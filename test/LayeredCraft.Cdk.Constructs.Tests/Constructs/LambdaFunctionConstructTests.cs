@@ -44,7 +44,7 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _  = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
         template.HasResourceProperties("AWS::IAM::Role", Match.ObjectLike(new Dictionary<string, object>
@@ -63,7 +63,7 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
         template.HasResourceProperties("AWS::IAM::Policy", Match.ObjectLike(new Dictionary<string, object>
@@ -82,7 +82,7 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
         // Verify the policy exists with correct name
@@ -125,7 +125,7 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
         template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
@@ -147,7 +147,7 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
         template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
@@ -205,7 +205,7 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
         // Verify Version resource exists (DeletionPolicy is at resource level, not in Properties)
@@ -227,14 +227,12 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
-        if (props.Permissions.Any())
-        {
-            var expectedPermissionCount = props.Permissions.Count * 3; // function + version + alias
-            template.ResourceCountIs("AWS::Lambda::Permission", expectedPermissionCount);
-        }
+        if (props.Permissions.Count == 0) return;
+        var expectedPermissionCount = props.Permissions.Count * 3; // function + version + alias
+        template.ResourceCountIs("AWS::Lambda::Permission", expectedPermissionCount);
     }
 
     [Theory]
@@ -247,7 +245,7 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
         props.Permissions.Should().BeEmpty();
@@ -264,7 +262,7 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
         // Verify the LogGroup is explicitly created with correct retention
