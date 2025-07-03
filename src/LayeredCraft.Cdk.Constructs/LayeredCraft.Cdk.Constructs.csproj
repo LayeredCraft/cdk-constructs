@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <LangVersion>default</LangVersion>
+        <PackageId>LayeredCraft.Cdk.Constructs</PackageId>
+        <Title>LayeredCraft.Cdk.Constructs</Title>
+        <Description>Provides reusable AWS CDK constructs for serverless .NET applications, including Lambda functions with OpenTelemetry, IAM roles, and environment configuration. Built for LayeredCraft projects using AWS CDK in C#.</Description>
+        <PackageTags>aws;cdk;lambda;constructs;dotnet;opentelemetry;infrastructure;cloudformation;layeredcraft</PackageTags>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Amazon.CDK.Lib" Version="2.203.1" />
+    </ItemGroup>
+    <ItemGroup>
+        <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="False" />
+        <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="False" />
+    </ItemGroup>
+
+</Project>
