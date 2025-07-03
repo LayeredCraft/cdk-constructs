@@ -13,8 +13,8 @@ This is a .NET library that provides reusable AWS CDK constructs for serverless 
 # Build the solution
 dotnet build
 
-# Run all tests
-dotnet test
+# Run all tests (preferred method for xUnit v3)
+dotnet run --project test/LayeredCraft.Cdk.Constructs.Tests/ --framework net8.0
 
 # Run tests for a specific project
 dotnet test test/LayeredCraft.Cdk.Constructs.Tests/
@@ -83,6 +83,27 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Uses AutoFixture with custom configurations for realistic AWS resource names
 - Test assets include `test-lambda.zip` for Lambda deployment packages
 - Tests verify both resource creation and property configuration
+
+### Testing Helpers (`src/LayeredCraft.Cdk.Constructs/Testing/`)
+The library includes comprehensive testing helpers for consumers:
+
+**CdkTestHelper** (`CdkTestHelper.cs`):
+- `CreateTestStack()`: Creates CDK app and stack with test environment
+- `CreateTestStackMinimal()`: Creates only the stack (app created internally)
+- `GetTestAssetPath()`: Resolves test asset paths relative to executing assembly
+- `CreatePropsBuilder()`: Creates fluent builder with test defaults
+
+**LambdaFunctionConstructAssertions** (`LambdaFunctionConstructAssertions.cs`):
+- Extension methods for Template assertions
+- `ShouldHaveLambdaFunction()`, `ShouldHaveOtelLayer()`, `ShouldHaveCloudWatchLogsPermissions()`, etc.
+
+**LambdaFunctionConstructPropsBuilder** (`LambdaFunctionConstructPropsBuilder.cs`):
+- Fluent builder for creating test props with common AWS service integrations
+- Methods like `WithDynamoDbAccess()`, `WithS3Access()`, `WithApiGatewayPermission()`
+
+**Critical Testing Pattern**: 
+- Always create CDK templates AFTER adding constructs to stacks
+- Use `Template.FromStack(stack)` after construct creation, not before
 
 ## Development Practices
 
