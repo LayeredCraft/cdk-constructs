@@ -85,9 +85,35 @@ public class LambdaFunctionConstructTests
         var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
+        // Verify the policy exists with correct name
         template.HasResourceProperties("AWS::IAM::Policy", Match.ObjectLike(new Dictionary<string, object>
         {
-            { "PolicyName", props.PolicyName }
+            { "PolicyName", props.PolicyName },
+            { "PolicyDocument", Match.ObjectLike(new Dictionary<string, object>
+            {
+                { "Statement", Match.ArrayWith(new object[]
+                {
+                    // First statement: logs:CreateLogStream, logs:CreateLogGroup, logs:TagResource
+                    Match.ObjectLike(new Dictionary<string, object>
+                    {
+                        { "Effect", "Allow" },
+                        { "Action", Match.ArrayWith(new object[]
+                        {
+                            "logs:CreateLogStream",
+                            "logs:CreateLogGroup", 
+                            "logs:TagResource"
+                        }) },
+                        { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}*:*" }
+                    }),
+                    // Second statement: logs:PutLogEvents
+                    Match.ObjectLike(new Dictionary<string, object>
+                    {
+                        { "Effect", "Allow" },
+                        { "Action", "logs:PutLogEvents" },
+                        { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}*:*:*" }
+                    })
+                }) }
+            }) }
         }));
     }
 
