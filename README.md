@@ -130,7 +130,7 @@ The library includes comprehensive testing helpers to make it easy to unit test 
 
 ### Testing Helpers Overview
 
-- **`CdkTestHelper`**: Reduces boilerplate for creating test stacks and props
+- **`CdkTestHelper`**: Reduces boilerplate for creating test stacks and props (including custom stack types)
 - **`LambdaFunctionConstructAssertions`**: Extension methods for asserting Lambda resources
 - **`LambdaFunctionConstructPropsBuilder`**: Fluent builder for creating test props
 
@@ -199,6 +199,40 @@ public void MyStack_ShouldCreateLegacyFunction()
     template.ShouldHaveCloudWatchLogsPermissions("legacy-function-test");
 }
 ```
+
+### Example: Testing Custom Stack Types
+
+For projects with custom stack implementations (inheriting from `Stack`), you can use the generic methods to create your custom stack types directly:
+
+```csharp
+[Fact]
+public void MyCustomStack_ShouldCreateInfrastructure()
+{
+    // Custom stack props (could be your LightsaberStackProps, InfraStackProps, etc.)
+    var customProps = new MyCustomStackProps
+    {
+        Env = new Environment { Account = "123456789012", Region = "us-east-1" },
+        Context = new MyContext { /* your custom context */ },
+        Tags = new Dictionary<string, string> { { "Environment", "test" } }
+    };
+
+    // Create your custom stack type directly - no unused base stack needed!
+    var customStack = CdkTestHelper.CreateTestStackMinimal<MyCustomStack>("test-stack", customProps);
+
+    // Your custom stack is ready to use
+    var template = Template.FromStack(customStack);
+
+    // Verify your custom stack's infrastructure
+    template.ShouldHaveLambdaFunction("my-function-test");
+    // ... other assertions
+}
+```
+
+**Benefits of Generic Stack Creation:**
+- **No Workarounds**: Create custom stack types directly instead of creating unused base stacks
+- **Type Safety**: Get strongly-typed stack instances with full IntelliSense support
+- **Clean Tests**: Eliminate boilerplate while maintaining flexibility
+- **Real-World Ready**: Works with any custom stack implementation
 
 ### Test Asset Management
 

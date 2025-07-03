@@ -51,6 +51,23 @@ public static class CdkTestHelper
     }
 
     /// <summary>
+    /// Creates a test CDK app and custom stack type with the specified props.
+    /// This method uses reflection to instantiate the custom stack type.
+    /// Note: You must create the Template.FromStack(stack) after adding constructs to the stack.
+    /// </summary>
+    /// <typeparam name="TStack">The custom stack type that inherits from Stack</typeparam>
+    /// <param name="stackName">The name of the test stack</param>
+    /// <param name="stackProps">Custom stack props implementing IStackProps</param>
+    /// <returns>Tuple containing the app and the custom stack instance</returns>
+    public static (App app, TStack stack) CreateTestStack<TStack>(string stackName, IStackProps stackProps) 
+        where TStack : Stack
+    {
+        var app = new App();
+        var stack = (TStack)Activator.CreateInstance(typeof(TStack), app, stackName, stackProps)!;
+        return (app, stack);
+    }
+
+    /// <summary>
     /// Creates a test CDK stack (app is created internally).
     /// Note: You must create the Template.FromStack(stack) after adding constructs to the stack.
     /// </summary>
@@ -77,6 +94,22 @@ public static class CdkTestHelper
     public static Stack CreateTestStackMinimal(string stackName, IStackProps stackProps)
     {
         var (_, stack) = CreateTestStack(stackName, stackProps);
+        return stack;
+    }
+
+    /// <summary>
+    /// Creates a test CDK custom stack type with the specified props (app is created internally).
+    /// This method uses reflection to instantiate the custom stack type.
+    /// Note: You must create the Template.FromStack(stack) after adding constructs to the stack.
+    /// </summary>
+    /// <typeparam name="TStack">The custom stack type that inherits from Stack</typeparam>
+    /// <param name="stackName">The name of the test stack</param>
+    /// <param name="stackProps">Custom stack props implementing IStackProps</param>
+    /// <returns>The custom stack instance for testing</returns>
+    public static TStack CreateTestStackMinimal<TStack>(string stackName, IStackProps stackProps)
+        where TStack : Stack
+    {
+        var (_, stack) = CreateTestStack<TStack>(stackName, stackProps);
         return stack;
     }
 
