@@ -36,6 +36,21 @@ public static class CdkTestHelper
     }
 
     /// <summary>
+    /// Creates a test CDK app and stack with custom stack props.
+    /// Note: You must create the Template.FromStack(stack) after adding constructs to the stack.
+    /// </summary>
+    /// <param name="stackName">The name of the test stack</param>
+    /// <param name="stackProps">Custom stack props implementing IStackProps</param>
+    /// <returns>Tuple containing the app and stack for testing</returns>
+    public static (App app, Stack stack) CreateTestStack(string stackName, IStackProps stackProps)
+    {
+        var app = new App();
+        var stack = new Stack(app, stackName, stackProps);
+        
+        return (app, stack);
+    }
+
+    /// <summary>
     /// Creates a test CDK stack (app is created internally).
     /// Note: You must create the Template.FromStack(stack) after adding constructs to the stack.
     /// </summary>
@@ -49,6 +64,19 @@ public static class CdkTestHelper
         string account = "123456789012")
     {
         var (_, stack) = CreateTestStack(stackName, region, account);
+        return stack;
+    }
+
+    /// <summary>
+    /// Creates a test CDK stack with custom stack props (app is created internally).
+    /// Note: You must create the Template.FromStack(stack) after adding constructs to the stack.
+    /// </summary>
+    /// <param name="stackName">The name of the test stack</param>
+    /// <param name="stackProps">Custom stack props implementing IStackProps</param>
+    /// <returns>The stack for testing</returns>
+    public static Stack CreateTestStackMinimal(string stackName, IStackProps stackProps)
+    {
+        var (_, stack) = CreateTestStack(stackName, stackProps);
         return stack;
     }
 
