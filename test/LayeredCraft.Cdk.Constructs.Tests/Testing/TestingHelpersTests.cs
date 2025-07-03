@@ -291,4 +291,112 @@ public class TestingHelpersTests
 
         template.ShouldHaveLambdaFunction("real-world-function-test");
     }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateGenericStackType()
+    {
+        var customProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment 
+            { 
+                Account = "111222333444", 
+                Region = "ca-central-1" 
+            },
+            Description = "Generic stack test"
+        };
+
+        // Create a custom stack type using the generic method
+        var (app, stack) = CdkTestHelper.CreateTestStack<TestCustomStack>("generic-test-stack", customProps);
+
+        app.Should().NotBeNull();
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestCustomStack>();
+        stack.StackName.Should().Be("generic-test-stack");
+        stack.Account.Should().Be("111222333444");
+        stack.Region.Should().Be("ca-central-1");
+        
+        // Verify custom stack functionality
+        var customStack = (TestCustomStack)stack;
+        customStack.CustomProperty.Should().Be("CustomValue");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateGenericStackTypeMinimal()
+    {
+        var customProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment 
+            { 
+                Account = "555777999111", 
+                Region = "eu-central-1" 
+            },
+            Tags = new Dictionary<string, string>
+            {
+                { "TestType", "Generic" },
+                { "Framework", "CDK" }
+            }
+        };
+
+        // Create custom stack type using the minimal generic method
+        var stack = CdkTestHelper.CreateTestStackMinimal<TestCustomStack>("minimal-generic-stack", customProps);
+
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestCustomStack>();
+        stack.StackName.Should().Be("minimal-generic-stack");
+        stack.Account.Should().Be("555777999111");
+        stack.Region.Should().Be("eu-central-1");
+        
+        // Verify custom stack functionality
+        var customStack = (TestCustomStack)stack;
+        customStack.CustomProperty.Should().Be("CustomValue");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldWorkWithGenericStackAndConstructs()
+    {
+        var customProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment 
+            { 
+                Account = "888999000111", 
+                Region = "us-east-2" 
+            }
+        };
+
+        // Create custom stack and add constructs to it
+        var stack = CdkTestHelper.CreateTestStackMinimal<TestCustomStack>("integration-test", customProps);
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("generic-function")
+            .WithEnvironmentVariable("STACK_TYPE", "CustomStack")
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "GenericConstruct", props);
+
+        // Create template AFTER adding constructs to the stack
+        var template = Template.FromStack(stack);
+
+        // Verify everything works together
+        template.ShouldHaveLambdaFunction("generic-function-test");
+        template.ShouldHaveEnvironmentVariables(new Dictionary<string, string>
+        {
+            { "ENVIRONMENT", "test" },
+            { "STACK_TYPE", "CustomStack" }
+        });
+        
+        // Verify custom stack properties
+        var customStack = (TestCustomStack)stack;
+        customStack.CustomProperty.Should().Be("CustomValue");
+    }
+}
+
+// Test helper class for generic stack testing
+public class TestCustomStack : Amazon.CDK.Stack
+{
+    public string CustomProperty { get; }
+
+    public TestCustomStack(Amazon.CDK.App scope, string id, Amazon.CDK.IStackProps props) : base(scope, id, props)
+    {
+        CustomProperty = "CustomValue";
+    }
 }

@@ -89,7 +89,9 @@ The library includes comprehensive testing helpers for consumers:
 
 **CdkTestHelper** (`CdkTestHelper.cs`):
 - `CreateTestStack()`: Creates CDK app and stack with test environment
-- `CreateTestStackMinimal()`: Creates only the stack (app created internally)
+- `CreateTestStack<TStack>()`: Creates custom stack types directly using generics and reflection
+- `CreateTestStackMinimal()`: Creates only the stack (app created internally)  
+- `CreateTestStackMinimal<TStack>()`: Creates custom stack types with app created internally
 - `GetTestAssetPath()`: Resolves test asset paths relative to executing assembly
 - `CreatePropsBuilder()`: Creates fluent builder with test defaults
 
@@ -104,6 +106,12 @@ The library includes comprehensive testing helpers for consumers:
 **Critical Testing Pattern**: 
 - Always create CDK templates AFTER adding constructs to stacks
 - Use `Template.FromStack(stack)` after construct creation, not before
+
+**Generic Stack Creation**:
+- Use `CreateTestStack<TStack>()` and `CreateTestStackMinimal<TStack>()` for custom stack types
+- These methods use `Activator.CreateInstance` with reflection to instantiate custom stacks
+- Eliminates the need to create unused base stacks when testing custom stack implementations
+- Supports any stack type that inherits from `Amazon.CDK.Stack` and follows the standard constructor pattern
 
 ## Development Practices
 
