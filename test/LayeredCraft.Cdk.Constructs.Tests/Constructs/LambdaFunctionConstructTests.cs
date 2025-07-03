@@ -101,14 +101,14 @@ public class LambdaFunctionConstructTests
                             "logs:CreateLogGroup", 
                             "logs:TagResource"
                         ]) },
-                        { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}*:*" }
+                        { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}*:*" }
                     }),
                     // Second statement: logs:PutLogEvents
                     Match.ObjectLike(new Dictionary<string, object>
                     {
                         { "Effect", "Allow" },
                         { "Action", "logs:PutLogEvents" },
-                        { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}*:*:*" }
+                        { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}*:*:*" }
                     })
                 ]) }
             }) }

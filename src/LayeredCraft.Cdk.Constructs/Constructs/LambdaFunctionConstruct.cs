@@ -26,7 +26,7 @@ public class LambdaFunctionConstruct : Construct
                         "logs:CreateLogGroup",
                         "logs:TagResource"
                     ],
-                    Resources = [$"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/{props.FunctionName}*:*"],
+                    Resources = [$"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}*:*"],
                     Effect = Effect.ALLOW
                 }),
                 new PolicyStatement(new PolicyStatementProps
@@ -36,7 +36,7 @@ public class LambdaFunctionConstruct : Construct
                         "logs:PutLogEvents"
                     ],
                     Resources =
-                        [$"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/{props.FunctionName}*:*:*"],
+                        [$"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}*:*:*"],
                     Effect = Effect.ALLOW
                 })
             ]

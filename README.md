@@ -124,6 +124,137 @@ The construct automatically grants these CloudWatch Logs permissions:
 - `logs:TagResource`
 - `logs:PutLogEvents`
 
+## Testing Support
+
+The library includes comprehensive testing helpers to make it easy to unit test your CDK stacks that use these constructs.
+
+### Testing Helpers Overview
+
+- **`CdkTestHelper`**: Reduces boilerplate for creating test stacks and props
+- **`LambdaFunctionConstructAssertions`**: Extension methods for asserting Lambda resources
+- **`LambdaFunctionConstructPropsBuilder`**: Fluent builder for creating test props
+
+### Quick Testing Example
+
+```csharp
+using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs.Testing;
+
+[Fact]
+public void MyStack_ShouldCreateApiFunction()
+{
+    // Create test infrastructure with minimal boilerplate
+    var stack = CdkTestHelper.CreateTestStackMinimal();
+
+    // Build test props using fluent builder
+    var props = CdkTestHelper.CreatePropsBuilder("./my-lambda.zip")
+        .WithFunctionName("my-api")
+        .WithFunctionSuffix("prod")
+        .WithDynamoDbAccess("users-table")
+        .WithApiGatewayPermission("arn:aws:execute-api:us-east-1:123456789012:abcdef123/prod/GET/users")
+        .WithEnvironmentVariable("TABLE_NAME", "users-table")
+        .WithOtelEnabled(true)
+        .Build();
+
+    // Create the construct
+    _ = new LambdaFunctionConstruct(stack, "MyApiLambda", props);
+
+    // Create template AFTER adding constructs to the stack
+    var template = Template.FromStack(stack);
+
+    // Use assertion helpers for clean, readable tests
+    template.ShouldHaveLambdaFunction("my-api-prod");
+    template.ShouldHaveOtelLayer();
+    template.ShouldHaveCloudWatchLogsPermissions("my-api-prod");
+    template.ShouldHaveEnvironmentVariables(new Dictionary<string, string>
+    {
+        { "TABLE_NAME", "users-table" }
+    });
+    template.ShouldHaveLambdaPermissions(1); // 1 permission = 3 resources (function + version + alias)
+    template.ShouldHaveVersionAndAlias("live");
+    template.ShouldHaveLogGroup("my-api-prod", 14);
+}
+```
+
+### Example: Testing Without OpenTelemetry
+
+```csharp
+[Fact]
+public void MyStack_ShouldCreateLegacyFunction()
+{
+    var stack = CdkTestHelper.CreateTestStackMinimal();
+
+    var props = CdkTestHelper.CreatePropsBuilder("./legacy-lambda.zip")
+        .WithFunctionName("legacy-function")
+        .WithOtelEnabled(false)
+        .Build();
+
+    _ = new LambdaFunctionConstruct(stack, "LegacyLambda", props);
+
+    // Create template AFTER adding constructs to the stack
+    var template = Template.FromStack(stack);
+
+    template.ShouldHaveLambdaFunction("legacy-function-test");
+    template.ShouldNotHaveOtelLayer();
+    template.ShouldHaveCloudWatchLogsPermissions("legacy-function-test");
+}
+```
+
+### Test Asset Management
+
+Create a `TestAssets` folder in your test project and place your Lambda deployment packages there:
+
+```
+YourTestProject/
+├── TestAssets/
+│   ├── test-lambda.zip      # Default test asset
+│   └── my-custom-lambda.zip # Custom test assets
+└── YourTests.cs
+```
+
+The testing helpers automatically resolve test asset paths:
+
+```csharp
+// Uses TestAssets/test-lambda.zip by default
+var props = CdkTestHelper.CreatePropsBuilder().Build();
+
+// Or specify your own test asset
+var props = CdkTestHelper.CreatePropsBuilder("./TestAssets/my-custom-lambda.zip").Build();
+
+// Get reliable paths to test assets
+var assetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-lambda.zip");
+```
+
+### Available Assertion Methods
+
+| Method | Description |
+|--------|-------------|
+| `ShouldHaveLambdaFunction(functionName)` | Verify Lambda function exists |
+| `ShouldHaveOtelLayer()` | Verify OpenTelemetry layer and tracing are enabled |
+| `ShouldNotHaveOtelLayer()` | Verify OpenTelemetry is disabled |
+| `ShouldHaveCloudWatchLogsPermissions(functionName)` | Verify log permissions |
+| `ShouldHaveEnvironmentVariables(variables)` | Verify environment variables |
+| `ShouldHaveLambdaPermissions(count)` | Verify Lambda invoke permissions |
+| `ShouldHaveVersionAndAlias(aliasName)` | Verify versioning setup |
+| `ShouldHaveLogGroup(functionName, retentionDays)` | Verify log group configuration |
+
+### Props Builder Methods
+
+| Method | Description |
+|--------|-------------|
+| `WithFunctionName(name)` | Set function name |
+| `WithFunctionSuffix(suffix)` | Set function suffix |
+| `WithAssetPath(path)` | Set Lambda deployment package path |
+| `WithOtelEnabled(bool)` | Enable/disable OpenTelemetry |
+| `WithDynamoDbAccess(tableName)` | Add DynamoDB permissions |
+| `WithS3Access(bucketName)` | Add S3 permissions |
+| `WithApiGatewayPermission(apiArn)` | Add API Gateway invoke permission |
+| `WithAlexaPermission(skillId)` | Add Alexa Skills Kit permission |
+| `WithEnvironmentVariable(key, value)` | Add environment variable |
+| `WithEnvironmentVariables(variables)` | Add multiple environment variables |
+| `WithCustomPolicy(policyStatement)` | Add custom IAM policy statement |
+| `WithCustomPermission(permission)` | Add custom Lambda permission |
+
 ## Project Structure
 
 ```
@@ -131,16 +262,23 @@ The construct automatically grants these CloudWatch Logs permissions:
 │   └── LayeredCraft.Cdk.Constructs/           # Main library package
 │       ├── Constructs/
 │       │   └── LambdaFunctionConstruct.cs      # Lambda function construct with IAM and logging
-│       └── Models/
-│           ├── LambdaFunctionConstructProps.cs # Configuration props for Lambda construct
-│           └── LambdaPermission.cs             # Lambda permission model
+│       ├── Models/
+│       │   ├── LambdaFunctionConstructProps.cs # Configuration props for Lambda construct
+│       │   └── LambdaPermission.cs             # Lambda permission model
+│       └── Testing/                            # Testing helpers for consumers
+│           ├── CdkTestHelper.cs                # Test stack and props creation utilities
+│           ├── LambdaFunctionConstructAssertions.cs # Extension methods for assertions
+│           └── LambdaFunctionConstructPropsBuilder.cs # Fluent builder for test props
 ├── test/
 │   └── LayeredCraft.Cdk.Constructs.Tests/     # Test suite
 │       ├── Constructs/
 │       │   └── LambdaFunctionConstructTests.cs # Unit tests for Lambda construct
+│       ├── Testing/
+│       │   └── TestingHelpersTests.cs          # Tests for testing helper functionality
 │       ├── TestKit/                            # Test utilities and fixtures
 │       │   ├── Attributes/                     # Custom AutoFixture attributes
-│       │   └── Customizations/                 # Test data customizations
+│       │   ├── Customizations/                 # Test data customizations
+│       │   └── Extensions/                     # Test extension methods
 │       └── TestAssets/
 │           └── test-lambda.zip                 # Test Lambda deployment package
 └── LayeredCraft.Cdk.Constructs.sln            # Solution file
