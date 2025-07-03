@@ -202,4 +202,93 @@ public class TestingHelpersTests
         zipPath.Should().EndWith("TestAssets/test-lambda.zip");
         Path.IsPathRooted(zipPath).Should().BeTrue("Should return absolute path");
     }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStackWithCustomStackProps()
+    {
+        var customProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment 
+            { 
+                Account = "987654321098", 
+                Region = "eu-west-1" 
+            },
+            Tags = new Dictionary<string, string>
+            {
+                { "Environment", "test" },
+                { "Project", "custom-test" }
+            }
+        };
+
+        var (app, stack) = CdkTestHelper.CreateTestStack("custom-test-stack", customProps);
+
+        app.Should().NotBeNull();
+        stack.Should().NotBeNull();
+        stack.StackName.Should().Be("custom-test-stack");
+        stack.Account.Should().Be("987654321098");
+        stack.Region.Should().Be("eu-west-1");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateMinimalStackWithCustomStackProps()
+    {
+        var customProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment 
+            { 
+                Account = "555666777888", 
+                Region = "ap-southeast-2" 
+            },
+            Description = "Test stack with custom props"
+        };
+
+        var stack = CdkTestHelper.CreateTestStackMinimal("minimal-custom-stack", customProps);
+
+        stack.Should().NotBeNull();
+        stack.StackName.Should().Be("minimal-custom-stack");
+        stack.Account.Should().Be("555666777888");
+        stack.Region.Should().Be("ap-southeast-2");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldWorkWithRealWorldCustomStackProps()
+    {
+        // Simulate a real-world scenario similar to LightsaberStackProps
+        var customEnv = new Amazon.CDK.Environment 
+        { 
+            Account = "123456789012", 
+            Region = "us-west-2" 
+        };
+
+        var customProps = new Amazon.CDK.StackProps
+        {
+            Env = customEnv,
+            Tags = new Dictionary<string, string>
+            {
+                { "Application", "MyApp" },
+                { "Environment", "test" },
+                { "Owner", "DevTeam" }
+            },
+            Description = "Test infrastructure stack"
+        };
+
+        var stack = CdkTestHelper.CreateTestStackMinimal("real-world-test", customProps);
+
+        stack.Should().NotBeNull();
+        stack.StackName.Should().Be("real-world-test");
+        stack.Account.Should().Be("123456789012");
+        stack.Region.Should().Be("us-west-2");
+
+        // Verify we can create constructs on this stack
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("real-world-function")
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "RealWorldConstruct", props);
+
+        // Create template AFTER adding constructs to the stack
+        var template = Template.FromStack(stack);
+
+        template.ShouldHaveLambdaFunction("real-world-function-test");
+    }
 }
