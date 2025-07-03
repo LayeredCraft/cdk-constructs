@@ -91,18 +91,16 @@ public class LambdaFunctionConstructTests
             { "PolicyName", props.PolicyName },
             { "PolicyDocument", Match.ObjectLike(new Dictionary<string, object>
             {
-                { "Statement", Match.ArrayWith(new object[]
-                {
+                { "Statement", Match.ArrayWith([
                     // First statement: logs:CreateLogStream, logs:CreateLogGroup, logs:TagResource
                     Match.ObjectLike(new Dictionary<string, object>
                     {
                         { "Effect", "Allow" },
-                        { "Action", Match.ArrayWith(new object[]
-                        {
+                        { "Action", Match.ArrayWith([
                             "logs:CreateLogStream",
                             "logs:CreateLogGroup", 
                             "logs:TagResource"
-                        }) },
+                        ]) },
                         { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}*:*" }
                     }),
                     // Second statement: logs:PutLogEvents
@@ -112,7 +110,7 @@ public class LambdaFunctionConstructTests
                         { "Action", "logs:PutLogEvents" },
                         { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}*:*:*" }
                     })
-                }) }
+                ]) }
             }) }
         }));
     }
@@ -178,9 +176,23 @@ public class LambdaFunctionConstructTests
         // Verify that there is 1 Lambda function (main function only, no log retention function)
         template.ResourceCountIs("AWS::Lambda::Function", 1);
         
-        // The test output shows that when IncludeOtelLayer=false, 
-        // the main function correctly has TracingConfig: undefined and no Layers property.
-        // This means the CDK construct is working as expected.
+        // Verify that the Lambda function has no TracingConfig (tracing disabled)
+        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "FunctionName", $"{props.FunctionName}-{props.FunctionSuffix}" }
+        }));
+        
+        // Verify that TracingConfig is not present (tracing disabled when OTEL layer is disabled)
+        template.HasResourceProperties("AWS::Lambda::Function", Match.Not(Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "TracingConfig", Match.AnyValue() }
+        })));
+        
+        // Verify that Layers property is not present (no OTEL layer when disabled)
+        template.HasResourceProperties("AWS::Lambda::Function", Match.Not(Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "Layers", Match.AnyValue() }
+        })));
     }
 
     [Theory]
