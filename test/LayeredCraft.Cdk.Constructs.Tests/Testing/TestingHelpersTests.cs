@@ -141,8 +141,8 @@ public class TestingHelpersTests
     {
         var customStatement = new Amazon.CDK.AWS.IAM.PolicyStatement(new Amazon.CDK.AWS.IAM.PolicyStatementProps
         {
-            Actions = new[] { "sns:Publish" },
-            Resources = new[] { "arn:aws:sns:us-east-1:123456789012:my-topic" },
+            Actions = ["sns:Publish"],
+            Resources = ["arn:aws:sns:us-east-1:123456789012:my-topic"],
             Effect = Amazon.CDK.AWS.IAM.Effect.ALLOW
         });
 
@@ -162,7 +162,7 @@ public class TestingHelpersTests
     [Fact]
     public void PropsBuilder_ShouldAddCustomPermission()
     {
-        var customPermission = new LayeredCraft.Cdk.Constructs.Models.LambdaPermission
+        var customPermission = new Models.LambdaPermission
         {
             Principal = "events.amazonaws.com",
             Action = "lambda:InvokeFunction",
@@ -316,7 +316,7 @@ public class TestingHelpersTests
         stack.Region.Should().Be("ca-central-1");
         
         // Verify custom stack functionality
-        var customStack = (TestCustomStack)stack;
+        var customStack = stack;
         customStack.CustomProperty.Should().Be("CustomValue");
     }
 
@@ -347,7 +347,7 @@ public class TestingHelpersTests
         stack.Region.Should().Be("eu-central-1");
         
         // Verify custom stack functionality
-        var customStack = (TestCustomStack)stack;
+        var customStack = stack;
         customStack.CustomProperty.Should().Be("CustomValue");
     }
 
@@ -385,9 +385,131 @@ public class TestingHelpersTests
         });
         
         // Verify custom stack properties
-        var customStack = (TestCustomStack)stack;
+        var customStack = stack;
         customStack.CustomProperty.Should().Be("CustomValue");
     }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateDualGenericStackType()
+    {
+        var customProps = new TestCustomStackProps
+        {
+            Env = new Amazon.CDK.Environment 
+            { 
+                Account = "222333444555", 
+                Region = "eu-west-2" 
+            },
+            Description = "Dual generic stack test",
+            CustomContext = "test-context",
+            EnableFeature = true
+        };
+
+        // Create stack using dual generics for exact type matching
+        var (app, stack) = CdkTestHelper.CreateTestStack<TestAdvancedStack, TestCustomStackProps>("dual-generic-stack", customProps);
+
+        app.Should().NotBeNull();
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestAdvancedStack>();
+        stack.StackName.Should().Be("dual-generic-stack");
+        stack.Account.Should().Be("222333444555");
+        stack.Region.Should().Be("eu-west-2");
+        
+        // Verify custom stack functionality with custom props
+        stack.CustomContext.Should().Be("test-context");
+        stack.FeatureEnabled.Should().Be(true);
+        stack.ProcessedValue.Should().Be("test-context-processed");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateDualGenericStackTypeMinimal()
+    {
+        var customProps = new TestCustomStackProps
+        {
+            Env = new Amazon.CDK.Environment 
+            { 
+                Account = "666777888999", 
+                Region = "ap-northeast-1" 
+            },
+            CustomContext = "minimal-context",
+            EnableFeature = false,
+            Tags = new Dictionary<string, string>
+            {
+                { "TestMethod", "DualGeneric" },
+                { "PropsType", "Custom" }
+            }
+        };
+
+        // Create stack using dual generics minimal method
+        var stack = CdkTestHelper.CreateTestStackMinimal<TestAdvancedStack, TestCustomStackProps>("dual-minimal-stack", customProps);
+
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestAdvancedStack>();
+        stack.StackName.Should().Be("dual-minimal-stack");
+        stack.Account.Should().Be("666777888999");
+        stack.Region.Should().Be("ap-northeast-1");
+        
+        // Verify custom props were passed correctly
+        stack.CustomContext.Should().Be("minimal-context");
+        stack.FeatureEnabled.Should().Be(false);
+        stack.ProcessedValue.Should().Be("minimal-context-processed");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldWorkWithDualGenericStackAndConstructs()
+    {
+        var customProps = new TestCustomStackProps
+        {
+            Env = new Amazon.CDK.Environment 
+            { 
+                Account = "111222333444", 
+                Region = "us-west-1" 
+            },
+            CustomContext = "integration-test",
+            EnableFeature = true
+        };
+
+        // Create custom stack with dual generics and add constructs
+        var stack = CdkTestHelper.CreateTestStackMinimal<TestAdvancedStack, TestCustomStackProps>("integration-dual", customProps);
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("dual-generic-function")
+            .WithEnvironmentVariable("STACK_CONTEXT", stack.CustomContext)
+            .WithEnvironmentVariable("FEATURE_ENABLED", stack.FeatureEnabled.ToString())
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "DualGenericConstruct", props);
+
+        // Create template AFTER adding constructs to the stack
+        var template = Template.FromStack(stack);
+
+        // Verify everything works together with custom props
+        template.ShouldHaveLambdaFunction("dual-generic-function-test");
+        template.ShouldHaveEnvironmentVariables(new Dictionary<string, string>
+        {
+            { "ENVIRONMENT", "test" },
+            { "STACK_CONTEXT", "integration-test" },
+            { "FEATURE_ENABLED", "True" }
+        });
+        
+        // Verify custom stack properties from custom props
+        stack.CustomContext.Should().Be("integration-test");
+        stack.FeatureEnabled.Should().Be(true);
+        stack.ProcessedValue.Should().Be("integration-test-processed");
+    }
+}
+
+// Test helper interface for custom props testing
+public interface ITestCustomStackProps : Amazon.CDK.IStackProps
+{
+    string CustomContext { get; }
+    bool EnableFeature { get; }
+}
+
+// Test helper class for custom props testing
+public class TestCustomStackProps : Amazon.CDK.StackProps, ITestCustomStackProps
+{
+    public string CustomContext { get; set; } = string.Empty;
+    public bool EnableFeature { get; set; }
 }
 
 // Test helper class for generic stack testing
@@ -398,5 +520,20 @@ public class TestCustomStack : Amazon.CDK.Stack
     public TestCustomStack(Amazon.CDK.App scope, string id, Amazon.CDK.IStackProps props) : base(scope, id, props)
     {
         CustomProperty = "CustomValue";
+    }
+}
+
+// Test helper class for dual generic testing with custom props
+public class TestAdvancedStack : Amazon.CDK.Stack
+{
+    public string CustomContext { get; }
+    public bool FeatureEnabled { get; }
+    public string ProcessedValue { get; }
+
+    public TestAdvancedStack(Amazon.CDK.App scope, string id, ITestCustomStackProps props) : base(scope, id, props)
+    {
+        CustomContext = props.CustomContext;
+        FeatureEnabled = props.EnableFeature;
+        ProcessedValue = $"{props.CustomContext}-processed";
     }
 }
