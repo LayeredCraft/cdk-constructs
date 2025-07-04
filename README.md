@@ -234,6 +234,41 @@ public void MyCustomStack_ShouldCreateInfrastructure()
 - **Clean Tests**: Eliminate boilerplate while maintaining flexibility
 - **Real-World Ready**: Works with any custom stack implementation
 
+### Example: Testing with Custom Stack Props Types
+
+For advanced scenarios where your custom stack expects specific props interfaces (not just `IStackProps`), you can use the dual-generic methods:
+
+```csharp
+[Fact]
+public void MyAdvancedStack_ShouldWorkWithCustomProps()
+{
+    // Custom props interface extending IStackProps
+    var customProps = new MyCustomStackProps
+    {
+        Env = new Environment { Account = "123456789012", Region = "us-east-1" },
+        Context = new MyContext { DatabaseUrl = "test-db-url" },
+        FeatureFlags = new Dictionary<string, bool> { { "EnableNewFeature", true } }
+    };
+
+    // Use dual generics for exact type matching - solves Activator.CreateInstance issues
+    var stack = CdkTestHelper.CreateTestStackMinimal<MyAdvancedStack, MyCustomStackProps>(
+        "advanced-test", customProps);
+
+    // Your stack gets the exact props type it expects
+    var template = Template.FromStack(stack);
+
+    // Test with full type safety
+    template.ShouldHaveLambdaFunction("advanced-function");
+    stack.DatabaseUrl.Should().Be("test-db-url"); // Custom props available
+    stack.IsNewFeatureEnabled.Should().Be(true);
+}
+```
+
+**When to Use Dual Generics:**
+- Your stack constructor expects a specific props interface (e.g., `ILightsaberStackProps`, `IInfraStackProps`)
+- You need exact type matching for `Activator.CreateInstance` to work correctly
+- You want full IntelliSense support for your custom props throughout the test
+
 ### Test Asset Management
 
 Create a `TestAssets` folder in your test project and place your Lambda deployment packages there:
