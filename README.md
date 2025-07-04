@@ -233,6 +233,7 @@ public void MyCustomStack_ShouldCreateInfrastructure()
 - **Type Safety**: Get strongly-typed stack instances with full IntelliSense support
 - **Clean Tests**: Eliminate boilerplate while maintaining flexibility
 - **Real-World Ready**: Works with any custom stack implementation
+- **Constructor Support**: Supports both public and internal constructors (CDK default)
 
 ### Example: Testing with Custom Stack Props Types
 
@@ -268,6 +269,35 @@ public void MyAdvancedStack_ShouldWorkWithCustomProps()
 - Your stack constructor expects a specific props interface (e.g., `ILightsaberStackProps`, `IInfraStackProps`)
 - You need exact type matching for `Activator.CreateInstance` to work correctly
 - You want full IntelliSense support for your custom props throughout the test
+
+### Supported Constructor Patterns
+
+The generic methods work with both public and internal constructors using reflection with `BindingFlags`:
+
+```csharp
+// ✅ Works - Public constructor
+public class MyStack : Stack
+{
+    public MyStack(Construct scope, string id, IStackProps props) : base(scope, id, props) { }
+}
+
+// ✅ Works - Internal constructor (CDK default pattern)
+public class MyStack : Stack
+{
+    internal MyStack(Construct scope, string id, IStackProps props) : base(scope, id, props) { }
+}
+
+// ✅ Works - Custom props interface with internal constructor
+public class MyStack : Stack
+{
+    internal MyStack(Construct scope, string id, IMyCustomProps props) : base(scope, id, props) { }
+}
+```
+
+**Important Notes:**
+- The helpers use `BindingFlags.NonPublic` to access internal constructors
+- This follows common testing library patterns for accessing non-public members
+- Works seamlessly with CDK's default internal constructor pattern
 
 ### Test Asset Management
 

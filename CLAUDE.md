@@ -109,9 +109,12 @@ The library includes comprehensive testing helpers for consumers:
 
 **Generic Stack Creation**:
 - Use `CreateTestStack<TStack>()` and `CreateTestStackMinimal<TStack>()` for custom stack types
-- These methods use `Activator.CreateInstance` with reflection to instantiate custom stacks
+- Use `CreateTestStack<TStack, TProps>()` and `CreateTestStackMinimal<TStack, TProps>()` for custom props types
+- These methods use `Activator.CreateInstance` with `BindingFlags.NonPublic` to support internal constructors
 - Eliminates the need to create unused base stacks when testing custom stack implementations
 - Supports any stack type that inherits from `Amazon.CDK.Stack` and follows the standard constructor pattern
+- **Constructor Support**: Works with both public and internal constructors (CDK default is internal)
+- **Dual Generics**: Use dual generics when your stack constructor expects specific props interfaces
 
 ## Development Practices
 
@@ -132,3 +135,35 @@ The library includes comprehensive testing helpers for consumers:
 - Hardcoded OpenTelemetry layer ARN for us-east-1 region
 - Default memory: 1024MB, timeout: 6 seconds, log retention: 2 weeks
 - Uses `RemovalPolicy.RETAIN` for Lambda versions to prevent deletion
+
+## Testing Patterns
+
+### CDK Infrastructure Testing
+
+The package provides comprehensive testing helpers with support for:
+- **Custom stack types** with public or internal constructors
+- **Custom props interfaces** that extend IStackProps
+- **Automatic test asset** path resolution
+- **Fluent assertion methods** for common AWS resources
+
+### Generic Stack Creation Methods
+
+**Single Generic (for IStackProps):**
+```csharp
+// Works with both public and internal constructors
+var (app, stack) = CdkTestHelper.CreateTestStack<MyStack>("stack-name", stackProps);
+var stack = CdkTestHelper.CreateTestStackMinimal<MyStack>("stack-name", stackProps);
+```
+
+**Dual Generic (for custom props interfaces):**
+```csharp
+// Exact type matching for Activator.CreateInstance
+var (app, stack) = CdkTestHelper.CreateTestStack<MyStack, IMyProps>("stack-name", customProps);
+var stack = CdkTestHelper.CreateTestStackMinimal<MyStack, IMyProps>("stack-name", customProps);
+```
+
+**Important Implementation Notes:**
+- Methods use `BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic` to access internal constructors
+- This follows standard testing library patterns for accessing non-public members
+- CDK's default pattern is internal constructors, so this support is essential for real-world testing
+- The reflection approach ensures compatibility with any custom stack implementation

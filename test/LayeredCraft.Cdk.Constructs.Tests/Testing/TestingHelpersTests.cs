@@ -496,6 +496,179 @@ public class TestingHelpersTests
         stack.FeatureEnabled.Should().Be(true);
         stack.ProcessedValue.Should().Be("integration-test-processed");
     }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStackWithPublicConstructor()
+    {
+        var stackProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment
+            {
+                Account = "123456789012",
+                Region = "us-east-1"
+            }
+        };
+
+        var (app, stack) = CdkTestHelper.CreateTestStack<TestPublicConstructorStack>("test-public-stack", stackProps);
+
+        app.Should().NotBeNull();
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestPublicConstructorStack>();
+        stack.StackName.Should().Be("test-public-stack");
+        stack.Account.Should().Be("123456789012");
+        stack.Region.Should().Be("us-east-1");
+        stack.IsPublicConstructor.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStackWithInternalConstructor()
+    {
+        var stackProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment
+            {
+                Account = "987654321098",
+                Region = "eu-west-1"
+            }
+        };
+
+        var (app, stack) = CdkTestHelper.CreateTestStack<TestInternalConstructorStack>("test-internal-stack", stackProps);
+
+        app.Should().NotBeNull();
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestInternalConstructorStack>();
+        stack.StackName.Should().Be("test-internal-stack");
+        stack.Account.Should().Be("987654321098");
+        stack.Region.Should().Be("eu-west-1");
+        stack.IsInternalConstructor.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStackWithPublicConstructorMinimal()
+    {
+        var stackProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment
+            {
+                Account = "111222333444",
+                Region = "ap-southeast-2"
+            }
+        };
+
+        var stack = CdkTestHelper.CreateTestStackMinimal<TestPublicConstructorStack>("test-public-minimal", stackProps);
+
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestPublicConstructorStack>();
+        stack.StackName.Should().Be("test-public-minimal");
+        stack.Account.Should().Be("111222333444");
+        stack.Region.Should().Be("ap-southeast-2");
+        stack.IsPublicConstructor.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStackWithInternalConstructorMinimal()
+    {
+        var stackProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment
+            {
+                Account = "555666777888",
+                Region = "ca-central-1"
+            }
+        };
+
+        var stack = CdkTestHelper.CreateTestStackMinimal<TestInternalConstructorStack>("test-internal-minimal", stackProps);
+
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestInternalConstructorStack>();
+        stack.StackName.Should().Be("test-internal-minimal");
+        stack.Account.Should().Be("555666777888");
+        stack.Region.Should().Be("ca-central-1");
+        stack.IsInternalConstructor.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStackWithInternalConstructorAndCustomProps()
+    {
+        var customProps = new TestInternalConstructorStackProps
+        {
+            Env = new Amazon.CDK.Environment
+            {
+                Account = "999888777666",
+                Region = "us-west-2"
+            },
+            InternalValue = "internal-test-value"
+        };
+
+        var (app, stack) = CdkTestHelper.CreateTestStack<TestInternalConstructorWithCustomPropsStack, TestInternalConstructorStackProps>("test-internal-custom", customProps);
+
+        app.Should().NotBeNull();
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestInternalConstructorWithCustomPropsStack>();
+        stack.StackName.Should().Be("test-internal-custom");
+        stack.Account.Should().Be("999888777666");
+        stack.Region.Should().Be("us-west-2");
+        stack.InternalValue.Should().Be("internal-test-value");
+        stack.ProcessedInternalValue.Should().Be("internal-test-value-processed");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStackWithInternalConstructorAndCustomPropsMinimal()
+    {
+        var customProps = new TestInternalConstructorStackProps
+        {
+            Env = new Amazon.CDK.Environment
+            {
+                Account = "444333222111",
+                Region = "ap-northeast-1"
+            },
+            InternalValue = "minimal-internal-value"
+        };
+
+        var stack = CdkTestHelper.CreateTestStackMinimal<TestInternalConstructorWithCustomPropsStack, TestInternalConstructorStackProps>("test-internal-custom-minimal", customProps);
+
+        stack.Should().NotBeNull();
+        stack.Should().BeOfType<TestInternalConstructorWithCustomPropsStack>();
+        stack.StackName.Should().Be("test-internal-custom-minimal");
+        stack.Account.Should().Be("444333222111");
+        stack.Region.Should().Be("ap-northeast-1");
+        stack.InternalValue.Should().Be("minimal-internal-value");
+        stack.ProcessedInternalValue.Should().Be("minimal-internal-value-processed");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldWorkWithInternalConstructorAndConstructs()
+    {
+        var stackProps = new Amazon.CDK.StackProps
+        {
+            Env = new Amazon.CDK.Environment
+            {
+                Account = "777666555444",
+                Region = "eu-central-1"
+            }
+        };
+
+        var stack = CdkTestHelper.CreateTestStackMinimal<TestInternalConstructorStack>("test-internal-with-constructs", stackProps);
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("internal-constructor-function")
+            .WithEnvironmentVariable("CONSTRUCTOR_TYPE", "Internal")
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "InternalConstructorConstruct", props);
+
+        // Create template AFTER adding constructs to the stack
+        var template = Template.FromStack(stack);
+
+        template.ShouldHaveLambdaFunction("internal-constructor-function-test");
+        template.ShouldHaveEnvironmentVariables(new Dictionary<string, string>
+        {
+            { "ENVIRONMENT", "test" },
+            { "CONSTRUCTOR_TYPE", "Internal" }
+        });
+        
+        stack.IsInternalConstructor.Should().BeTrue();
+    }
 }
 
 // Test helper interface for custom props testing
@@ -535,5 +708,52 @@ public class TestAdvancedStack : Amazon.CDK.Stack
         CustomContext = props.CustomContext;
         FeatureEnabled = props.EnableFeature;
         ProcessedValue = $"{props.CustomContext}-processed";
+    }
+}
+
+// Test helper class for public constructor testing
+public class TestPublicConstructorStack : Amazon.CDK.Stack
+{
+    public bool IsPublicConstructor { get; }
+
+    public TestPublicConstructorStack(Amazon.CDK.App scope, string id, Amazon.CDK.IStackProps props) : base(scope, id, props)
+    {
+        IsPublicConstructor = true;
+    }
+}
+
+// Test helper class for internal constructor testing
+public class TestInternalConstructorStack : Amazon.CDK.Stack
+{
+    public bool IsInternalConstructor { get; }
+
+    internal TestInternalConstructorStack(Amazon.CDK.App scope, string id, Amazon.CDK.IStackProps props) : base(scope, id, props)
+    {
+        IsInternalConstructor = true;
+    }
+}
+
+// Test helper interface for internal constructor with custom props
+public interface ITestInternalConstructorStackProps : Amazon.CDK.IStackProps
+{
+    string InternalValue { get; }
+}
+
+// Test helper class for internal constructor with custom props
+public class TestInternalConstructorStackProps : Amazon.CDK.StackProps, ITestInternalConstructorStackProps
+{
+    public string InternalValue { get; set; } = string.Empty;
+}
+
+// Test helper class for internal constructor with custom props
+public class TestInternalConstructorWithCustomPropsStack : Amazon.CDK.Stack
+{
+    public string InternalValue { get; }
+    public string ProcessedInternalValue { get; }
+
+    internal TestInternalConstructorWithCustomPropsStack(Amazon.CDK.App scope, string id, ITestInternalConstructorStackProps props) : base(scope, id, props)
+    {
+        InternalValue = props.InternalValue;
+        ProcessedInternalValue = $"{props.InternalValue}-processed";
     }
 }

@@ -52,7 +52,7 @@ public static class CdkTestHelper
 
     /// <summary>
     /// Creates a test CDK app and custom stack type with the specified props.
-    /// This method uses reflection to instantiate the custom stack type.
+    /// This method uses reflection to instantiate the custom stack type, supporting both public and internal constructors.
     /// Note: You must create the Template.FromStack(stack) after adding constructs to the stack.
     /// </summary>
     /// <typeparam name="TStack">The custom stack type that inherits from Stack</typeparam>
@@ -63,13 +63,17 @@ public static class CdkTestHelper
         where TStack : Stack
     {
         var app = new App();
-        var stack = (TStack)Activator.CreateInstance(typeof(TStack), app, stackName, stackProps)!;
+        var stack = (TStack)Activator.CreateInstance(typeof(TStack),
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            [app, stackName, stackProps],
+            null)!;
         return (app, stack);
     }
 
     /// <summary>
     /// Creates a test CDK app and custom stack type with the specified custom props type.
-    /// This method uses reflection to instantiate the custom stack type with custom props.
+    /// This method uses reflection to instantiate the custom stack type, supporting both public and internal constructors.
     /// Note: You must create the Template.FromStack(stack) after adding constructs to the stack.
     /// </summary>
     /// <typeparam name="TStack">The custom stack type that inherits from Stack</typeparam>
@@ -82,7 +86,11 @@ public static class CdkTestHelper
         where TProps : IStackProps
     {
         var app = new App();
-        var stack = (TStack)Activator.CreateInstance(typeof(TStack), app, stackName, stackProps)!;
+        var stack = (TStack)Activator.CreateInstance(typeof(TStack),
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            [app, stackName, stackProps],
+            null)!;
         return (app, stack);
     }
 
