@@ -73,7 +73,10 @@ public class LambdaFunctionConstruct : Construct
             Tracing = props.IncludeOtelLayer ? Tracing.ACTIVE : Tracing.DISABLED,
             CurrentVersionOptions = new VersionOptions
             {
-                RemovalPolicy = RemovalPolicy.RETAIN
+                RemovalPolicy = RemovalPolicy.RETAIN,
+                SnapStart = props.EnableSnapStart
+                    ? new SnapStartProperty { ApplyOn = SnapStartApplyOn.PUBLISHED_VERSIONS }
+                    : null
             }
         });
         if (props.IncludeOtelLayer)
