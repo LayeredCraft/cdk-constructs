@@ -73,10 +73,7 @@ public class LambdaFunctionConstruct : Construct
             Tracing = props.IncludeOtelLayer ? Tracing.ACTIVE : Tracing.DISABLED,
             CurrentVersionOptions = new VersionOptions
             {
-                RemovalPolicy = RemovalPolicy.RETAIN,
-                SnapStart = props.EnableSnapStart
-                    ? new SnapStartProperty { ApplyOn = SnapStartApplyOn.PUBLISHED_VERSIONS }
-                    : null
+                RemovalPolicy = RemovalPolicy.RETAIN
             }
         });
         if (props.IncludeOtelLayer)
@@ -84,7 +81,14 @@ public class LambdaFunctionConstruct : Construct
             lambda.AddLayers(LayerVersion.FromLayerVersionArn(this, "OTELLambdaLayer",
                 $"arn:aws:lambda:{region}:901920570463:layer:aws-otel-collector-amd64-ver-0-102-1:1"));
         }
-
+        // ✅ SnapStart override (Cfn-level)
+        if (props.EnableSnapStart && lambda.Node.DefaultChild is CfnFunction cfnFunction)
+        {
+            cfnFunction.AddPropertyOverride("SnapStart", new Dictionary<string, string>
+            {
+                ["ApplyOn"] = "PublishedVersions"
+            });
+        }
         // ✅ Create a new version on every deployment
         var currentVersion = lambda.CurrentVersion;
 
