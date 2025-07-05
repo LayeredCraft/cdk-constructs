@@ -272,4 +272,47 @@ public class LambdaFunctionConstructTests
             { "RetentionInDays", 14 }
         }));
     }
+
+    [Theory]
+    [LambdaFunctionConstructAutoData(enableSnapStart: true)]
+    public void Construct_ShouldEnableSnapStartWhenEnabled(LambdaFunctionConstructProps props)
+    {
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+        
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        props.EnableSnapStart.Should().BeTrue();
+        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "SnapStart", Match.ObjectLike(new Dictionary<string, object>
+            {
+                { "ApplyOn", "PublishedVersions" }
+            }) }
+        }));
+    }
+
+    [Theory]
+    [LambdaFunctionConstructAutoData(enableSnapStart: false)]
+    public void Construct_ShouldNotHaveSnapStartWhenDisabled(LambdaFunctionConstructProps props)
+    {
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+        
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        props.EnableSnapStart.Should().BeFalse();
+        template.HasResourceProperties("AWS::Lambda::Function", Match.Not(Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "SnapStart", Match.AnyValue() }
+        })));
+    }
 }
