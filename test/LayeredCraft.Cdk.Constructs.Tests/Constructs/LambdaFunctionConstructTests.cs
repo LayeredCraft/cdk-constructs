@@ -4,6 +4,7 @@ using AwesomeAssertions;
 using LayeredCraft.Cdk.Constructs.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
+using LayeredCraft.Cdk.Constructs.Testing;
 
 namespace LayeredCraft.Cdk.Constructs.Tests.Constructs;
 
@@ -287,10 +288,7 @@ public class LambdaFunctionConstructTests
         var template = Template.FromStack(stack);
 
         // Verify that SnapStart is not configured by default
-        template.HasResourceProperties("AWS::Lambda::Function", Match.Not(Match.ObjectLike(new Dictionary<string, object>
-        {
-            { "SnapStart", Match.AnyValue() }
-        })));
+        template.ShouldNotHaveSnapStart();
     }
 
     [Theory]
@@ -309,12 +307,6 @@ public class LambdaFunctionConstructTests
         var template = Template.FromStack(stack);
 
         // Verify that SnapStart is enabled for published versions
-        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
-        {
-            { "SnapStart", Match.ObjectLike(new Dictionary<string, object>
-            {
-                { "ApplyOn", "PublishedVersions" }
-            }) }
-        }));
+        template.ShouldHaveSnapStart();
     }
 }
