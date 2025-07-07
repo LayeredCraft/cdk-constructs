@@ -13,6 +13,7 @@ public interface ILambdaFunctionConstructProps
     IDictionary<string, string> EnvironmentVariables { get; set; }
     bool IncludeOtelLayer { get; set; }
     List<LambdaPermission> Permissions { get; set; }
+    bool EnableSnapStart { get; set; }
 }
 public sealed record LambdaFunctionConstructProps : ILambdaFunctionConstructProps
 {
@@ -25,4 +26,5 @@ public sealed record LambdaFunctionConstructProps : ILambdaFunctionConstructProp
     public IDictionary<string, string> EnvironmentVariables { get; set; } = new Dictionary<string, string>();
     public bool IncludeOtelLayer { get; set; } = true;
     public List<LambdaPermission> Permissions { get; set; } = [];
+    public bool EnableSnapStart { get; set; } = false;
 }

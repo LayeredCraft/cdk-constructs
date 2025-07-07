@@ -85,6 +85,15 @@ public class LambdaFunctionConstruct : Construct
         // ✅ Create a new version on every deployment
         var currentVersion = lambda.CurrentVersion;
 
+        if (props.EnableSnapStart)
+        {
+            var cfnFunction = (CfnFunction)lambda.Node.DefaultChild!;
+            cfnFunction.AddPropertyOverride("SnapStart", new Dictionary<string, object>
+            {
+                ["ApplyOn"] = "PublishedVersions"
+            });
+        }
+
         var alias = new Alias(this, $"{id}-alias", new AliasProps
         {
             AliasName = "live",
