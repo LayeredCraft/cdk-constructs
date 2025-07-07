@@ -43,6 +43,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Main CDK construct that creates Lambda functions with comprehensive configuration
 - Automatically creates IAM roles and policies with CloudWatch Logs permissions
 - Supports OpenTelemetry layer integration via AWS managed layer
+- Supports AWS Lambda SnapStart for improved cold start performance
 - Creates function versions and aliases for deployment management
 - Handles Lambda permissions for multiple targets (function, version, alias)
 
@@ -97,11 +98,11 @@ The library includes comprehensive testing helpers for consumers:
 
 **LambdaFunctionConstructAssertions** (`LambdaFunctionConstructAssertions.cs`):
 - Extension methods for Template assertions
-- `ShouldHaveLambdaFunction()`, `ShouldHaveOtelLayer()`, `ShouldHaveCloudWatchLogsPermissions()`, etc.
+- `ShouldHaveLambdaFunction()`, `ShouldHaveOtelLayer()`, `ShouldHaveCloudWatchLogsPermissions()`, `ShouldHaveSnapStart()`, etc.
 
 **LambdaFunctionConstructPropsBuilder** (`LambdaFunctionConstructPropsBuilder.cs`):
 - Fluent builder for creating test props with common AWS service integrations
-- Methods like `WithDynamoDbAccess()`, `WithS3Access()`, `WithApiGatewayPermission()`
+- Methods like `WithDynamoDbAccess()`, `WithS3Access()`, `WithApiGatewayPermission()`, `WithSnapStart()`
 
 **Critical Testing Pattern**: 
 - Always create CDK templates AFTER adding constructs to stacks

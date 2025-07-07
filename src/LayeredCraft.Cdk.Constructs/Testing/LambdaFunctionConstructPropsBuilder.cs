@@ -18,6 +18,7 @@ public class LambdaFunctionConstructPropsBuilder
     private readonly Dictionary<string, string> _environmentVariables = new();
     private bool _includeOtelLayer = true;
     private readonly List<LambdaPermission> _permissions = new();
+    private bool _enableSnapStart = false;
 
     /// <summary>
     /// Sets the function name.
@@ -208,6 +209,17 @@ public class LambdaFunctionConstructPropsBuilder
     }
 
     /// <summary>
+    /// Enables or disables Lambda SnapStart.
+    /// </summary>
+    /// <param name="enabled">Whether to enable SnapStart</param>
+    /// <returns>The builder instance for method chaining</returns>
+    public LambdaFunctionConstructPropsBuilder WithSnapStart(bool enabled = true)
+    {
+        _enableSnapStart = enabled;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the LambdaFunctionConstructProps instance.
     /// </summary>
     /// <returns>The configured LambdaFunctionConstructProps</returns>
@@ -223,7 +235,8 @@ public class LambdaFunctionConstructPropsBuilder
             PolicyStatements = _policyStatements.ToArray(),
             EnvironmentVariables = _environmentVariables,
             IncludeOtelLayer = _includeOtelLayer,
-            Permissions = _permissions
+            Permissions = _permissions,
+            EnableSnapStart = _enableSnapStart
         };
     }
 }

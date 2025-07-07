@@ -145,4 +145,31 @@ public static class LambdaFunctionConstructAssertions
             { "RetentionInDays", retentionDays }
         }));
     }
+
+    /// <summary>
+    /// Asserts that the template contains a Lambda function with SnapStart enabled.
+    /// </summary>
+    /// <param name="template">The CDK template to assert against</param>
+    public static void ShouldHaveSnapStart(this Template template)
+    {
+        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "SnapStart", Match.ObjectLike(new Dictionary<string, object>
+            {
+                { "ApplyOn", "PublishedVersions" }
+            }) }
+        }));
+    }
+
+    /// <summary>
+    /// Asserts that the template contains a Lambda function without SnapStart configuration.
+    /// </summary>
+    /// <param name="template">The CDK template to assert against</param>
+    public static void ShouldNotHaveSnapStart(this Template template)
+    {
+        template.HasResourceProperties("AWS::Lambda::Function", Match.Not(Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "SnapStart", Match.AnyValue() }
+        })));
+    }
 }

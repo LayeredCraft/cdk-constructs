@@ -82,6 +82,24 @@ var lambdaConstruct = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFu
 });
 ```
 
+### Lambda with SnapStart for Improved Performance
+
+```csharp
+var lambdaConstruct = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "my-function",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda-deployment.zip",
+    RoleName = "my-function-role",
+    PolicyName = "my-function-policy",
+    EnableSnapStart = true, // Enable SnapStart for faster cold starts
+    EnvironmentVariables = new Dictionary<string, string>
+    {
+        { "ENVIRONMENT", "production" }
+    }
+});
+```
+
 ## Features
 
 ### 🚀 LambdaFunctionConstruct
@@ -92,6 +110,7 @@ The main construct that creates a complete Lambda function setup with:
 - **IAM Role & Policy**: Automatic CloudWatch Logs permissions + custom policy statements
 - **CloudWatch Logs**: Explicit log group with configurable retention (default: 2 weeks)
 - **OpenTelemetry**: Optional AWS OTEL Collector layer integration
+- **SnapStart**: Optional AWS Lambda SnapStart for improved cold start performance
 - **Versioning**: Automatic version creation with "live" alias
 - **Multi-target Permissions**: Applies permissions to function, version, and alias
 
@@ -107,6 +126,7 @@ The main construct that creates a complete Lambda function setup with:
 | `PolicyStatements` | `PolicyStatement[]` | Custom IAM policy statements | `[]` |
 | `EnvironmentVariables` | `IDictionary<string, string>` | Environment variables | `{}` |
 | `IncludeOtelLayer` | `bool` | Enable OpenTelemetry layer | `true` |
+| `EnableSnapStart` | `bool` | Enable AWS Lambda SnapStart | `false` |
 | `Permissions` | `List<LambdaPermission>` | Lambda invocation permissions | `[]` |
 
 ### 🔍 OpenTelemetry Integration
@@ -336,6 +356,8 @@ var assetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-lambda.zip");
 | `ShouldHaveLambdaPermissions(count)` | Verify Lambda invoke permissions |
 | `ShouldHaveVersionAndAlias(aliasName)` | Verify versioning setup |
 | `ShouldHaveLogGroup(functionName, retentionDays)` | Verify log group configuration |
+| `ShouldHaveSnapStart()` | Verify SnapStart is enabled |
+| `ShouldNotHaveSnapStart()` | Verify SnapStart is disabled |
 
 ### Props Builder Methods
 
@@ -353,6 +375,7 @@ var assetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-lambda.zip");
 | `WithEnvironmentVariables(variables)` | Add multiple environment variables |
 | `WithCustomPolicy(policyStatement)` | Add custom IAM policy statement |
 | `WithCustomPermission(permission)` | Add custom Lambda permission |
+| `WithSnapStart(bool)` | Enable/disable Lambda SnapStart |
 
 ## Project Structure
 

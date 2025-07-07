@@ -35,6 +35,7 @@ public class LambdaFunctionConstructCustomization(bool includeOtelLayer = true, 
             .With(props => props.IncludeOtelLayer, includeOtelLayer)
             .With(props => props.Permissions, includePermissions 
                 ? [fixture.Create<LambdaPermission>()]
-                : []));
+                : [])
+            .With(props => props.EnableSnapStart, false));
     }
 }

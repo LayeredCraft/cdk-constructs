@@ -4,6 +4,7 @@ using AwesomeAssertions;
 using LayeredCraft.Cdk.Constructs.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
+using LayeredCraft.Cdk.Constructs.Testing;
 
 namespace LayeredCraft.Cdk.Constructs.Tests.Constructs;
 
@@ -271,5 +272,41 @@ public class LambdaFunctionConstructTests
             { "LogGroupName", $"/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}" },
             { "RetentionInDays", 14 }
         }));
+    }
+
+    [Theory]
+    [LambdaFunctionConstructAutoData]
+    public void Construct_ShouldNotEnableSnapStartByDefault(LambdaFunctionConstructProps props)
+    {
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+        
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        // Verify that SnapStart is not configured by default
+        template.ShouldNotHaveSnapStart();
+    }
+
+    [Theory]
+    [LambdaFunctionConstructAutoData]
+    public void Construct_ShouldEnableSnapStartWhenConfigured(LambdaFunctionConstructProps props)
+    {
+        props.EnableSnapStart = true;
+        
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+        
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        // Verify that SnapStart is enabled for published versions
+        template.ShouldHaveSnapStart();
     }
 }
