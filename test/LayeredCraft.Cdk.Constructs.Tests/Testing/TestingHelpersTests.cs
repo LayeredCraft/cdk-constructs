@@ -804,6 +804,34 @@ public class TestingHelpersTests
         props.AssetPath.Should().Be(customPath);
         props.AssetPath.Should().EndWith("TestAssets/custom-site");
     }
+
+    [Fact]
+    public void PropsBuilder_ShouldConfigureSnapStart()
+    {
+        // Act
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("snapstart-test")
+            .WithSnapStart(true)
+            .Build();
+
+        // Assert
+        props.FunctionName.Should().Be("snapstart-test");
+        props.EnableSnapStart.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldDisableSnapStart()
+    {
+        // Act
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("no-snapstart-test")
+            .WithSnapStart(false)
+            .Build();
+
+        // Assert
+        props.FunctionName.Should().Be("no-snapstart-test");
+        props.EnableSnapStart.Should().BeFalse();
+    }
 }
 
 // Test helper interface for custom props testing
