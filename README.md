@@ -61,12 +61,12 @@ var lambdaConstruct = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFu
     AssetPath = "./lambda-deployment.zip",
     RoleName = "my-function-role",
     PolicyName = "my-function-policy",
-    PolicyStatements = new[]
-    {
+    PolicyStatements = 
+    [
         new PolicyStatement(new PolicyStatementProps
         {
-            Actions = new[] { "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query" },
-            Resources = new[] { "arn:aws:dynamodb:us-east-1:123456789012:table/MyTable" },
+            Actions = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"],
+            Resources = ["arn:aws:dynamodb:us-east-1:123456789012:table/MyTable"],
             Effect = Effect.ALLOW
         })
     },
@@ -155,7 +155,7 @@ var staticSite = new StaticSiteConstruct(this, "MySite", new StaticSiteConstruct
     SiteSubDomain = "app",
     AssetPath = "./build",
     ApiDomain = "api.example.com", // Proxy /api/* to this domain
-    AlternateDomains = new[] { "example.com", "www.example.com" }
+    AlternateDomains = ["example.com", "www.example.com"]
 });
 ```
 
@@ -196,8 +196,8 @@ public class MyStack : Stack
         var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
         {
             TableName = "users",
-            PartitionKey = new AttributeDefinition { Name = "userId", Type = AttributeType.STRING },
-            SortKey = new AttributeDefinition { Name = "itemId", Type = AttributeType.STRING },
+            PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+            SortKey = new Attribute { Name = "itemId", Type = AttributeType.STRING },
             BillingMode = BillingMode.PAY_PER_REQUEST,
             RemovalPolicy = RemovalPolicy.DESTROY
         });
@@ -211,19 +211,19 @@ public class MyStack : Stack
 var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
 {
     TableName = "users",
-    PartitionKey = new AttributeDefinition { Name = "userId", Type = AttributeType.STRING },
-    SortKey = new AttributeDefinition { Name = "itemId", Type = AttributeType.STRING },
+    PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "itemId", Type = AttributeType.STRING },
     BillingMode = BillingMode.PAY_PER_REQUEST,
     RemovalPolicy = RemovalPolicy.DESTROY,
-    GlobalSecondaryIndexes = new[]
-    {
+    GlobalSecondaryIndexes = 
+    [
         new GlobalSecondaryIndexProps
         {
             IndexName = "GSI1",
-            PartitionKey = new AttributeDefinition { Name = "itemType", Type = AttributeType.STRING },
-            SortKey = new AttributeDefinition { Name = "createdAt", Type = AttributeType.STRING }
+            PartitionKey = new Attribute { Name = "itemType", Type = AttributeType.STRING },
+            SortKey = new Attribute { Name = "createdAt", Type = AttributeType.STRING }
         }
-    }
+    ]
 });
 ```
 
@@ -233,8 +233,8 @@ var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstru
 var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
 {
     TableName = "events",
-    PartitionKey = new AttributeDefinition { Name = "aggregateId", Type = AttributeType.STRING },
-    SortKey = new AttributeDefinition { Name = "eventId", Type = AttributeType.STRING },
+    PartitionKey = new Attribute { Name = "aggregateId", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "eventId", Type = AttributeType.STRING },
     BillingMode = BillingMode.PAY_PER_REQUEST,
     RemovalPolicy = RemovalPolicy.DESTROY,
     Stream = StreamViewType.NEW_AND_OLD_IMAGES,
