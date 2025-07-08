@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a .NET library that provides reusable AWS CDK constructs for serverless applications. The library is designed specifically for LayeredCraft projects and focuses on Lambda functions with integrated OpenTelemetry support, IAM management, and environment configuration.
+This is a .NET library that provides reusable AWS CDK constructs for serverless applications and static websites. The library is designed specifically for LayeredCraft projects and includes:
+
+- **Lambda Functions**: Comprehensive Lambda construct with integrated OpenTelemetry support, IAM management, and environment configuration
+- **Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, Route53 DNS, and optional API proxying
 
 ## Commands
 
@@ -47,9 +50,18 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Creates function versions and aliases for deployment management
 - Handles Lambda permissions for multiple targets (function, version, alias)
 
+**StaticSiteConstruct** (`src/LayeredCraft.Cdk.Constructs/Constructs/StaticSiteConstruct.cs`)
+- Comprehensive CDK construct for static website hosting
+- Creates S3 bucket with public access for website hosting
+- Sets up CloudFront distribution with SSL certificate and custom error pages
+- Configures Route53 DNS records for primary domain and alternates
+- Supports optional API proxying via CloudFront behaviors for `/api/*` paths
+- Includes automatic asset deployment with cache invalidation
+
 **Configuration Models** (`src/LayeredCraft.Cdk.Constructs/Models/`)
 - `LambdaFunctionConstructProps`: Main configuration interface and record for Lambda construct
 - `LambdaPermission`: Record for defining Lambda invocation permissions
+- `StaticSiteConstructProps`: Configuration interface and record for static site construct
 
 ### Key Design Patterns
 
@@ -78,12 +90,14 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 **Test Customizations**:
 - `LambdaFunctionConstructCustomization`: Configures realistic test data for Lambda constructs
-- Supports parameterized test scenarios (OTEL layer on/off, permissions included/excluded)
+- `StaticSiteConstructCustomization`: Configures realistic test data for static site constructs
+- Supports parameterized test scenarios for Lambda (OTEL layer on/off, permissions included/excluded) and static sites (API domain on/off, alternate domains included/excluded)
 
 ### Test Data Strategy
 - Uses AutoFixture with custom configurations for realistic AWS resource names
-- Test assets include `test-lambda.zip` for Lambda deployment packages
+- Test assets include `test-lambda.zip` for Lambda deployment packages and `static-site/` folder for static site assets
 - Tests verify both resource creation and property configuration
+- Supports parameterized scenarios for both Lambda (OTEL layer on/off, permissions included/excluded) and static sites (API domain on/off, alternate domains included/excluded)
 
 ### Testing Helpers (`src/LayeredCraft.Cdk.Constructs/Testing/`)
 The library includes comprehensive testing helpers for consumers:
@@ -94,7 +108,8 @@ The library includes comprehensive testing helpers for consumers:
 - `CreateTestStackMinimal()`: Creates only the stack (app created internally)  
 - `CreateTestStackMinimal<TStack>()`: Creates custom stack types with app created internally
 - `GetTestAssetPath()`: Resolves test asset paths relative to executing assembly
-- `CreatePropsBuilder()`: Creates fluent builder with test defaults
+- `CreatePropsBuilder()`: Creates fluent builder with Lambda test defaults
+- `CreateStaticSitePropsBuilder()`: Creates fluent builder with static site test defaults
 
 **LambdaFunctionConstructAssertions** (`LambdaFunctionConstructAssertions.cs`):
 - Extension methods for Template assertions
@@ -103,6 +118,14 @@ The library includes comprehensive testing helpers for consumers:
 **LambdaFunctionConstructPropsBuilder** (`LambdaFunctionConstructPropsBuilder.cs`):
 - Fluent builder for creating test props with common AWS service integrations
 - Methods like `WithDynamoDbAccess()`, `WithS3Access()`, `WithApiGatewayPermission()`, `WithSnapStart()`
+
+**StaticSiteConstructAssertions** (`StaticSiteConstructAssertions.cs`):
+- Extension methods for Template assertions specific to static sites
+- `ShouldHaveCompleteStaticSite()`, `ShouldHaveStaticWebsiteBucket()`, `ShouldHaveCloudFrontDistribution()`, `ShouldHaveSSLCertificate()`, `ShouldHaveRoute53Records()`, `ShouldHaveApiProxyBehavior()`, etc.
+
+**StaticSiteConstructPropsBuilder** (`StaticSiteConstructPropsBuilder.cs`):
+- Fluent builder for creating static site test props with scenario-based configurations
+- Methods like `WithDomainName()`, `WithAlternateDomains()`, `WithApiDomain()`, `ForBlog()`, `ForDocumentation()`, `ForSinglePageApp()`
 
 **Critical Testing Pattern**: 
 - Always create CDK templates AFTER adding constructs to stacks

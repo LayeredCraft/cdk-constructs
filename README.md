@@ -4,7 +4,7 @@
 [![NuGet](https://img.shields.io/nuget/v/LayeredCraft.Cdk.Constructs.svg)](https://www.nuget.org/packages/LayeredCraft.Cdk.Constructs/)
 [![Downloads](https://img.shields.io/nuget/dt/LayeredCraft.Cdk.Constructs.svg)](https://www.nuget.org/packages/LayeredCraft.Cdk.Constructs/)
 
-A reusable library of AWS CDK constructs for .NET projects, optimized for serverless applications using Lambda, API Gateway (or Lambda URLs), DynamoDB, S3, CloudFront, and OpenTelemetry. Built for speed, observability, and cost efficiency across the LayeredCraft project ecosystem.
+A reusable library of AWS CDK constructs for .NET projects, optimized for serverless applications and static websites. Features comprehensive Lambda functions with OpenTelemetry support, and complete static site hosting with CloudFront CDN, SSL certificates, and DNS management. Built for speed, observability, and cost efficiency across the LayeredCraft project ecosystem.
 
 ## Installation
 
@@ -114,6 +114,61 @@ The main construct that creates a complete Lambda function setup with:
 - **Versioning**: Automatic version creation with "live" alias
 - **Multi-target Permissions**: Applies permissions to function, version, and alias
 
+### 🌐 StaticSiteConstruct
+
+A comprehensive construct for hosting static websites with global content delivery:
+
+- **S3 Static Website**: Bucket configured for website hosting with proper public access
+- **CloudFront Distribution**: Global CDN with custom error pages and caching optimization
+- **SSL Certificate**: Automatic SSL/TLS certificate with DNS validation
+- **Route53 DNS**: A records with CloudFront alias targets for the domain and alternates
+- **Optional API Proxying**: Forward `/api/*` requests to a backend API domain
+- **Asset Deployment**: Automatic deployment of static assets with cache invalidation
+
+#### Quick Start - Static Site
+
+```csharp
+using Amazon.CDK;
+using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs.Models;
+
+public class MyStack : Stack
+{
+    public MyStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+    {
+        var staticSite = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
+        {
+            DomainName = "example.com",
+            SiteSubDomain = "www",
+            AssetPath = "./build"
+        });
+    }
+}
+```
+
+#### Static Site with API Proxying
+
+```csharp
+var staticSite = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
+{
+    DomainName = "example.com",
+    SiteSubDomain = "app",
+    AssetPath = "./build",
+    ApiDomain = "api.example.com", // Proxy /api/* to this domain
+    AlternateDomains = new[] { "example.com", "www.example.com" }
+});
+```
+
+#### Static Site Configuration Options
+
+| Property | Type | Description | Default |
+|----------|------|-------------|---------|
+| `DomainName` | `string` | Root domain name (e.g., "example.com") | Required |
+| `SiteSubDomain` | `string` | Subdomain for the site (e.g., "www", "app") | Required |
+| `AssetPath` | `string` | Path to static assets directory | Required |
+| `ApiDomain` | `string?` | API domain for /api/* proxying | `null` |
+| `AlternateDomains` | `string[]` | Additional domains to serve content | `[]` |
+
 ### 🔧 Configuration Options
 
 | Property | Type | Description | Default |
@@ -153,6 +208,8 @@ The library includes comprehensive testing helpers to make it easy to unit test 
 - **`CdkTestHelper`**: Reduces boilerplate for creating test stacks and props (including custom stack types)
 - **`LambdaFunctionConstructAssertions`**: Extension methods for asserting Lambda resources
 - **`LambdaFunctionConstructPropsBuilder`**: Fluent builder for creating test props
+- **`StaticSiteConstructAssertions`**: Extension methods for asserting static site resources
+- **`StaticSiteConstructPropsBuilder`**: Fluent builder for creating static site test props
 
 ### Quick Testing Example
 
@@ -217,6 +274,65 @@ public void MyStack_ShouldCreateLegacyFunction()
     template.ShouldHaveLambdaFunction("legacy-function-test");
     template.ShouldNotHaveOtelLayer();
     template.ShouldHaveCloudWatchLogsPermissions("legacy-function-test");
+}
+```
+
+### Example: Testing StaticSiteConstruct
+
+```csharp
+using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs.Testing;
+
+[Fact]
+public void MyStack_ShouldCreateStaticSiteWithApiProxy()
+{
+    // Create test infrastructure
+    var stack = CdkTestHelper.CreateTestStackMinimal();
+
+    // Build test props using fluent builder
+    var props = CdkTestHelper.CreateStaticSitePropsBuilder()
+        .WithDomainName("myapp.com")
+        .WithSiteSubDomain("app")
+        .WithApiDomain("api.myapp.com")
+        .WithAlternateDomains("myapp.com", "www.myapp.com")
+        .Build();
+
+    // Create the construct
+    _ = new StaticSiteConstruct(stack, "MyAppSite", props);
+
+    // Create template AFTER adding constructs to the stack
+    var template = Template.FromStack(stack);
+
+    // Use assertion helpers for clean, readable tests
+    template.ShouldHaveCompleteStaticSite("app.myapp.com", "app.myapp.com", 
+        hasApiProxy: true, domainCount: 3);
+    template.ShouldHaveApiProxyBehavior("api.myapp.com");
+    template.ShouldHaveRoute53Records("app.myapp.com");
+    template.ShouldHaveRoute53Records("myapp.com");
+    template.ShouldHaveRoute53Records("www.myapp.com");
+}
+```
+
+### Example: Testing Static Site Scenarios
+
+```csharp
+[Fact]
+public void MyStack_ShouldCreateBlogSite()
+{
+    var stack = CdkTestHelper.CreateTestStackMinimal();
+
+    var props = CdkTestHelper.CreateStaticSitePropsBuilder()
+        .ForBlog("myblog.com")
+        .Build();
+
+    _ = new StaticSiteConstruct(stack, "BlogSite", props);
+
+    var template = Template.FromStack(stack);
+
+    template.ShouldHaveCompleteStaticSite("www.myblog.com", "www.myblog.com", 
+        hasApiProxy: false, domainCount: 2);
+    template.ShouldHaveRoute53Records("www.myblog.com");
+    template.ShouldHaveRoute53Records("myblog.com");
 }
 ```
 
@@ -321,30 +437,42 @@ public class MyStack : Stack
 
 ### Test Asset Management
 
-Create a `TestAssets` folder in your test project and place your Lambda deployment packages there:
+Create a `TestAssets` folder in your test project and place your deployment packages there:
 
 ```
 YourTestProject/
 ├── TestAssets/
-│   ├── test-lambda.zip      # Default test asset
-│   └── my-custom-lambda.zip # Custom test assets
+│   ├── test-lambda.zip      # Default Lambda test asset
+│   ├── my-custom-lambda.zip # Custom Lambda test assets
+│   └── static-site/         # Static site test assets
+│       ├── index.html
+│       ├── styles.css
+│       ├── about.html
+│       └── app.js
 └── YourTests.cs
 ```
 
 The testing helpers automatically resolve test asset paths:
 
 ```csharp
-// Uses TestAssets/test-lambda.zip by default
-var props = CdkTestHelper.CreatePropsBuilder().Build();
+// Lambda testing - uses TestAssets/test-lambda.zip by default
+var lambdaProps = CdkTestHelper.CreatePropsBuilder().Build();
 
-// Or specify your own test asset
-var props = CdkTestHelper.CreatePropsBuilder("./TestAssets/my-custom-lambda.zip").Build();
+// Static site testing - uses TestAssets/static-site by default
+var staticProps = CdkTestHelper.CreateStaticSitePropsBuilder().Build();
+
+// Or specify your own test assets
+var customLambdaProps = CdkTestHelper.CreatePropsBuilder("./TestAssets/my-custom-lambda.zip").Build();
+var customStaticProps = CdkTestHelper.CreateStaticSitePropsBuilder("./TestAssets/my-site").Build();
 
 // Get reliable paths to test assets
-var assetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-lambda.zip");
+var lambdaAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-lambda.zip");
+var staticAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-site");
 ```
 
 ### Available Assertion Methods
+
+#### Lambda Function Assertions
 
 | Method | Description |
 |--------|-------------|
@@ -359,7 +487,23 @@ var assetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-lambda.zip");
 | `ShouldHaveSnapStart()` | Verify SnapStart is enabled |
 | `ShouldNotHaveSnapStart()` | Verify SnapStart is disabled |
 
+#### Static Site Assertions
+
+| Method | Description |
+|--------|-------------|
+| `ShouldHaveCompleteStaticSite(bucketName, domainName, hasApiProxy, domainCount)` | Verify complete static site setup |
+| `ShouldHaveStaticWebsiteBucket(bucketName)` | Verify S3 bucket with website configuration |
+| `ShouldHaveCloudFrontDistribution(domainName)` | Verify CloudFront distribution |
+| `ShouldHaveSSLCertificate(domainName)` | Verify SSL certificate |
+| `ShouldHaveRoute53Records(domainName)` | Verify Route53 A records |
+| `ShouldHaveMultipleRoute53Records(count)` | Verify multiple domain records |
+| `ShouldHaveApiProxyBehavior(apiDomain)` | Verify API proxy behavior |
+| `ShouldNotHaveApiProxyBehavior()` | Verify no API proxy behavior |
+| `ShouldHaveBucketDeployment()` | Verify asset deployment |
+
 ### Props Builder Methods
+
+#### Lambda Function Props Builder
 
 | Method | Description |
 |--------|-------------|
@@ -377,24 +521,45 @@ var assetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-lambda.zip");
 | `WithCustomPermission(permission)` | Add custom Lambda permission |
 | `WithSnapStart(bool)` | Enable/disable Lambda SnapStart |
 
+#### Static Site Props Builder
+
+| Method | Description |
+|--------|-------------|
+| `WithDomainName(domain)` | Set root domain name |
+| `WithSiteSubDomain(subdomain)` | Set site subdomain |
+| `WithAssetPath(path)` | Set static assets directory path |
+| `WithApiDomain(apiDomain)` | Set API domain for proxying |
+| `WithoutApiDomain()` | Remove API domain |
+| `WithAlternateDomain(domain)` | Add single alternate domain |
+| `WithAlternateDomains(domains...)` | Add multiple alternate domains |
+| `WithoutAlternateDomains()` | Clear all alternate domains |
+| `ForBlog(domain)` | Configure for blog scenario (www + naked domain) |
+| `ForDocumentation(domain, apiDomain)` | Configure for docs scenario with API |
+| `ForSinglePageApp(domain, apiDomain)` | Configure for SPA scenario with API |
+
 ## Project Structure
 
 ```
 ├── src/
 │   └── LayeredCraft.Cdk.Constructs/           # Main library package
 │       ├── Constructs/
-│       │   └── LambdaFunctionConstruct.cs      # Lambda function construct with IAM and logging
+│       │   ├── LambdaFunctionConstruct.cs      # Lambda function construct with IAM and logging
+│       │   └── StaticSiteConstruct.cs          # Static site construct with CDN and DNS
 │       ├── Models/
 │       │   ├── LambdaFunctionConstructProps.cs # Configuration props for Lambda construct
-│       │   └── LambdaPermission.cs             # Lambda permission model
+│       │   ├── LambdaPermission.cs             # Lambda permission model
+│       │   └── StaticSiteConstructProps.cs     # Configuration props for static site construct
 │       └── Testing/                            # Testing helpers for consumers
 │           ├── CdkTestHelper.cs                # Test stack and props creation utilities
-│           ├── LambdaFunctionConstructAssertions.cs # Extension methods for assertions
-│           └── LambdaFunctionConstructPropsBuilder.cs # Fluent builder for test props
+│           ├── LambdaFunctionConstructAssertions.cs # Extension methods for Lambda assertions
+│           ├── LambdaFunctionConstructPropsBuilder.cs # Fluent builder for Lambda test props
+│           ├── StaticSiteConstructAssertions.cs # Extension methods for static site assertions
+│           └── StaticSiteConstructPropsBuilder.cs # Fluent builder for static site test props
 ├── test/
 │   └── LayeredCraft.Cdk.Constructs.Tests/     # Test suite
 │       ├── Constructs/
-│       │   └── LambdaFunctionConstructTests.cs # Unit tests for Lambda construct
+│       │   ├── LambdaFunctionConstructTests.cs # Unit tests for Lambda construct
+│       │   └── StaticSiteConstructTests.cs     # Unit tests for static site construct
 │       ├── Testing/
 │       │   └── TestingHelpersTests.cs          # Tests for testing helper functionality
 │       ├── TestKit/                            # Test utilities and fixtures
@@ -402,7 +567,12 @@ var assetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-lambda.zip");
 │       │   ├── Customizations/                 # Test data customizations
 │       │   └── Extensions/                     # Test extension methods
 │       └── TestAssets/
-│           └── test-lambda.zip                 # Test Lambda deployment package
+│           ├── test-lambda.zip                 # Test Lambda deployment package
+│           └── static-site/                    # Test static site assets
+│               ├── index.html
+│               ├── styles.css
+│               ├── about.html
+│               └── app.js
 └── LayeredCraft.Cdk.Constructs.sln            # Solution file
 ```
 

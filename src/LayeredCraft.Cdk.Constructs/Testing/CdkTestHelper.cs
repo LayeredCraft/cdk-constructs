@@ -1,6 +1,5 @@
 using System.Reflection;
 using Amazon.CDK;
-using Amazon.CDK.Assertions;
 
 namespace LayeredCraft.Cdk.Constructs.Testing;
 
@@ -199,5 +198,21 @@ public static class CdkTestHelper
             .WithPolicyName("test-function-policy")
             .WithEnvironmentVariable("ENVIRONMENT", "test")
             .WithOtelEnabled(true);
+    }
+
+    /// <summary>
+    /// Creates a StaticSiteConstructPropsBuilder with sensible test defaults.
+    /// Uses the executing assembly location to find test assets reliably.
+    /// </summary>
+    /// <param name="assetPath">Optional custom asset path. If not provided, uses TestAssets/static-site</param>
+    /// <returns>A configured builder for creating test props</returns>
+    public static StaticSiteConstructPropsBuilder CreateStaticSitePropsBuilder(string? assetPath = null)
+    {
+        var defaultAssetPath = assetPath ?? GetTestAssetPath("TestAssets/static-site");
+        
+        return new StaticSiteConstructPropsBuilder()
+            .WithDomainName("example.com")
+            .WithSiteSubDomain("www")
+            .WithAssetPath(defaultAssetPath);
     }
 }

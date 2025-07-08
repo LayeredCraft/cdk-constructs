@@ -1,8 +1,10 @@
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
 using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Extensions;
+using LayeredCraft.Cdk.Constructs.Tests.TestKit.Customizations;
 
 namespace LayeredCraft.Cdk.Constructs.Tests.Testing;
 
@@ -668,6 +670,167 @@ public class TestingHelpersTests
         });
         
         stack.IsInternalConstructor.Should().BeTrue();
+    }
+
+    [Fact]
+    public void StaticSiteConstructCustomization_WithApiDomainIncluded_ShouldSetApiDomain()
+    {
+        // Arrange
+        var fixture = new Fixture();
+        var customization = new StaticSiteConstructCustomization(includeApiDomain: true, includeAlternateDomains: false);
+
+        // Act
+        customization.Customize(fixture);
+        var props = fixture.Create<StaticSiteConstructProps>();
+
+        // Assert
+        props.ApiDomain.Should().Be("api.example.com");
+        props.AlternateDomains.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void StaticSiteConstructCustomization_WithApiDomainExcluded_ShouldNotSetApiDomain()
+    {
+        // Arrange
+        var fixture = new Fixture();
+        var customization = new StaticSiteConstructCustomization(includeApiDomain: false, includeAlternateDomains: false);
+
+        // Act
+        customization.Customize(fixture);
+        var props = fixture.Create<StaticSiteConstructProps>();
+
+        // Assert
+        props.ApiDomain.Should().BeNull();
+        props.AlternateDomains.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void StaticSiteConstructCustomization_WithAlternateDomainsIncluded_ShouldSetAlternateDomains()
+    {
+        // Arrange
+        var fixture = new Fixture();
+        var customization = new StaticSiteConstructCustomization(includeApiDomain: false, includeAlternateDomains: true);
+
+        // Act
+        customization.Customize(fixture);
+        var props = fixture.Create<StaticSiteConstructProps>();
+
+        // Assert
+        props.ApiDomain.Should().BeNull();
+        props.AlternateDomains.Should().HaveCount(2);
+        props.AlternateDomains.Should().Contain("example.com");
+        props.AlternateDomains.Should().Contain("alt.example.com");
+    }
+
+    [Fact]
+    public void StaticSiteConstructCustomization_WithAlternateDomainsExcluded_ShouldNotSetAlternateDomains()
+    {
+        // Arrange
+        var fixture = new Fixture();
+        var customization = new StaticSiteConstructCustomization(includeApiDomain: false, includeAlternateDomains: false);
+
+        // Act
+        customization.Customize(fixture);
+        var props = fixture.Create<StaticSiteConstructProps>();
+
+        // Assert
+        props.ApiDomain.Should().BeNull();
+        props.AlternateDomains.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void StaticSiteConstructCustomization_WithBothIncluded_ShouldSetBothApiDomainAndAlternateDomains()
+    {
+        // Arrange
+        var fixture = new Fixture();
+        var customization = new StaticSiteConstructCustomization(includeApiDomain: true, includeAlternateDomains: true);
+
+        // Act
+        customization.Customize(fixture);
+        var props = fixture.Create<StaticSiteConstructProps>();
+
+        // Assert
+        props.ApiDomain.Should().Be("api.example.com");
+        props.AlternateDomains.Should().HaveCount(2);
+        props.AlternateDomains.Should().Contain("example.com");
+        props.AlternateDomains.Should().Contain("alt.example.com");
+    }
+
+    [Fact]
+    public void StaticSiteConstructCustomization_ShouldAlwaysSetRequiredProperties()
+    {
+        // Arrange
+        var fixture = new Fixture();
+        var customization = new StaticSiteConstructCustomization(includeApiDomain: false, includeAlternateDomains: false);
+
+        // Act
+        customization.Customize(fixture);
+        var props = fixture.Create<StaticSiteConstructProps>();
+
+        // Assert
+        props.DomainName.Should().Be("example.com");
+        props.SiteSubDomain.Should().Be("www");
+        props.AssetPath.Should().EndWith("TestAssets/static-site");
+        Path.IsPathRooted(props.AssetPath).Should().BeTrue("Asset path should be absolute");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStaticSitePropsBuilderWithDefaults()
+    {
+        // Act
+        var builder = CdkTestHelper.CreateStaticSitePropsBuilder();
+        var props = builder.Build();
+
+        // Assert
+        props.DomainName.Should().Be("example.com");
+        props.SiteSubDomain.Should().Be("www");
+        props.AssetPath.Should().EndWith("TestAssets/static-site");
+        Path.IsPathRooted(props.AssetPath).Should().BeTrue("Asset path should be absolute");
+        props.ApiDomain.Should().BeNull();
+        props.AlternateDomains.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateStaticSitePropsBuilderWithCustomAssetPath()
+    {
+        // Arrange
+        var customPath = CdkTestHelper.GetTestAssetPath("TestAssets/custom-site");
+
+        // Act
+        var builder = CdkTestHelper.CreateStaticSitePropsBuilder(customPath);
+        var props = builder.Build();
+
+        // Assert
+        props.AssetPath.Should().Be(customPath);
+        props.AssetPath.Should().EndWith("TestAssets/custom-site");
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldConfigureSnapStart()
+    {
+        // Act
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("snapstart-test")
+            .WithSnapStart(true)
+            .Build();
+
+        // Assert
+        props.FunctionName.Should().Be("snapstart-test");
+        props.EnableSnapStart.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldDisableSnapStart()
+    {
+        // Act
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("no-snapstart-test")
+            .WithSnapStart(false)
+            .Build();
+
+        // Assert
+        props.FunctionName.Should().Be("no-snapstart-test");
+        props.EnableSnapStart.Should().BeFalse();
     }
 }
 
