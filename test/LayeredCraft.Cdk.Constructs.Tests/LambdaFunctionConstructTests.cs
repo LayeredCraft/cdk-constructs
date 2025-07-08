@@ -31,8 +31,8 @@ public class LambdaFunctionConstructTests
             { "FunctionName", $"{props.FunctionName}-{props.FunctionSuffix}" },
             { "Runtime", "provided.al2023" },
             { "Handler", "bootstrap" },
-            { "MemorySize", (int)props.MemorySize },
-            { "Timeout", (int)props.TimeoutInSeconds }
+            { "MemorySize", props.MemorySize },
+            { "Timeout", props.TimeoutInSeconds }
         }));
     }
 

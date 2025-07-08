@@ -76,7 +76,7 @@ public class LambdaFunctionConstruct : Construct
             Handler = "bootstrap",
             Code = Code.FromAsset(props.AssetPath),
             Role = role,
-            MemorySize = (int)props.MemorySize,
+            MemorySize = props.MemorySize,
             Timeout = Duration.Seconds(props.TimeoutInSeconds),
             Environment = props.EnvironmentVariables,
             LogGroup = logGroup,
