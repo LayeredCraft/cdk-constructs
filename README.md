@@ -447,7 +447,8 @@ YourTestProject/
 │   └── static-site/         # Static site test assets
 │       ├── index.html
 │       ├── styles.css
-│       └── script.js
+│       ├── about.html
+│       └── app.js
 └── YourTests.cs
 ```
 
@@ -570,7 +571,8 @@ var staticAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-site");
 │           └── static-site/                    # Test static site assets
 │               ├── index.html
 │               ├── styles.css
-│               └── script.js
+│               ├── about.html
+│               └── app.js
 └── LayeredCraft.Cdk.Constructs.sln            # Solution file
 ```
 
