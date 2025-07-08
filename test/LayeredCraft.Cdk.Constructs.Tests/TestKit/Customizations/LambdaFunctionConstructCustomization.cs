@@ -19,15 +19,15 @@ public class LambdaFunctionConstructCustomization(bool includeOtelLayer = true, 
             .With(props => props.AssetPath, "./TestAssets/test-lambda.zip")
             .With(props => props.RoleName, "test-function-us-east-1-lambdaRole")
             .With(props => props.PolicyName, "test-function-lambda")
-            .With(props => props.PolicyStatements, new PolicyStatement[]
-            {
+            .With(props => props.PolicyStatements, 
+            [
                 new(new PolicyStatementProps
                 {
                     Actions = ["dynamodb:Query", "dynamodb:GetItem", "dynamodb:PutItem"],
                     Resources = ["arn:aws:dynamodb:us-east-1:123456789012:table/test-table"],
                     Effect = Effect.ALLOW
                 })
-            })
+            ])
             .With(props => props.EnvironmentVariables, new Dictionary<string, string>
             {
                 { "TEST_VAR", "test-value" }

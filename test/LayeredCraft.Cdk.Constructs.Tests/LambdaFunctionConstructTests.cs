@@ -1,12 +1,12 @@
 using Amazon.CDK;
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
-using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
 using LayeredCraft.Cdk.Constructs.Testing;
 
-namespace LayeredCraft.Cdk.Constructs.Tests.Constructs;
+namespace LayeredCraft.Cdk.Constructs.Tests;
 
 [Collection("CDK Tests")]
 public class LambdaFunctionConstructTests

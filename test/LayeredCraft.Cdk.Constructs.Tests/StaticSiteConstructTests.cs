@@ -1,10 +1,10 @@
 using Amazon.CDK.Assertions;
-using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
 
-namespace LayeredCraft.Cdk.Constructs.Tests.Constructs;
+namespace LayeredCraft.Cdk.Constructs.Tests;
 
 [Collection("CDK Tests")]
 public class StaticSiteConstructTests

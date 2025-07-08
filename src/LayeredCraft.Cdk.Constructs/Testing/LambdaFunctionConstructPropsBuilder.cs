@@ -98,8 +98,8 @@ public class LambdaFunctionConstructPropsBuilder
     {
         _policyStatements.Add(new PolicyStatement(new PolicyStatementProps
         {
-            Actions = new[] { "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem", "dynamodb:DeleteItem" },
-            Resources = new[] { $"arn:aws:dynamodb:{region}:{account}:table/{tableName}" },
+            Actions = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem", "dynamodb:DeleteItem"],
+            Resources = [$"arn:aws:dynamodb:{region}:{account}:table/{tableName}"],
             Effect = Effect.ALLOW
         }));
         return this;
@@ -232,7 +232,7 @@ public class LambdaFunctionConstructPropsBuilder
             AssetPath = _assetPath,
             RoleName = _roleName,
             PolicyName = _policyName,
-            PolicyStatements = _policyStatements.ToArray(),
+            PolicyStatements = [.. _policyStatements],
             EnvironmentVariables = _environmentVariables,
             IncludeOtelLayer = _includeOtelLayer,
             Permissions = _permissions,

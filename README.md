@@ -27,7 +27,7 @@ Install-Package LayeredCraft.Cdk.Constructs
 ```csharp
 using Amazon.CDK;
 using Amazon.CDK.AWS.IAM;
-using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 
 public class MyStack : Stack
@@ -61,12 +61,12 @@ var lambdaConstruct = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFu
     AssetPath = "./lambda-deployment.zip",
     RoleName = "my-function-role",
     PolicyName = "my-function-policy",
-    PolicyStatements = new[]
-    {
+    PolicyStatements = 
+    [
         new PolicyStatement(new PolicyStatementProps
         {
-            Actions = new[] { "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query" },
-            Resources = new[] { "arn:aws:dynamodb:us-east-1:123456789012:table/MyTable" },
+            Actions = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"],
+            Resources = ["arn:aws:dynamodb:us-east-1:123456789012:table/MyTable"],
             Effect = Effect.ALLOW
         })
     },
@@ -129,7 +129,7 @@ A comprehensive construct for hosting static websites with global content delive
 
 ```csharp
 using Amazon.CDK;
-using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 
 public class MyStack : Stack
@@ -155,7 +155,7 @@ var staticSite = new StaticSiteConstruct(this, "MySite", new StaticSiteConstruct
     SiteSubDomain = "app",
     AssetPath = "./build",
     ApiDomain = "api.example.com", // Proxy /api/* to this domain
-    AlternateDomains = new[] { "example.com", "www.example.com" }
+    AlternateDomains = ["example.com", "www.example.com"]
 });
 ```
 
@@ -169,7 +169,105 @@ var staticSite = new StaticSiteConstruct(this, "MySite", new StaticSiteConstruct
 | `ApiDomain` | `string?` | API domain for /api/* proxying | `null` |
 | `AlternateDomains` | `string[]` | Additional domains to serve content | `[]` |
 
-### 🔧 Configuration Options
+### 🗃️ DynamoDbTableConstruct
+
+A comprehensive construct for creating DynamoDB tables with advanced configuration:
+
+- **Flexible Key Schema**: Support for partition keys, sort keys, and composite keys
+- **Global Secondary Indexes**: Easy GSI configuration with automatic outputs
+- **DynamoDB Streams**: Real-time data processing with Lambda integration
+- **Time-to-Live (TTL)**: Automatic data expiration for cost optimization
+- **CloudFormation Outputs**: Automatic export of table ARN, name, and stream ARN
+- **Stream Lambda Integration**: Built-in method for attaching Lambda functions to streams
+- **Billing Flexibility**: Support for both PAY_PER_REQUEST and PROVISIONED billing modes
+
+#### Quick Start - DynamoDB Table
+
+```csharp
+using Amazon.CDK;
+using Amazon.CDK.AWS.DynamoDB;
+using LayeredCraft.Cdk.Constructs;
+using LayeredCraft.Cdk.Constructs.Models;
+
+public class MyStack : Stack
+{
+    public MyStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+    {
+        var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
+        {
+            TableName = "users",
+            PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+            SortKey = new Attribute { Name = "itemId", Type = AttributeType.STRING },
+            BillingMode = BillingMode.PAY_PER_REQUEST,
+            RemovalPolicy = RemovalPolicy.DESTROY
+        });
+    }
+}
+```
+
+#### DynamoDB Table with Global Secondary Index
+
+```csharp
+var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
+{
+    TableName = "users",
+    PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "itemId", Type = AttributeType.STRING },
+    BillingMode = BillingMode.PAY_PER_REQUEST,
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    GlobalSecondaryIndexes = 
+    [
+        new GlobalSecondaryIndexProps
+        {
+            IndexName = "GSI1",
+            PartitionKey = new Attribute { Name = "itemType", Type = AttributeType.STRING },
+            SortKey = new Attribute { Name = "createdAt", Type = AttributeType.STRING }
+        }
+    ]
+});
+```
+
+#### DynamoDB Table with Streams and Lambda Integration
+
+```csharp
+var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
+{
+    TableName = "events",
+    PartitionKey = new Attribute { Name = "aggregateId", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "eventId", Type = AttributeType.STRING },
+    BillingMode = BillingMode.PAY_PER_REQUEST,
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    Stream = StreamViewType.NEW_AND_OLD_IMAGES,
+    TimeToLiveAttribute = "expiresAt"
+});
+
+// Attach a Lambda function to process stream events
+var streamProcessor = new LambdaFunctionConstruct(this, "StreamProcessor", new LambdaFunctionConstructProps
+{
+    FunctionName = "stream-processor",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda-deployment.zip",
+    RoleName = "stream-processor-role",
+    PolicyName = "stream-processor-policy"
+});
+
+table.AttachStreamLambda(streamProcessor.Function);
+```
+
+#### DynamoDB Configuration Options
+
+| Property | Type | Description | Default |
+|----------|------|-------------|---------|
+| `TableName` | `string` | Name of the DynamoDB table | Required |
+| `PartitionKey` | `IAttribute?` | Partition key attribute definition | `null` |
+| `SortKey` | `IAttribute?` | Sort key attribute definition | `null` |
+| `RemovalPolicy` | `RemovalPolicy` | Stack removal policy | Required |
+| `BillingMode` | `BillingMode` | Billing mode (PAY_PER_REQUEST or PROVISIONED) | Required |
+| `GlobalSecondaryIndexes` | `GlobalSecondaryIndexProps[]` | Array of GSI configurations | `[]` |
+| `Stream` | `StreamViewType?` | Stream view type if streams enabled | `null` |
+| `TimeToLiveAttribute` | `string?` | TTL attribute name | `null` |
+
+### 🔧 Lambda Configuration Options
 
 | Property | Type | Description | Default |
 |----------|------|-------------|---------|
@@ -214,7 +312,7 @@ The library includes comprehensive testing helpers to make it easy to unit test 
 ### Quick Testing Example
 
 ```csharp
-using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Testing;
 
 [Fact]
@@ -280,7 +378,7 @@ public void MyStack_ShouldCreateLegacyFunction()
 ### Example: Testing StaticSiteConstruct
 
 ```csharp
-using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Testing;
 
 [Fact]
@@ -333,6 +431,68 @@ public void MyStack_ShouldCreateBlogSite()
         hasApiProxy: false, domainCount: 2);
     template.ShouldHaveRoute53Records("www.myblog.com");
     template.ShouldHaveRoute53Records("myblog.com");
+}
+```
+
+### Example: Testing DynamoDbTableConstruct
+
+```csharp
+using LayeredCraft.Cdk.Constructs;
+using LayeredCraft.Cdk.Constructs.Testing;
+
+[Fact]
+public void MyStack_ShouldCreateDynamoDbTable()
+{
+    // Create test infrastructure
+    var stack = CdkTestHelper.CreateTestStackMinimal();
+
+    // Build test props using fluent builder
+    var props = CdkTestHelper.CreateDynamoDbTablePropsBuilder()
+        .WithTableName("users")
+        .WithPartitionKey("userId")
+        .WithSortKey("itemId")
+        .WithGlobalSecondaryIndex("GSI1", "itemType", AttributeType.STRING, "createdAt")
+        .WithStream(StreamViewType.NEW_AND_OLD_IMAGES)
+        .WithTimeToLiveAttribute("expiresAt")
+        .Build();
+
+    // Create the construct
+    _ = new DynamoDbTableConstruct(stack, "UsersTable", props);
+
+    // Create template AFTER adding constructs to the stack
+    var template = Template.FromStack(stack);
+
+    // Use assertion helpers for clean, readable tests
+    template.ShouldHaveDynamoTable("users");
+    template.ShouldHavePartitionKey("userId", AttributeType.STRING);
+    template.ShouldHaveSortKey("itemId", AttributeType.STRING);
+    template.ShouldHaveGlobalSecondaryIndex("GSI1");
+    template.ShouldHaveTableStream(StreamViewType.NEW_AND_OLD_IMAGES);
+    template.ShouldHaveTimeToLiveAttribute("expiresAt");
+    template.ShouldHaveTableOutputs("test-stack", "UsersTable");
+}
+```
+
+### Example: Testing DynamoDB Table Scenarios
+
+```csharp
+[Fact]
+public void MyStack_ShouldCreateSessionTable()
+{
+    var stack = CdkTestHelper.CreateTestStackMinimal();
+
+    var props = CdkTestHelper.CreateDynamoDbTablePropsBuilder()
+        .ForSessionTable("user-sessions")
+        .Build();
+
+    _ = new DynamoDbTableConstruct(stack, "SessionsTable", props);
+
+    var template = Template.FromStack(stack);
+
+    template.ShouldHaveDynamoTable("user-sessions");
+    template.ShouldHavePartitionKey("sessionId", AttributeType.STRING);
+    template.ShouldHaveTimeToLiveAttribute("expiresAt");
+    template.ShouldHaveTableStream(StreamViewType.NEW_AND_OLD_IMAGES);
 }
 ```
 
@@ -501,6 +661,19 @@ var staticAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-site");
 | `ShouldNotHaveApiProxyBehavior()` | Verify no API proxy behavior |
 | `ShouldHaveBucketDeployment()` | Verify asset deployment |
 
+#### DynamoDB Table Assertions
+
+| Method | Description |
+|--------|-------------|
+| `ShouldHaveDynamoTable(tableName)` | Verify DynamoDB table exists |
+| `ShouldHavePartitionKey(keyName, keyType)` | Verify partition key configuration |
+| `ShouldHaveSortKey(keyName, keyType)` | Verify sort key configuration |
+| `ShouldHaveGlobalSecondaryIndex(indexName)` | Verify GSI exists |
+| `ShouldHaveTableStream(streamType)` | Verify stream configuration |
+| `ShouldHaveTimeToLiveAttribute(attributeName)` | Verify TTL attribute |
+| `ShouldHaveTableOutputs(stackName, constructId)` | Verify CloudFormation outputs |
+| `ShouldHaveGlobalSecondaryIndexCount(count)` | Verify number of GSIs |
+
 ### Props Builder Methods
 
 #### Lambda Function Props Builder
@@ -537,29 +710,53 @@ var staticAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-site");
 | `ForDocumentation(domain, apiDomain)` | Configure for docs scenario with API |
 | `ForSinglePageApp(domain, apiDomain)` | Configure for SPA scenario with API |
 
+#### DynamoDB Table Props Builder
+
+| Method | Description |
+|--------|-------------|
+| `WithTableName(name)` | Set table name |
+| `WithPartitionKey(keyName, keyType)` | Set partition key |
+| `WithSortKey(keyName, keyType)` | Set sort key |
+| `WithRemovalPolicy(policy)` | Set removal policy |
+| `WithBillingMode(mode)` | Set billing mode |
+| `WithGlobalSecondaryIndex(indexName, partitionKey, partitionKeyType, sortKey, sortKeyType)` | Add GSI |
+| `WithStream(streamViewType)` | Enable streams |
+| `WithoutStream()` | Disable streams |
+| `WithTimeToLiveAttribute(attributeName)` | Set TTL attribute |
+| `WithoutTimeToLiveAttribute()` | Remove TTL attribute |
+| `ForUserTable(tableName)` | Configure for user data scenario |
+| `ForSessionTable(tableName)` | Configure for session management scenario |
+| `ForEventSourcing(tableName)` | Configure for event sourcing scenario |
+
 ## Project Structure
 
 ```
 ├── src/
 │   └── LayeredCraft.Cdk.Constructs/           # Main library package
-│       ├── Constructs/
-│       │   ├── LambdaFunctionConstruct.cs      # Lambda function construct with IAM and logging
-│       │   └── StaticSiteConstruct.cs          # Static site construct with CDN and DNS
+│       ├── LambdaFunctionConstruct.cs          # Lambda function construct with IAM and logging
+│       ├── StaticSiteConstruct.cs              # Static site construct with CDN and DNS
+│       ├── DynamoDbTableConstruct.cs           # DynamoDB table construct with GSI and streams
+│       ├── Extensions/
+│       │   └── StackExtensions.cs              # CDK Stack extension methods
 │       ├── Models/
 │       │   ├── LambdaFunctionConstructProps.cs # Configuration props for Lambda construct
 │       │   ├── LambdaPermission.cs             # Lambda permission model
-│       │   └── StaticSiteConstructProps.cs     # Configuration props for static site construct
+│       │   ├── StaticSiteConstructProps.cs     # Configuration props for static site construct
+│       │   └── DynamoDbTableConstructProps.cs  # Configuration props for DynamoDB table construct
 │       └── Testing/                            # Testing helpers for consumers
 │           ├── CdkTestHelper.cs                # Test stack and props creation utilities
 │           ├── LambdaFunctionConstructAssertions.cs # Extension methods for Lambda assertions
 │           ├── LambdaFunctionConstructPropsBuilder.cs # Fluent builder for Lambda test props
 │           ├── StaticSiteConstructAssertions.cs # Extension methods for static site assertions
-│           └── StaticSiteConstructPropsBuilder.cs # Fluent builder for static site test props
+│           ├── StaticSiteConstructPropsBuilder.cs # Fluent builder for static site test props
+│           ├── DynamoDbTableConstructAssertions.cs # Extension methods for DynamoDB table assertions
+│           └── DynamoDbTableConstructPropsBuilder.cs # Fluent builder for DynamoDB table test props
 ├── test/
 │   └── LayeredCraft.Cdk.Constructs.Tests/     # Test suite
-│       ├── Constructs/
-│       │   ├── LambdaFunctionConstructTests.cs # Unit tests for Lambda construct
-│       │   └── StaticSiteConstructTests.cs     # Unit tests for static site construct
+│       ├── LambdaFunctionConstructTests.cs     # Unit tests for Lambda construct
+│       ├── StaticSiteConstructTests.cs         # Unit tests for static site construct
+│       ├── DynamoDbTableConstructTests.cs      # Unit tests for DynamoDB table construct
+│       ├── StackExtensionsTests.cs             # Unit tests for Stack extension methods
 │       ├── Testing/
 │       │   └── TestingHelpersTests.cs          # Tests for testing helper functionality
 │       ├── TestKit/                            # Test utilities and fixtures

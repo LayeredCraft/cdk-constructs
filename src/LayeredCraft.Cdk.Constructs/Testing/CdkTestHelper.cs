@@ -215,4 +215,16 @@ public static class CdkTestHelper
             .WithSiteSubDomain("www")
             .WithAssetPath(defaultAssetPath);
     }
+
+    /// <summary>
+    /// Creates a DynamoDbTableConstructPropsBuilder with sensible test defaults.
+    /// The builder has built-in defaults for table name, billing mode, and removal policy.
+    /// Adds a default partition key since it's required for DynamoDB table creation.
+    /// </summary>
+    /// <returns>A configured builder for creating test props</returns>
+    public static DynamoDbTableConstructPropsBuilder CreateDynamoDbTablePropsBuilder()
+    {
+        return new DynamoDbTableConstructPropsBuilder()
+            .WithPartitionKey("pk", Amazon.CDK.AWS.DynamoDB.AttributeType.STRING);
+    }
 }

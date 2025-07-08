@@ -42,7 +42,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 ### Core Components
 
-**LambdaFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/Constructs/LambdaFunctionConstruct.cs`)
+**LambdaFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/LambdaFunctionConstruct.cs`)
 - Main CDK construct that creates Lambda functions with comprehensive configuration
 - Automatically creates IAM roles and policies with CloudWatch Logs permissions
 - Supports OpenTelemetry layer integration via AWS managed layer
@@ -50,7 +50,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Creates function versions and aliases for deployment management
 - Handles Lambda permissions for multiple targets (function, version, alias)
 
-**StaticSiteConstruct** (`src/LayeredCraft.Cdk.Constructs/Constructs/StaticSiteConstruct.cs`)
+**StaticSiteConstruct** (`src/LayeredCraft.Cdk.Constructs/StaticSiteConstruct.cs`)
 - Comprehensive CDK construct for static website hosting
 - Creates S3 bucket with public access for website hosting
 - Sets up CloudFront distribution with SSL certificate and custom error pages
@@ -58,10 +58,24 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Supports optional API proxying via CloudFront behaviors for `/api/*` paths
 - Includes automatic asset deployment with cache invalidation
 
+**DynamoDbTableConstruct** (`src/LayeredCraft.Cdk.Constructs/DynamoDbTableConstruct.cs`)
+- Comprehensive CDK construct for DynamoDB table creation and configuration
+- Supports partition keys, sort keys, and global secondary indexes
+- Configures DynamoDB streams for real-time data processing
+- Includes time-to-live (TTL) attribute support for automatic data expiration
+- Automatically generates CloudFormation outputs for table ARN, name, and stream ARN
+- Provides `AttachStreamLambda` method for easy Lambda stream integration
+- Supports both PAY_PER_REQUEST and PROVISIONED billing modes
+
 **Configuration Models** (`src/LayeredCraft.Cdk.Constructs/Models/`)
 - `LambdaFunctionConstructProps`: Main configuration interface and record for Lambda construct
 - `LambdaPermission`: Record for defining Lambda invocation permissions
 - `StaticSiteConstructProps`: Configuration interface and record for static site construct
+- `DynamoDbTableConstructProps`: Configuration interface and record for DynamoDB table construct
+
+**Extensions** (`src/LayeredCraft.Cdk.Constructs/Extensions/`)
+- `StackExtensions`: Utility methods for CDK Stack operations
+- `CreateExportName`: Generates consistent CloudFormation export names with hash truncation support
 
 ### Key Design Patterns
 
@@ -110,6 +124,7 @@ The library includes comprehensive testing helpers for consumers:
 - `GetTestAssetPath()`: Resolves test asset paths relative to executing assembly
 - `CreatePropsBuilder()`: Creates fluent builder with Lambda test defaults
 - `CreateStaticSitePropsBuilder()`: Creates fluent builder with static site test defaults
+- `CreateDynamoDbTablePropsBuilder()`: Creates fluent builder with DynamoDB table test defaults
 
 **LambdaFunctionConstructAssertions** (`LambdaFunctionConstructAssertions.cs`):
 - Extension methods for Template assertions
@@ -126,6 +141,14 @@ The library includes comprehensive testing helpers for consumers:
 **StaticSiteConstructPropsBuilder** (`StaticSiteConstructPropsBuilder.cs`):
 - Fluent builder for creating static site test props with scenario-based configurations
 - Methods like `WithDomainName()`, `WithAlternateDomains()`, `WithApiDomain()`, `ForBlog()`, `ForDocumentation()`, `ForSinglePageApp()`
+
+**DynamoDbTableConstructAssertions** (`DynamoDbTableConstructAssertions.cs`):
+- Extension methods for Template assertions specific to DynamoDB tables
+- `ShouldHaveDynamoTable()`, `ShouldHavePartitionKey()`, `ShouldHaveSortKey()`, `ShouldHaveGlobalSecondaryIndex()`, `ShouldHaveTableStream()`, `ShouldHaveTimeToLiveAttribute()`, `ShouldHaveTableOutputs()`, etc.
+
+**DynamoDbTableConstructPropsBuilder** (`DynamoDbTableConstructPropsBuilder.cs`):
+- Fluent builder for creating DynamoDB table test props with scenario-based configurations
+- Methods like `WithTableName()`, `WithPartitionKey()`, `WithSortKey()`, `WithGlobalSecondaryIndex()`, `WithStream()`, `WithTimeToLiveAttribute()`, `ForUserTable()`, `ForSessionTable()`, `ForEventSourcing()`
 
 **Critical Testing Pattern**: 
 - Always create CDK templates AFTER adding constructs to stacks
@@ -169,6 +192,19 @@ The package provides comprehensive testing helpers with support for:
 - **Custom props interfaces** that extend IStackProps
 - **Automatic test asset** path resolution
 - **Fluent assertion methods** for common AWS resources
+
+**CRITICAL: Test Collection Requirement**
+- All CDK construct tests MUST be decorated with `[Collection("CDK Tests")]` to ensure sequential execution
+- CDK tests cannot run in parallel due to shared CDK context and resource conflicts
+- This is already configured in the existing test files and must be maintained for all new construct tests
+
+```csharp
+[Collection("CDK Tests")]
+public class LambdaFunctionConstructTests
+{
+    // Your CDK construct tests here
+}
+```
 
 ### Generic Stack Creation Methods
 
