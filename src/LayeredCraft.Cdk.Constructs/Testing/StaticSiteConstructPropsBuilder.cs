@@ -10,7 +10,7 @@ public class StaticSiteConstructPropsBuilder
 {
     private string _domainName = "example.com";
     private string _siteSubDomain = "www";
-    private string _assetPath = "./test-static-site";
+    private string _assetPath = CdkTestHelper.GetTestAssetPath("TestAssets/static-site");
     private string? _apiDomain = null;
     private readonly List<string> _alternateDomains = new();
 
