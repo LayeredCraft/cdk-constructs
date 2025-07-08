@@ -13,7 +13,7 @@ public class StaticSiteConstructTests
     public void Construct_ShouldCreateBasicStaticSite()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithDomainName("example.com")
             .WithSiteSubDomain("www")
@@ -23,7 +23,7 @@ public class StaticSiteConstructTests
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestStaticSite", props);
+        _ = new StaticSiteConstruct(stack, "TestStaticSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -35,10 +35,10 @@ public class StaticSiteConstructTests
     public void Construct_WithAutoFixtureData_ShouldCreateBasicStaticSite(StaticSiteConstructProps props)
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestStaticSite", props);
+        _ = new StaticSiteConstruct(stack, "TestStaticSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -55,10 +55,10 @@ public class StaticSiteConstructTests
     public void Construct_WithApiDomain_ShouldCreateApiProxyBehavior(StaticSiteConstructProps props)
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestStaticSite", props);
+        _ = new StaticSiteConstruct(stack, "TestStaticSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -72,10 +72,10 @@ public class StaticSiteConstructTests
     public void Construct_WithAlternateDomains_ShouldCreateMultipleRoute53Records(StaticSiteConstructProps props)
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestStaticSite", props);
+        _ = new StaticSiteConstruct(stack, "TestStaticSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -88,14 +88,14 @@ public class StaticSiteConstructTests
     public void Construct_ForBlogScenario_ShouldCreateProperConfiguration()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .ForBlog("myblog.com")
             .WithAssetPath(CdkTestHelper.GetTestAssetPath("TestAssets/static-site"))
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "BlogSite", props);
+        _ = new StaticSiteConstruct(stack, "BlogSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -108,14 +108,14 @@ public class StaticSiteConstructTests
     public void Construct_ForDocumentationScenario_ShouldCreateDocsSubdomain()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .ForDocumentation("mycompany.com", "api.mycompany.com")
             .WithAssetPath(CdkTestHelper.GetTestAssetPath("TestAssets/static-site"))
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "DocsSite", props);
+        _ = new StaticSiteConstruct(stack, "DocsSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -127,14 +127,14 @@ public class StaticSiteConstructTests
     public void Construct_ForSinglePageAppScenario_ShouldCreateAppSubdomainWithApi()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .ForSinglePageApp("myapp.com", "api.myapp.com")
             .WithAssetPath(CdkTestHelper.GetTestAssetPath("TestAssets/static-site"))
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "AppSite", props);
+        _ = new StaticSiteConstruct(stack, "AppSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -146,7 +146,7 @@ public class StaticSiteConstructTests
     public void Construct_ShouldCreateS3BucketWithCorrectConfiguration()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithDomainName("test.com")
             .WithSiteSubDomain("www")
@@ -154,7 +154,7 @@ public class StaticSiteConstructTests
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -180,7 +180,7 @@ public class StaticSiteConstructTests
     public void Construct_ShouldCreateCloudFrontDistributionWithCorrectCaching()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithDomainName("test.com")
             .WithSiteSubDomain("www")
@@ -188,7 +188,7 @@ public class StaticSiteConstructTests
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -219,13 +219,13 @@ public class StaticSiteConstructTests
     public void Construct_ShouldCreateBucketDeploymentWithCorrectConfiguration()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithAssetPath(CdkTestHelper.GetTestAssetPath("TestAssets/static-site"))
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -240,13 +240,13 @@ public class StaticSiteConstructTests
     public void Construct_WithNullApiDomain_ShouldNotCreateApiProxyBehavior()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithoutApiDomain()
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -257,13 +257,13 @@ public class StaticSiteConstructTests
     public void Construct_ShouldCreateMinimalResources()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithoutApiDomain()
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert - Test only basic resource creation without BucketDeployment
@@ -277,13 +277,13 @@ public class StaticSiteConstructTests
     public void Construct_WithEmptyApiDomain_ShouldNotCreateApiProxyBehavior()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithApiDomain("")
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -294,13 +294,13 @@ public class StaticSiteConstructTests
     public void Construct_WithWhitespaceApiDomain_ShouldNotCreateApiProxyBehavior()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithApiDomain("   ")
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -311,14 +311,14 @@ public class StaticSiteConstructTests
     public void Construct_WithSingleAlternateDomain_ShouldCreateTwoRoute53Records()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithAlternateDomain("alt.example.com")
             .WithAssetPath(CdkTestHelper.GetTestAssetPath("TestAssets/static-site"))
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -331,14 +331,14 @@ public class StaticSiteConstructTests
     public void Construct_WithMultipleAlternateDomains_ShouldCreateCorrectNumberOfRoute53Records()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithAlternateDomains("alt1.example.com", "alt2.example.com", "alt3.example.com")
             .WithAssetPath(CdkTestHelper.GetTestAssetPath("TestAssets/static-site"))
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert
@@ -353,7 +353,7 @@ public class StaticSiteConstructTests
     public void Construct_WithoutAlternateDomains_ShouldClearExistingAlternates()
     {
         // Arrange
-        var (app, stack) = CdkTestHelper.CreateTestStack();
+        var (_, stack) = CdkTestHelper.CreateTestStack();
         var props = CdkTestHelper.CreateStaticSitePropsBuilder()
             .WithAlternateDomains("temp1.example.com", "temp2.example.com")
             .WithoutAlternateDomains()
@@ -361,7 +361,7 @@ public class StaticSiteConstructTests
             .Build();
 
         // Act
-        var construct = new StaticSiteConstruct(stack, "TestSite", props);
+        _ = new StaticSiteConstruct(stack, "TestSite", props);
         var template = Template.FromStack(stack);
 
         // Assert

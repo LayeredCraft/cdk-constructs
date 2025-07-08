@@ -70,7 +70,7 @@ public class StaticSiteConstruct : Construct
         // Create CloudFront distribution for global content delivery
         var distribution = new Distribution(this, $"{id}-cdn", new DistributionProps
         {
-            DomainNames = ((string[]) [siteDomain]).Concat(props.AlternateDomains).ToArray(),
+            DomainNames = new[] { siteDomain }.Concat(props.AlternateDomains).ToArray(),
             DefaultBehavior = new BehaviorOptions
             {
                 Origin = new S3StaticWebsiteOrigin(siteBucket, new S3StaticWebsiteOriginProps
