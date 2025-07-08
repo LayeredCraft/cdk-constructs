@@ -215,4 +215,17 @@ public static class CdkTestHelper
             .WithSiteSubDomain("www")
             .WithAssetPath(defaultAssetPath);
     }
+
+    /// <summary>
+    /// Creates a DynamoDbTableConstructPropsBuilder with sensible test defaults.
+    /// Configures basic table properties suitable for most testing scenarios.
+    /// </summary>
+    /// <returns>A configured builder for creating test props</returns>
+    public static DynamoDbTableConstructPropsBuilder CreateDynamoDbTablePropsBuilder()
+    {
+        return new DynamoDbTableConstructPropsBuilder()
+            .WithTableName("test-table")
+            .WithBillingMode(Amazon.CDK.AWS.DynamoDB.BillingMode.PAY_PER_REQUEST)
+            .WithRemovalPolicy(Amazon.CDK.RemovalPolicy.DESTROY);
+    }
 }

@@ -5,7 +5,7 @@ using Amazon.CDK.AWS.Logs;
 using Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 
-namespace LayeredCraft.Cdk.Constructs.Constructs;
+namespace LayeredCraft.Cdk.Constructs;
 
 public class LambdaFunctionConstruct : Construct
 {

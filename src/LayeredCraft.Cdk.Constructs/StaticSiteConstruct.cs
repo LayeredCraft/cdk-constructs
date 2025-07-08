@@ -9,7 +9,7 @@ using Amazon.CDK.AWS.S3.Deployment;
 using Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 
-namespace LayeredCraft.Cdk.Constructs.Constructs;
+namespace LayeredCraft.Cdk.Constructs;
 
 /// <summary>
 /// AWS CDK construct for creating a complete static website infrastructure.
@@ -70,7 +70,7 @@ public class StaticSiteConstruct : Construct
         // Create CloudFront distribution for global content delivery
         var distribution = new Distribution(this, $"{id}-cdn", new DistributionProps
         {
-            DomainNames = new[] { siteDomain }.Concat(props.AlternateDomains).ToArray(),
+            DomainNames = [siteDomain, ..props.AlternateDomains],
             DefaultBehavior = new BehaviorOptions
             {
                 Origin = new S3StaticWebsiteOrigin(siteBucket, new S3StaticWebsiteOriginProps

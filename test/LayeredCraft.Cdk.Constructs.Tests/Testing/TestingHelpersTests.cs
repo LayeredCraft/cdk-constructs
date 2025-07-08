@@ -1,6 +1,6 @@
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
-using LayeredCraft.Cdk.Constructs.Constructs;
+using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Extensions;
