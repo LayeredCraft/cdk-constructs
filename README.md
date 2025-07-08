@@ -100,6 +100,50 @@ var lambdaConstruct = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFu
 });
 ```
 
+### Lambda with Custom Memory and Timeout
+
+```csharp
+var lambdaConstruct = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "my-function",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda-deployment.zip",
+    RoleName = "my-function-role",
+    PolicyName = "my-function-policy",
+    MemorySize = 2048,       // Custom memory allocation (default: 1024 MB)
+    TimeoutInSeconds = 30,   // Custom timeout (default: 6 seconds)
+    EnvironmentVariables = new Dictionary<string, string>
+    {
+        { "ENVIRONMENT", "production" }
+    }
+});
+```
+
+### Lambda with Function URL for Direct HTTP Access
+
+```csharp
+var lambdaConstruct = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "my-api",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda-deployment.zip",
+    RoleName = "my-api-role",
+    PolicyName = "my-api-policy",
+    GenerateUrl = true,      // Enable Function URL for direct HTTP access
+    MemorySize = 512,        // Optimized for lightweight API
+    TimeoutInSeconds = 15,   // API timeout
+    EnvironmentVariables = new Dictionary<string, string>
+    {
+        { "ENVIRONMENT", "production" },
+        { "CORS_ORIGINS", "*" }
+    }
+});
+
+// Access the function URL domain
+string functionUrlDomain = lambdaConstruct.LiveAliasFunctionUrlDomain;
+Console.WriteLine($"Function URL: https://{functionUrlDomain}");
+```
+
 ## Features
 
 ### 🚀 LambdaFunctionConstruct
@@ -111,6 +155,8 @@ The main construct that creates a complete Lambda function setup with:
 - **CloudWatch Logs**: Explicit log group with configurable retention (default: 2 weeks)
 - **OpenTelemetry**: Optional AWS OTEL Collector layer integration
 - **SnapStart**: Optional AWS Lambda SnapStart for improved cold start performance
+- **Function URLs**: Optional direct HTTP access without API Gateway
+- **Configurable Resources**: Customizable memory allocation and timeout settings
 - **Versioning**: Automatic version creation with "live" alias
 - **Multi-target Permissions**: Applies permissions to function, version, and alias
 
@@ -276,6 +322,9 @@ table.AttachStreamLambda(streamProcessor.Function);
 | `AssetPath` | `string` | Path to Lambda deployment package | Required |
 | `RoleName` | `string` | IAM role name | Required |
 | `PolicyName` | `string` | IAM policy name | Required |
+| `MemorySize` | `double` | Memory allocation in MB | `1024` |
+| `TimeoutInSeconds` | `double` | Function timeout in seconds | `6` |
+| `GenerateUrl` | `bool` | Enable Function URL for direct HTTP access | `false` |
 | `PolicyStatements` | `PolicyStatement[]` | Custom IAM policy statements | `[]` |
 | `EnvironmentVariables` | `IDictionary<string, string>` | Environment variables | `{}` |
 | `IncludeOtelLayer` | `bool` | Enable OpenTelemetry layer | `true` |
@@ -325,6 +374,9 @@ public void MyStack_ShouldCreateApiFunction()
     var props = CdkTestHelper.CreatePropsBuilder("./my-lambda.zip")
         .WithFunctionName("my-api")
         .WithFunctionSuffix("prod")
+        .WithMemorySize(2048)
+        .WithTimeoutInSeconds(30)
+        .WithGenerateUrl()
         .WithDynamoDbAccess("users-table")
         .WithApiGatewayPermission("arn:aws:execute-api:us-east-1:123456789012:abcdef123/prod/GET/users")
         .WithEnvironmentVariable("TABLE_NAME", "users-table")
@@ -646,6 +698,12 @@ var staticAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-site");
 | `ShouldHaveLogGroup(functionName, retentionDays)` | Verify log group configuration |
 | `ShouldHaveSnapStart()` | Verify SnapStart is enabled |
 | `ShouldNotHaveSnapStart()` | Verify SnapStart is disabled |
+| `ShouldHaveMemorySize(memorySize)` | Verify Lambda memory allocation |
+| `ShouldHaveTimeout(timeoutInSeconds)` | Verify Lambda timeout configuration |
+| `ShouldHaveFunctionUrl(authType)` | Verify Function URL exists with specified auth |
+| `ShouldNotHaveFunctionUrl()` | Verify no Function URL is configured |
+| `ShouldHaveFunctionUrlOutput(stackName, constructId)` | Verify Function URL CloudFormation output |
+| `ShouldHaveCustomResourceConfiguration(memorySize, timeout)` | Verify custom memory and timeout together |
 
 #### Static Site Assertions
 
@@ -693,6 +751,10 @@ var staticAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-site");
 | `WithCustomPolicy(policyStatement)` | Add custom IAM policy statement |
 | `WithCustomPermission(permission)` | Add custom Lambda permission |
 | `WithSnapStart(bool)` | Enable/disable Lambda SnapStart |
+| `WithMemorySize(memorySize)` | Set custom memory allocation |
+| `WithTimeoutInSeconds(timeout)` | Set custom timeout |
+| `WithGenerateUrl(bool)` | Enable/disable Function URL |
+| `WithoutGenerateUrl()` | Disable Function URL generation |
 
 #### Static Site Props Builder
 

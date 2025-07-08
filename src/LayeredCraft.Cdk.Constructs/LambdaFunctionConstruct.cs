@@ -3,12 +3,22 @@ using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.Logs;
 using Constructs;
+using LayeredCraft.Cdk.Constructs.Extensions;
 using LayeredCraft.Cdk.Constructs.Models;
 
 namespace LayeredCraft.Cdk.Constructs;
 
 public class LambdaFunctionConstruct : Construct
 {
+    /// <summary>
+    /// The domain of the function URL if GenerateUrl is enabled, null otherwise.
+    /// </summary>
+    public readonly string? LiveAliasFunctionUrlDomain;
+    
+    /// <summary>
+    /// The underlying Lambda function for advanced configuration.
+    /// </summary>
+    public readonly Function LambdaFunction;
     public LambdaFunctionConstruct(Construct scope, string id, ILambdaFunctionConstructProps props) : base(scope, id)
     {
         var region = Stack.Of(this).Region;
@@ -59,15 +69,15 @@ public class LambdaFunctionConstruct : Construct
             RemovalPolicy = RemovalPolicy.DESTROY
         });
 
-        var lambda = new Function(this, $"{id}-function", new FunctionProps
+        LambdaFunction = new Function(this, $"{id}-function", new FunctionProps
         {
             FunctionName = $"{props.FunctionName}-{props.FunctionSuffix}",
             Runtime = Runtime.PROVIDED_AL2023,
             Handler = "bootstrap",
             Code = Code.FromAsset(props.AssetPath),
             Role = role,
-            MemorySize = 1024,
-            Timeout = Duration.Seconds(6),
+            MemorySize = (int)props.MemorySize,
+            Timeout = Duration.Seconds(props.TimeoutInSeconds),
             Environment = props.EnvironmentVariables,
             LogGroup = logGroup,
             Tracing = props.IncludeOtelLayer ? Tracing.ACTIVE : Tracing.DISABLED,
@@ -78,16 +88,16 @@ public class LambdaFunctionConstruct : Construct
         });
         if (props.IncludeOtelLayer)
         {
-            lambda.AddLayers(LayerVersion.FromLayerVersionArn(this, "OTELLambdaLayer",
+            LambdaFunction.AddLayers(LayerVersion.FromLayerVersionArn(this, "OTELLambdaLayer",
                 $"arn:aws:lambda:{region}:901920570463:layer:aws-otel-collector-amd64-ver-0-102-1:1"));
         }
 
         // ✅ Create a new version on every deployment
-        var currentVersion = lambda.CurrentVersion;
+        var currentVersion = LambdaFunction.CurrentVersion;
 
         if (props.EnableSnapStart)
         {
-            var cfnFunction = (CfnFunction)lambda.Node.DefaultChild!;
+            var cfnFunction = (CfnFunction)LambdaFunction.Node.DefaultChild!;
             cfnFunction.AddPropertyOverride("SnapStart", new Dictionary<string, object>
             {
                 ["ApplyOn"] = "PublishedVersions"
@@ -99,13 +109,34 @@ public class LambdaFunctionConstruct : Construct
             AliasName = "live",
             Version = currentVersion,
         });
+        
         AddPermissionsToAllTargets(
             baseId: $"{id}-permission",
-            function: lambda,
-            version: lambda.CurrentVersion,
+            function: LambdaFunction,
+            version: LambdaFunction.CurrentVersion,
             alias: alias,
             permissions: props.Permissions
         );
+
+        if (props.GenerateUrl)
+        {
+            var functionUrl = alias.AddFunctionUrl(new FunctionUrlProps
+            {
+                AuthType = FunctionUrlAuthType.NONE
+            });
+
+            LiveAliasFunctionUrlDomain = Fn.Select(2, Fn.Split("/", functionUrl.Url));
+            
+            _ = new CfnOutput(this, $"{id}-url-output", new CfnOutputProps
+            {
+                ExportName = Stack.Of(this).CreateExportName(id, "url-output"),
+                Value = functionUrl.Url
+            });
+        }
+        else
+        {
+            LiveAliasFunctionUrlDomain = null;
+        }
     }
     
     private void AddPermissionsToAllTargets(string baseId, IFunction function, IVersion version, IAlias? alias, List<LambdaPermission> permissions)
