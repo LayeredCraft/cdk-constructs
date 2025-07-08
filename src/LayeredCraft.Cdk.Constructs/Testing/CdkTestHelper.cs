@@ -219,12 +219,14 @@ public static class CdkTestHelper
     /// <summary>
     /// Creates a DynamoDbTableConstructPropsBuilder with sensible test defaults.
     /// Configures basic table properties suitable for most testing scenarios.
+    /// Includes a default partition key since it's required for DynamoDB table creation.
     /// </summary>
     /// <returns>A configured builder for creating test props</returns>
     public static DynamoDbTableConstructPropsBuilder CreateDynamoDbTablePropsBuilder()
     {
         return new DynamoDbTableConstructPropsBuilder()
             .WithTableName("test-table")
+            .WithPartitionKey("pk", Amazon.CDK.AWS.DynamoDB.AttributeType.STRING)
             .WithBillingMode(Amazon.CDK.AWS.DynamoDB.BillingMode.PAY_PER_REQUEST)
             .WithRemovalPolicy(Amazon.CDK.RemovalPolicy.DESTROY);
     }

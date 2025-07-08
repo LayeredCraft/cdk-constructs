@@ -832,6 +832,70 @@ public class TestingHelpersTests
         props.FunctionName.Should().Be("no-snapstart-test");
         props.EnableSnapStart.Should().BeFalse();
     }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateDynamoDbTablePropsBuilderWithDefaults()
+    {
+        // Act
+        var builder = CdkTestHelper.CreateDynamoDbTablePropsBuilder();
+        var props = builder.Build();
+
+        // Assert
+        props.TableName.Should().Be("test-table");
+        props.PartitionKey.Should().NotBeNull();
+        props.PartitionKey!.Name.Should().Be("pk");
+        props.PartitionKey!.Type.Should().Be(Amazon.CDK.AWS.DynamoDB.AttributeType.STRING);
+        props.BillingMode.Should().Be(Amazon.CDK.AWS.DynamoDB.BillingMode.PAY_PER_REQUEST);
+        props.RemovalPolicy.Should().Be(Amazon.CDK.RemovalPolicy.DESTROY);
+        props.SortKey.Should().BeNull("Sort key should not be set by default");
+        props.GlobalSecondaryIndexes.Should().BeEmpty("GSIs should not be set by default");
+        props.Stream.Should().BeNull("Stream should not be enabled by default");
+        props.TimeToLiveAttribute.Should().BeNull("TTL should not be set by default");
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateDynamoDbTablePropsBuilderWithCustomizations()
+    {
+        // Act
+        var builder = CdkTestHelper.CreateDynamoDbTablePropsBuilder();
+        var props = builder
+            .WithTableName("custom-table")
+            .WithPartitionKey("customPK", Amazon.CDK.AWS.DynamoDB.AttributeType.NUMBER)
+            .WithSortKey("customSK", Amazon.CDK.AWS.DynamoDB.AttributeType.STRING)
+            .WithStream(Amazon.CDK.AWS.DynamoDB.StreamViewType.NEW_AND_OLD_IMAGES)
+            .WithBillingMode(Amazon.CDK.AWS.DynamoDB.BillingMode.PROVISIONED)
+            .WithRemovalPolicy(Amazon.CDK.RemovalPolicy.RETAIN)
+            .Build();
+
+        // Assert
+        props.TableName.Should().Be("custom-table");
+        props.PartitionKey.Should().NotBeNull();
+        props.PartitionKey!.Name.Should().Be("customPK");
+        props.PartitionKey!.Type.Should().Be(Amazon.CDK.AWS.DynamoDB.AttributeType.NUMBER);
+        props.SortKey.Should().NotBeNull();
+        props.SortKey!.Name.Should().Be("customSK");
+        props.SortKey!.Type.Should().Be(Amazon.CDK.AWS.DynamoDB.AttributeType.STRING);
+        props.Stream.Should().Be(Amazon.CDK.AWS.DynamoDB.StreamViewType.NEW_AND_OLD_IMAGES);
+        props.BillingMode.Should().Be(Amazon.CDK.AWS.DynamoDB.BillingMode.PROVISIONED);
+        props.RemovalPolicy.Should().Be(Amazon.CDK.RemovalPolicy.RETAIN);
+    }
+
+    [Fact]
+    public void CdkTestHelper_ShouldCreateDynamoDbTablePropsBuilderThatCreatesValidTable()
+    {
+        // Arrange
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+        var props = CdkTestHelper.CreateDynamoDbTablePropsBuilder().Build();
+
+        // Act
+        _ = new DynamoDbTableConstruct(stack, "TestTable", props);
+
+        // Assert
+        var template = Template.FromStack(stack);
+        template.ShouldHaveDynamoTable("test-table");
+        template.ShouldHavePartitionKey("pk", Amazon.CDK.AWS.DynamoDB.AttributeType.STRING);
+        template.ShouldHaveTableOutputs("test-stack", "TestTable");
+    }
 }
 
 // Test helper interface for custom props testing
