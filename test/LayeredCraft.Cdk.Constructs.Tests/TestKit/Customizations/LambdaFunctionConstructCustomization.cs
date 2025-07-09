@@ -3,7 +3,7 @@ using LayeredCraft.Cdk.Constructs.Models;
 
 namespace LayeredCraft.Cdk.Constructs.Tests.TestKit.Customizations;
 
-public class LambdaFunctionConstructCustomization(bool includeOtelLayer = true, bool includePermissions = true)
+public class LambdaFunctionConstructCustomization(bool includeOtelLayer = true, bool includePermissions = true, bool generateUrl = false)
     : ICustomization
 {
     public void Customize(IFixture fixture)
@@ -36,6 +36,7 @@ public class LambdaFunctionConstructCustomization(bool includeOtelLayer = true, 
             .With(props => props.Permissions, includePermissions 
                 ? [fixture.Create<LambdaPermission>()]
                 : [])
-            .With(props => props.EnableSnapStart, false));
+            .With(props => props.EnableSnapStart, false)
+            .With(props => props.GenerateUrl, generateUrl));
     }
 }

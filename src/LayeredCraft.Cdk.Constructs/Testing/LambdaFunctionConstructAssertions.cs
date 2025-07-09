@@ -172,4 +172,73 @@ public static class LambdaFunctionConstructAssertions
             { "SnapStart", Match.AnyValue() }
         })));
     }
+
+    /// <summary>
+    /// Asserts that the template contains a Lambda function with the specified memory size.
+    /// </summary>
+    /// <param name="template">The CDK template to assert against</param>
+    /// <param name="memorySize">Expected memory size in MB</param>
+    public static void ShouldHaveMemorySize(this Template template, int memorySize)
+    {
+        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "MemorySize", memorySize }
+        }));
+    }
+
+    /// <summary>
+    /// Asserts that the template contains a Lambda function with the specified timeout.
+    /// </summary>
+    /// <param name="template">The CDK template to assert against</param>
+    /// <param name="timeoutInSeconds">Expected timeout in seconds</param>
+    public static void ShouldHaveTimeout(this Template template, int timeoutInSeconds)
+    {
+        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "Timeout", timeoutInSeconds }
+        }));
+    }
+
+    /// <summary>
+    /// Asserts that the template contains a Lambda function URL with the specified configuration.
+    /// </summary>
+    /// <param name="template">The CDK template to assert against</param>
+    /// <param name="authType">Expected authentication type (default: NONE)</param>
+    public static void ShouldHaveFunctionUrl(this Template template, string authType = "NONE")
+    {
+        template.HasResourceProperties("AWS::Lambda::Url", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "AuthType", authType }
+        }));
+    }
+
+    /// <summary>
+    /// Asserts that the template does not contain any Lambda function URLs.
+    /// </summary>
+    /// <param name="template">The CDK template to assert against</param>
+    public static void ShouldNotHaveFunctionUrl(this Template template)
+    {
+        template.ResourceCountIs("AWS::Lambda::Url", 0);
+    }
+
+    /// <summary>
+    /// Asserts that the template contains a CloudFormation output for the function URL.
+    /// </summary>
+    /// <param name="template">The CDK template to assert against</param>
+    /// <param name="stackName">The stack name used for export naming</param>
+    /// <param name="constructId">The construct ID used for export naming</param>
+    public static void ShouldHaveFunctionUrlOutput(this Template template, string stackName, string constructId)
+    {
+        var outputs = template.FindOutputs("*", new Dictionary<string, object>
+        {
+            { "Export", Match.ObjectLike(new Dictionary<string, object>
+            {
+                { "Name", $"{stackName}-{constructId}-url-output" }
+            }) }
+        });
+        
+        if (outputs.Count != 1)
+            throw new Exception($"Expected 1 function URL output but found {outputs.Count}");
+    }
+
 }

@@ -4,6 +4,7 @@ using AwesomeAssertions;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
+using LayeredCraft.Cdk.Constructs.Tests.TestKit.Extensions;
 using LayeredCraft.Cdk.Constructs.Testing;
 
 namespace LayeredCraft.Cdk.Constructs.Tests;
@@ -30,8 +31,8 @@ public class LambdaFunctionConstructTests
             { "FunctionName", $"{props.FunctionName}-{props.FunctionSuffix}" },
             { "Runtime", "provided.al2023" },
             { "Handler", "bootstrap" },
-            { "MemorySize", 1024 },
-            { "Timeout", 6 }
+            { "MemorySize", props.MemorySize },
+            { "Timeout", props.TimeoutInSeconds }
         }));
     }
 
@@ -219,7 +220,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [LambdaFunctionConstructAutoData(generateUrl: false)]
     public void Construct_ShouldAddPermissionsToAllTargets(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -237,7 +238,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData(includePermissions: false)]
+    [LambdaFunctionConstructAutoData(includePermissions: false, generateUrl: false)]
     public void Construct_ShouldHandleEmptyPermissionsList(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -308,5 +309,211 @@ public class LambdaFunctionConstructTests
 
         // Verify that SnapStart is enabled for published versions
         template.ShouldHaveSnapStart();
+    }
+
+    [Fact]
+    public void Construct_ShouldUseConfigurableMemorySize()
+    {
+        // Arrange
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithMemorySize(2048)
+            .Build();
+
+        // Act
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        // Assert - Using new assertion helper
+        template.ShouldHaveMemorySize(2048);
+    }
+
+    [Fact]
+    public void Construct_ShouldUseConfigurableTimeout()
+    {
+        // Arrange
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithTimeoutInSeconds(30)
+            .Build();
+
+        // Act
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        // Assert - Using new assertion helper
+        template.ShouldHaveTimeout(30);
+    }
+
+    [Fact]
+    public void Construct_ShouldGenerateFunctionUrl_WhenEnabled()
+    {
+        // Arrange
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithGenerateUrl(true)
+            .Build();
+
+        // Act
+        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        // Assert - Using new assertion helpers
+        template.ShouldHaveFunctionUrl();
+        template.ShouldHaveFunctionUrlOutput("test-stack", "test-construct");
+        construct.LiveAliasFunctionUrlDomain.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Construct_ShouldNotGenerateFunctionUrl_WhenDisabled()
+    {
+        // Arrange
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithGenerateUrl(false)
+            .Build();
+
+        // Act
+        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        // Assert - Using new assertion helper
+        template.ShouldNotHaveFunctionUrl();
+        construct.LiveAliasFunctionUrlDomain.Should().BeNull();
+    }
+
+    [Fact]
+    public void Construct_ShouldExposePublicProperties()
+    {
+        // Arrange
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithGenerateUrl()
+            .Build();
+
+        // Act
+        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+
+        // Assert
+        construct.LambdaFunction.Should().NotBeNull();
+        // Function name will be a CDK token during construction, so check the props instead
+        props.FunctionName.Should().Be("test-function");
+        props.FunctionSuffix.Should().Be("test");
+        construct.LiveAliasFunctionUrlDomain.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Construct_ShouldMaintainBackwardCompatibility()
+    {
+        // Arrange
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
+        });
+
+        // Create props the old way without new properties
+        var props = new LambdaFunctionConstructProps
+        {
+            FunctionName = "legacy-function",
+            FunctionSuffix = "test",
+            AssetPath = AssetPathExtensions.GetTestLambdaZipPath(),
+            RoleName = "legacy-role",
+            PolicyName = "legacy-policy"
+            // Not setting MemorySize, TimeoutInSeconds, or GenerateUrl - should use defaults
+        };
+
+        // Act
+        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        // Assert - should use default values
+        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "MemorySize", 1024 },  // Default
+            { "Timeout", 6 }         // Default
+        }));
+        
+        template.ResourceCountIs("AWS::Lambda::Url", 0);  // No URL by default
+        construct.LiveAliasFunctionUrlDomain.Should().BeNull();
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldConfigureMemorySize()
+    {
+        // Act
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithMemorySize(512)
+            .Build();
+
+        // Assert
+        props.MemorySize.Should().Be(512);
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldConfigureTimeout()
+    {
+        // Act
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithTimeoutInSeconds(15)
+            .Build();
+
+        // Assert
+        props.TimeoutInSeconds.Should().Be(15);
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldConfigureFunctionUrl()
+    {
+        // Act
+        var propsEnabled = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithGenerateUrl()
+            .Build();
+
+        var propsDisabled = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithGenerateUrl(false)
+            .Build();
+
+        // Assert
+        propsEnabled.GenerateUrl.Should().BeTrue();
+        propsDisabled.GenerateUrl.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldHaveCorrectDefaults()
+    {
+        // Act
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .Build();
+
+        // Assert
+        props.MemorySize.Should().Be(1024);
+        props.TimeoutInSeconds.Should().Be(6);
+        props.GenerateUrl.Should().BeFalse();
     }
 }

@@ -14,11 +14,14 @@ public class LambdaFunctionConstructPropsBuilder
     private string _assetPath = "./test-lambda.zip";
     private string _roleName = "test-role";
     private string _policyName = "test-policy";
+    private double _memorySize = 1024;
+    private double _timeoutInSeconds = 6;
     private readonly List<PolicyStatement> _policyStatements = new();
     private readonly Dictionary<string, string> _environmentVariables = new();
     private bool _includeOtelLayer = true;
     private readonly List<LambdaPermission> _permissions = new();
     private bool _enableSnapStart = false;
+    private bool _generateUrl = false;
 
     /// <summary>
     /// Sets the function name.
@@ -220,6 +223,39 @@ public class LambdaFunctionConstructPropsBuilder
     }
 
     /// <summary>
+    /// Sets the memory size for the Lambda function.
+    /// </summary>
+    /// <param name="memorySize">The memory size in MB</param>
+    /// <returns>The builder instance for method chaining</returns>
+    public LambdaFunctionConstructPropsBuilder WithMemorySize(double memorySize)
+    {
+        _memorySize = memorySize;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the timeout for the Lambda function.
+    /// </summary>
+    /// <param name="timeoutInSeconds">The timeout in seconds</param>
+    /// <returns>The builder instance for method chaining</returns>
+    public LambdaFunctionConstructPropsBuilder WithTimeoutInSeconds(double timeoutInSeconds)
+    {
+        _timeoutInSeconds = timeoutInSeconds;
+        return this;
+    }
+
+    /// <summary>
+    /// Enables or disables function URL generation for direct HTTP access.
+    /// </summary>
+    /// <param name="generateUrl">Whether to generate a function URL</param>
+    /// <returns>The builder instance for method chaining</returns>
+    public LambdaFunctionConstructPropsBuilder WithGenerateUrl(bool generateUrl = true)
+    {
+        _generateUrl = generateUrl;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the LambdaFunctionConstructProps instance.
     /// </summary>
     /// <returns>The configured LambdaFunctionConstructProps</returns>
@@ -232,11 +268,14 @@ public class LambdaFunctionConstructPropsBuilder
             AssetPath = _assetPath,
             RoleName = _roleName,
             PolicyName = _policyName,
+            MemorySize = _memorySize,
+            TimeoutInSeconds = _timeoutInSeconds,
             PolicyStatements = [.. _policyStatements],
             EnvironmentVariables = _environmentVariables,
             IncludeOtelLayer = _includeOtelLayer,
             Permissions = _permissions,
-            EnableSnapStart = _enableSnapStart
+            EnableSnapStart = _enableSnapStart,
+            GenerateUrl = _generateUrl
         };
     }
 }
