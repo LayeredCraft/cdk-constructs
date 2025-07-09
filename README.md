@@ -86,11 +86,11 @@ var table = new DynamoDbTableConstruct(this, "UserTable", new DynamoDbTableConst
 
 📖 **[Complete Documentation](https://layeredcraft.github.io/cdk-constructs/)**
 
-- **[Lambda Function Construct](https://layeredcraft.github.io/cdk-constructs/constructs/lambda-function/)** - Full-featured Lambda functions with OpenTelemetry, IAM, and more
-- **[Static Site Construct](https://layeredcraft.github.io/cdk-constructs/constructs/static-site/)** - Complete static website hosting with CloudFront and SSL
-- **[DynamoDB Table Construct](https://layeredcraft.github.io/cdk-constructs/constructs/dynamodb-table/)** - Production-ready DynamoDB tables with streams and indexes
-- **[Testing Guide](https://layeredcraft.github.io/cdk-constructs/testing/)** - Comprehensive testing utilities and patterns
-- **[Examples](https://layeredcraft.github.io/cdk-constructs/examples/)** - Real-world usage examples and patterns
+- **[Lambda Function Construct](https://layeredcraft.github.io/cdk-constructs/constructs/lambda-function)** - Full-featured Lambda functions with OpenTelemetry, IAM, and more
+- **[Static Site Construct](https://layeredcraft.github.io/cdk-constructs/constructs/static-site)** - Complete static website hosting with CloudFront and SSL
+- **[DynamoDB Table Construct](https://layeredcraft.github.io/cdk-constructs/constructs/dynamodb-table)** - Production-ready DynamoDB tables with streams and indexes
+- **[Testing Guide](https://layeredcraft.github.io/cdk-constructs/testing)** - Comprehensive testing utilities and patterns
+- **[Examples](https://layeredcraft.github.io/cdk-constructs/examples)** - Real-world usage examples and patterns
 
 ## Requirements
 
