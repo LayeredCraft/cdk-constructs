@@ -390,7 +390,7 @@ public class LambdaFunctionConstructTests
         });
 
         var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
-            .WithoutGenerateUrl()
+            .WithGenerateUrl(false)
             .Build();
 
         // Act
@@ -496,7 +496,7 @@ public class LambdaFunctionConstructTests
             .Build();
 
         var propsDisabled = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
-            .WithoutGenerateUrl()
+            .WithGenerateUrl(false)
             .Build();
 
         // Assert

@@ -245,23 +245,13 @@ public class LambdaFunctionConstructPropsBuilder
     }
 
     /// <summary>
-    /// Enables function URL generation for direct HTTP access.
+    /// Enables or disables function URL generation for direct HTTP access.
     /// </summary>
     /// <param name="generateUrl">Whether to generate a function URL</param>
     /// <returns>The builder instance for method chaining</returns>
     public LambdaFunctionConstructPropsBuilder WithGenerateUrl(bool generateUrl = true)
     {
         _generateUrl = generateUrl;
-        return this;
-    }
-
-    /// <summary>
-    /// Disables function URL generation.
-    /// </summary>
-    /// <returns>The builder instance for method chaining</returns>
-    public LambdaFunctionConstructPropsBuilder WithoutGenerateUrl()
-    {
-        _generateUrl = false;
         return this;
     }
 

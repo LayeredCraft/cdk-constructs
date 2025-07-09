@@ -241,18 +241,4 @@ public static class LambdaFunctionConstructAssertions
             throw new Exception($"Expected 1 function URL output but found {outputs.Count}");
     }
 
-    /// <summary>
-    /// Asserts that the template contains Lambda resources with custom memory and timeout configuration.
-    /// </summary>
-    /// <param name="template">The CDK template to assert against</param>
-    /// <param name="memorySize">Expected memory size in MB</param>
-    /// <param name="timeoutInSeconds">Expected timeout in seconds</param>
-    public static void ShouldHaveCustomResourceConfiguration(this Template template, int memorySize, int timeoutInSeconds)
-    {
-        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
-        {
-            { "MemorySize", memorySize },
-            { "Timeout", timeoutInSeconds }
-        }));
-    }
 }
