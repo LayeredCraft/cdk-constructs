@@ -23,6 +23,29 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "git", "git", "{32F31203-71F
 		.github\workflows\pr-build.yaml = .github\workflows\pr-build.yaml
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{B4C8E2F1-3A2D-4B8F-9C7E-1F5A8D9E2B3C}"
+	ProjectSection(SolutionItems) = preProject
+		docs\_config.yml = docs\_config.yml
+		docs\index.md = docs\index.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "constructs", "constructs", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+	ProjectSection(SolutionItems) = preProject
+		docs\constructs\lambda-function.md = docs\constructs\lambda-function.md
+		docs\constructs\static-site.md = docs\constructs\static-site.md
+		docs\constructs\dynamodb-table.md = docs\constructs\dynamodb-table.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "testing", "testing", "{F9E8D7C6-B5A4-9382-7160-5E4D3C2B1A09}"
+	ProjectSection(SolutionItems) = preProject
+		docs\testing\index.md = docs\testing\index.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{9F8E7D6C-5B4A-3928-1607-E5D4C3B2A190}"
+	ProjectSection(SolutionItems) = preProject
+		docs\examples\index.md = docs\examples\index.md
+	EndProjectSection
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayeredCraft.Cdk.Constructs", "src\LayeredCraft.Cdk.Constructs\LayeredCraft.Cdk.Constructs.csproj", "{63FCBE95-6714-49D5-A9CD-0BE725BAE259}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayeredCraft.Cdk.Constructs.Tests", "test\LayeredCraft.Cdk.Constructs.Tests\LayeredCraft.Cdk.Constructs.Tests.csproj", "{7F2D2EA4-D201-4B0E-AE44-6D03B1B7AEBC}"
@@ -38,6 +61,9 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{63FCBE95-6714-49D5-A9CD-0BE725BAE259} = {5C4245CB-F794-42A5-8226-AF6AA00D0E5E}
 		{7F2D2EA4-D201-4B0E-AE44-6D03B1B7AEBC} = {F802A3E0-E887-4EAA-87FA-AB090DCCB788}
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890} = {B4C8E2F1-3A2D-4B8F-9C7E-1F5A8D9E2B3C}
+		{F9E8D7C6-B5A4-9382-7160-5E4D3C2B1A09} = {B4C8E2F1-3A2D-4B8F-9C7E-1F5A8D9E2B3C}
+		{9F8E7D6C-5B4A-3928-1607-E5D4C3B2A190} = {B4C8E2F1-3A2D-4B8F-9C7E-1F5A8D9E2B3C}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{63FCBE95-6714-49D5-A9CD-0BE725BAE259}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
