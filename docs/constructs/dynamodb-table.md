@@ -1,6 +1,7 @@
 ---
 layout: default
 title: DynamoDB Table Construct
+permalink: /constructs/dynamodb-table/
 ---
 
 # DynamoDB Table Construct

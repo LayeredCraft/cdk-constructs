@@ -61,7 +61,7 @@ public class MyStack : Stack
 
 ## Available Constructs
 
-### [Lambda Function Construct](constructs/lambda-function.md)
+### [Lambda Function Construct](constructs/lambda-function)
 Full-featured Lambda functions with:
 - OpenTelemetry integration
 - IAM roles and policies
@@ -70,7 +70,7 @@ Full-featured Lambda functions with:
 - SnapStart support
 - Versioning and aliases
 
-### [Static Site Construct](constructs/static-site.md)
+### [Static Site Construct](constructs/static-site)
 Complete static website hosting with:
 - S3 website hosting
 - CloudFront CDN
@@ -78,7 +78,7 @@ Complete static website hosting with:
 - Route53 DNS
 - API proxy support
 
-### [DynamoDB Table Construct](constructs/dynamodb-table.md)
+### [DynamoDB Table Construct](constructs/dynamodb-table)
 Production-ready DynamoDB tables with:
 - Global secondary indexes
 - DynamoDB streams
@@ -89,7 +89,6 @@ Production-ready DynamoDB tables with:
 
 - **[Testing Guide](testing/)** - Comprehensive testing utilities and patterns
 - **[Examples](examples/)** - Real-world usage examples and patterns
-- **[API Reference](api/)** - Complete API documentation
 
 ## Requirements
 

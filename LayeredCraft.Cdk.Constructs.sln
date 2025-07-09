@@ -28,6 +28,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{B4C8E2F1-3
 		docs\_config.yml = docs\_config.yml
 		docs\index.md = docs\index.md
 		docs\assets\css\style.scss = docs\assets\css\style.scss
+		docs\_layouts\default.html = docs\_layouts\default.html
+		docs\_includes\navigation.html = docs\_includes\navigation.html
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "constructs", "constructs", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"

@@ -1,6 +1,7 @@
 ---
 layout: default
 title: Testing Guide
+permalink: /testing/
 ---
 
 # Testing Guide

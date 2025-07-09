@@ -1,6 +1,7 @@
 ---
 layout: default
 title: Static Site Construct
+permalink: /constructs/static-site/
 ---
 
 # Static Site Construct

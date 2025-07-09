@@ -1,6 +1,7 @@
 ---
 layout: default
 title: Lambda Function Construct
+permalink: /constructs/lambda-function/
 ---
 
 # Lambda Function Construct
