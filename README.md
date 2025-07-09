@@ -703,7 +703,6 @@ var staticAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-site");
 | `ShouldHaveFunctionUrl(authType)` | Verify Function URL exists with specified auth |
 | `ShouldNotHaveFunctionUrl()` | Verify no Function URL is configured |
 | `ShouldHaveFunctionUrlOutput(stackName, constructId)` | Verify Function URL CloudFormation output |
-| `ShouldHaveCustomResourceConfiguration(memorySize, timeout)` | Verify custom memory and timeout together |
 
 #### Static Site Assertions
 
@@ -754,7 +753,6 @@ var staticAssetPath = CdkTestHelper.GetTestAssetPath("TestAssets/my-site");
 | `WithMemorySize(memorySize)` | Set custom memory allocation |
 | `WithTimeoutInSeconds(timeout)` | Set custom timeout |
 | `WithGenerateUrl(bool)` | Enable/disable Function URL |
-| `WithoutGenerateUrl()` | Disable Function URL generation |
 
 #### Static Site Props Builder
 
