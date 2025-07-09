@@ -3,21 +3,17 @@ description: Reusable AWS CDK constructs for .NET serverless applications
 baseurl: "/cdk-constructs"
 url: "https://layeredcraft.github.io"
 
+# Theme settings
+show_downloads: true
+google_analytics: # Add your tracking ID if needed
+
 # Build settings
 markdown: kramdown
-theme: architect
+remote_theme: pages-themes/architect@v0.2.0
 plugins:
   - jekyll-feed
   - jekyll-sitemap
-
-# Navigation
-header_pages:
-  - index.md
-  - constructs/lambda-function.md
-  - constructs/static-site.md
-  - constructs/dynamodb-table.md
-  - testing/index.md
-  - examples/index.md
+  - jekyll-remote-theme
 
 # GitHub repository
 github_username: LayeredCraft
@@ -35,15 +31,3 @@ exclude:
   - vendor/cache/
   - vendor/gems/
   - vendor/ruby/
-
-# Collections
-collections:
-  constructs:
-    output: true
-    permalink: /:collection/:name/
-  testing:
-    output: true
-    permalink: /:collection/:name/
-  examples:
-    output: true
-    permalink: /:collection/:name/
