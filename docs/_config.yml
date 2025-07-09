@@ -4,12 +4,20 @@ baseurl: "/cdk-constructs"
 url: "https://layeredcraft.github.io"
 
 # Theme settings
+theme: minima
 show_downloads: true
 google_analytics: # Add your tracking ID if needed
 
+# Minima navigation
+header_pages:
+  - constructs/lambda-function.md
+  - constructs/static-site.md
+  - constructs/dynamodb-table.md
+  - testing/index.md
+  - examples/index.md
+
 # Build settings
 markdown: kramdown
-remote_theme: pages-themes/architect@v0.2.0
 plugins:
   - jekyll-feed
   - jekyll-sitemap
