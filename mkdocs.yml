@@ -15,8 +15,8 @@ copyright: Copyright &copy; 2024 LayeredCraft Team
 theme:
   name: material
   language: en
-  logo: assets/icon.png
-  favicon: assets/icon.png
+  logo: docs/assets/icon.png
+  favicon: docs/assets/icon.png
   
   features:
     - content.code.copy
