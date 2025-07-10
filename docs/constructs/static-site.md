@@ -1,22 +1,16 @@
----
-layout: default
-title: Static Site Construct
-permalink: /constructs/static-site/
----
-
 # Static Site Construct
 
 The `StaticSiteConstruct` provides complete static website hosting with S3, CloudFront CDN, SSL certificates, Route53 DNS management, and optional API proxying.
 
-## Features
+## :globe_with_meridians: Features
 
-- **S3 Website Hosting**: Optimized S3 bucket configuration for static websites
-- **CloudFront CDN**: Global content delivery with custom error pages
-- **SSL Certificates**: Automatic SSL certificate provisioning and management
-- **Route53 DNS**: DNS record management for primary and alternate domains
-- **API Proxy Support**: Optional CloudFront behavior for `/api/*` paths
-- **Asset Deployment**: Automatic deployment with cache invalidation
-- **Custom Error Pages**: 404 and 403 error page handling
+- **:file_cabinet: S3 Website Hosting**: Optimized S3 bucket configuration for static websites
+- **:zap: CloudFront CDN**: Global content delivery with custom error pages
+- **:lock: SSL Certificates**: Automatic SSL certificate provisioning and management
+- **:globe_with_meridians: Route53 DNS**: DNS record management for primary and alternate domains
+- **:arrows_counterclockwise: API Proxy Support**: Optional CloudFront behavior for `/api/*` paths
+- **:package: Asset Deployment**: Automatic deployment with cache invalidation
+- **:warning: Custom Error Pages**: 404 and 403 error page handling
 
 ## Basic Usage
 
@@ -211,8 +205,8 @@ var docs = new StaticSiteConstruct(this, "Docs", new StaticSiteConstructProps
 
 ## Testing
 
-See the [Testing Guide](../testing/) for comprehensive testing utilities and patterns specific to the Static Site construct.
+See the [Testing Guide](../testing/index.md) for comprehensive testing utilities and patterns specific to the Static Site construct.
 
 ## Examples
 
-For more real-world examples, see the [Examples](../examples/) section.
+For more real-world examples, see the [Examples](../examples/index.md) section.

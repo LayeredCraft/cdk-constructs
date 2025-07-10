@@ -1,22 +1,16 @@
----
-layout: default
-title: Lambda Function Construct
-permalink: /constructs/lambda-function/
----
-
 # Lambda Function Construct
 
 The `LambdaFunctionConstruct` provides a comprehensive, production-ready Lambda function with integrated OpenTelemetry support, IAM management, and environment configuration.
 
-## Features
+## :rocket: Features
 
-- **OpenTelemetry Integration**: Built-in AWS OpenTelemetry collector layer
-- **IAM Management**: Automatic role and policy creation with CloudWatch Logs permissions
-- **Environment Configuration**: Easy environment variable management
-- **Function URLs**: Optional HTTP endpoint generation
-- **SnapStart Support**: Improved cold start performance for Java runtimes
-- **Versioning & Aliases**: Automatic version management with "live" alias
-- **Lambda Permissions**: Multi-target permission management (function, version, alias)
+- **:chart_with_upwards_trend: OpenTelemetry Integration**: Built-in AWS OpenTelemetry collector layer
+- **:shield: IAM Management**: Automatic role and policy creation with CloudWatch Logs permissions
+- **:gear: Environment Configuration**: Easy environment variable management
+- **:link: Function URLs**: Optional HTTP endpoint generation
+- **:rocket: SnapStart Support**: Improved cold start performance for Java runtimes
+- **:label: Versioning & Aliases**: Automatic version management with "live" alias
+- **:key: Lambda Permissions**: Multi-target permission management (function, version, alias)
 
 ## Basic Usage
 
@@ -174,15 +168,16 @@ var lambda = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFunctionCon
 var domain = lambda.LiveAliasFunctionUrlDomain; // Returns the domain string
 ```
 
-## Runtime Configuration
+## :computer: Runtime Configuration
 
 The Lambda functions use the following runtime configuration:
 
-- **Runtime**: `PROVIDED_AL2023` (Amazon Linux 2023)
-- **Handler**: `bootstrap` (for custom runtimes)
-- **Architecture**: x86_64
-- **Log Retention**: 2 weeks
-- **OpenTelemetry Layer**: AWS managed layer (us-east-1 region)
+!!! info "Runtime Details"
+    - **Runtime**: `PROVIDED_AL2023` (Amazon Linux 2023)
+    - **Handler**: `bootstrap` (for custom runtimes)
+    - **Architecture**: x86_64
+    - **Log Retention**: 2 weeks
+    - **OpenTelemetry Layer**: AWS managed layer (us-east-1 region)
 
 ## IAM Permissions
 
@@ -206,8 +201,8 @@ The construct automatically creates:
 
 ## Testing
 
-See the [Testing Guide](../testing/) for comprehensive testing utilities and patterns specific to the Lambda Function construct.
+See the [Testing Guide](../testing/index.md) for comprehensive testing utilities and patterns specific to the Lambda Function construct.
 
 ## Examples
 
-For more real-world examples, see the [Examples](../examples/) section.
+For more real-world examples, see the [Examples](../examples/index.md) section.

@@ -3,8 +3,6 @@ layout: default
 title: LayeredCraft CDK Constructs
 ---
 
-# LayeredCraft CDK Constructs
-
 [![Build Status](https://github.com/LayeredCraft/cdk-constructs/actions/workflows/build.yaml/badge.svg)](https://github.com/LayeredCraft/cdk-constructs/actions/workflows/build.yaml)
 [![NuGet](https://img.shields.io/nuget/v/LayeredCraft.Cdk.Constructs.svg)](https://www.nuget.org/packages/LayeredCraft.Cdk.Constructs/)
 [![Downloads](https://img.shields.io/nuget/dt/LayeredCraft.Cdk.Constructs.svg)](https://www.nuget.org/packages/LayeredCraft.Cdk.Constructs/)
@@ -61,8 +59,10 @@ public class MyStack : Stack
 
 ## Available Constructs
 
-### [Lambda Function Construct](constructs/lambda-function)
+### [Lambda Function Construct](constructs/lambda-function.md)
+
 Full-featured Lambda functions with:
+
 - OpenTelemetry integration
 - IAM roles and policies
 - Environment variables
@@ -70,16 +70,20 @@ Full-featured Lambda functions with:
 - SnapStart support
 - Versioning and aliases
 
-### [Static Site Construct](constructs/static-site)
+### [Static Site Construct](constructs/static-site.md)
+
 Complete static website hosting with:
+
 - S3 website hosting
 - CloudFront CDN
 - SSL certificates
 - Route53 DNS
 - API proxy support
 
-### [DynamoDB Table Construct](constructs/dynamodb-table)
+### [DynamoDB Table Construct](constructs/dynamodb-table.md)
+
 Production-ready DynamoDB tables with:
+
 - Global secondary indexes
 - DynamoDB streams
 - TTL configuration
@@ -87,8 +91,8 @@ Production-ready DynamoDB tables with:
 
 ## Documentation
 
-- **[Testing Guide](testing/)** - Comprehensive testing utilities and patterns
-- **[Examples](examples/)** - Real-world usage examples and patterns
+- **[Testing Guide](testing/index.md)** - Comprehensive testing utilities and patterns
+- **[Examples](examples/index.md)** - Real-world usage examples and patterns
 
 ## Requirements
 
