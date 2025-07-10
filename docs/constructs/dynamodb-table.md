@@ -1,22 +1,16 @@
----
-layout: default
-title: DynamoDB Table Construct
-permalink: /constructs/dynamodb-table/
----
-
 # DynamoDB Table Construct
 
 The `DynamoDbTableConstruct` provides a comprehensive, production-ready DynamoDB table with support for global secondary indexes, streams, TTL, and Lambda integration.
 
-## Features
+## :bar_chart: Features
 
-- **Flexible Key Schema**: Support for partition keys, sort keys, and composite keys
-- **Global Secondary Indexes**: Multiple GSIs with custom key schemas
-- **DynamoDB Streams**: Real-time data processing with Lambda integration
-- **TTL Support**: Automatic data expiration
-- **CloudFormation Outputs**: Automatic exports for table ARN, name, and stream ARN
-- **Lambda Integration**: Built-in method for attaching Lambda functions to streams
-- **Billing Modes**: Support for both PAY_PER_REQUEST and PROVISIONED billing
+- **:key: Flexible Key Schema**: Support for partition keys, sort keys, and composite keys
+- **:index_pointing_at_the_viewer: Global Secondary Indexes**: Multiple GSIs with custom key schemas
+- **:ocean: DynamoDB Streams**: Real-time data processing with Lambda integration
+- **:hourglass: TTL Support**: Automatic data expiration
+- **:outbox_tray: CloudFormation Outputs**: Automatic exports for table ARN, name, and stream ARN
+- **:zap: Lambda Integration**: Built-in method for attaching Lambda functions to streams
+- **:credit_card: Billing Modes**: Support for both PAY_PER_REQUEST and PROVISIONED billing
 
 ## Basic Usage
 
@@ -274,8 +268,8 @@ var eventTable = new DynamoDbTableConstruct(this, "EventTable", new DynamoDbTabl
 
 ## Testing
 
-See the [Testing Guide](../testing/) for comprehensive testing utilities and patterns specific to the DynamoDB Table construct.
+See the [Testing Guide](../testing/index.md) for comprehensive testing utilities and patterns specific to the DynamoDB Table construct.
 
 ## Examples
 
-For more real-world examples, see the [Examples](../examples/) section.
+For more real-world examples, see the [Examples](../examples/index.md) section.
