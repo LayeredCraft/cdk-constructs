@@ -15,8 +15,8 @@ copyright: Copyright &copy; 2024 LayeredCraft Team
 theme:
   name: material
   language: en
-  logo: docs/assets/icon.png
-  favicon: docs/assets/icon.png
+  logo: assets/icon.png
+  favicon: assets/icon.png
   
   features:
     - content.code.copy
@@ -91,9 +91,6 @@ markdown_extensions:
   - pymdownx.keys
   - pymdownx.mark
   - pymdownx.smartsymbols
-  - pymdownx.snippets:
-      auto_append:
-        - includes/mkdocs.md
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid

@@ -1,4 +1,7 @@
-# LayeredCraft CDK Constructs
+---
+layout: default
+title: LayeredCraft CDK Constructs
+---
 
 [![Build Status](https://github.com/LayeredCraft/cdk-constructs/actions/workflows/build.yaml/badge.svg)](https://github.com/LayeredCraft/cdk-constructs/actions/workflows/build.yaml)
 [![NuGet](https://img.shields.io/nuget/v/LayeredCraft.Cdk.Constructs.svg)](https://www.nuget.org/packages/LayeredCraft.Cdk.Constructs/)
@@ -6,14 +9,14 @@
 
 A comprehensive library of reusable AWS CDK constructs for .NET projects, designed for serverless applications and static websites. Built with best practices, observability, and cost efficiency in mind.
 
-## :rocket: Key Features
+## Key Features
 
-- **:zap: Lambda Functions**: Comprehensive Lambda construct with OpenTelemetry support, IAM management, and environment configuration
-- **:globe_with_meridians: Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, and Route53 DNS management
-- **:bar_chart: DynamoDB Tables**: Full-featured DynamoDB construct with streams, TTL, and global secondary indexes
-- **:test_tube: Testing Helpers**: Extensive testing utilities with fluent assertions and builders
-- **:memo: Type Safety**: Full TypeScript-style intellisense and compile-time validation
-- **:zap: Performance**: Optimized for cold starts with AWS Lambda SnapStart support
+- **🚀 Lambda Functions**: Comprehensive Lambda construct with OpenTelemetry support, IAM management, and environment configuration
+- **🌐 Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, and Route53 DNS management
+- **📊 DynamoDB Tables**: Full-featured DynamoDB construct with streams, TTL, and global secondary indexes
+- **🧪 Testing Helpers**: Extensive testing utilities with fluent assertions and builders
+- **📝 Type Safety**: Full TypeScript-style intellisense and compile-time validation
+- **⚡ Performance**: Optimized for cold starts with AWS Lambda SnapStart support
 
 ## Installation
 
@@ -56,8 +59,10 @@ public class MyStack : Stack
 
 ## Available Constructs
 
-### [:zap: Lambda Function Construct](constructs/lambda-function.md)
+### [Lambda Function Construct](constructs/lambda-function.md)
+
 Full-featured Lambda functions with:
+
 - OpenTelemetry integration
 - IAM roles and policies
 - Environment variables
@@ -65,16 +70,20 @@ Full-featured Lambda functions with:
 - SnapStart support
 - Versioning and aliases
 
-### [:globe_with_meridians: Static Site Construct](constructs/static-site.md)
+### [Static Site Construct](constructs/static-site.md)
+
 Complete static website hosting with:
+
 - S3 website hosting
 - CloudFront CDN
 - SSL certificates
 - Route53 DNS
 - API proxy support
 
-### [:bar_chart: DynamoDB Table Construct](constructs/dynamodb-table.md)
+### [DynamoDB Table Construct](constructs/dynamodb-table.md)
+
 Production-ready DynamoDB tables with:
+
 - Global secondary indexes
 - DynamoDB streams
 - TTL configuration
