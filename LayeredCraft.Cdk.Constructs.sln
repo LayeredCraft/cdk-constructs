@@ -21,7 +21,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "git", "git", "{32F31203-71F
 		.github\dependabot.yml = .github\dependabot.yml
 		.github\workflows\build.yaml = .github\workflows\build.yaml
 		.github\workflows\pr-build.yaml = .github\workflows\pr-build.yaml
-		.github\workflows\mkdocs-material-gh-pages.yml = .github\workflows\mkdocs-material-gh-pages.yml
+		.github\workflows\docs.yml = .github\workflows\docs.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{B4C8E2F1-3A2D-4B8F-9C7E-1F5A8D9E2B3C}"
