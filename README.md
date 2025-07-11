@@ -1,6 +1,6 @@
 # LayeredCraft CDK Constructs
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 [![Build Status](https://github.com/LayeredCraft/cdk-constructs/actions/workflows/build.yaml/badge.svg)](https://github.com/LayeredCraft/cdk-constructs/actions/workflows/build.yaml)
@@ -159,6 +159,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/taylorbobaylor"><img src="https://avatars.githubusercontent.com/u/25238885?v=4?s=100" width="100px;" alt="Taylor Christian"/><br /><sub><b>Taylor Christian</b></sub></a><br /><a href="https://github.com/LayeredCraft/cdk-constructs/commits?author=taylorbobaylor" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/ncipollina"><img src="https://avatars.githubusercontent.com/u/1405469?v=4?s=100" width="100px;" alt="Nick Cipollina"/><br /><sub><b>Nick Cipollina</b></sub></a><br /><a href="https://github.com/LayeredCraft/cdk-constructs/commits?author=ncipollina" title="Code">💻</a> <a href="https://github.com/LayeredCraft/cdk-constructs/commits?author=ncipollina" title="Documentation">📖</a> <a href="#infra-ncipollina" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a></td>
     </tr>
   </tbody>
 </table>
