@@ -1,10 +1,10 @@
 # Lambda Function Construct
 
-The `LambdaFunctionConstruct` provides a comprehensive, production-ready Lambda function with integrated OpenTelemetry support, IAM management, and environment configuration.
+The `LambdaFunctionConstruct` provides a comprehensive, production-ready Lambda function with configurable OpenTelemetry support, IAM management, and environment configuration.
 
 ## :rocket: Features
 
-- **:chart_with_upwards_trend: OpenTelemetry Integration**: Built-in AWS OpenTelemetry collector layer
+- **:chart_with_upwards_trend: OpenTelemetry Integration**: Configurable AWS OpenTelemetry collector layer with version and architecture support
 - **:shield: IAM Management**: Automatic role and policy creation with CloudWatch Logs permissions
 - **:gear: Environment Configuration**: Easy environment variable management
 - **:link: Function URLs**: Optional HTTP endpoint generation
@@ -29,7 +29,8 @@ public class MyStack : Stack
             FunctionSuffix = "prod",
             AssetPath = "./lambda-deployment.zip",
             RoleName = "my-api-role",
-            PolicyName = "my-api-policy"
+            PolicyName = "my-api-policy",
+            IncludeOtelLayer = true // Enable OpenTelemetry (disabled by default in v2.0+)
         });
     }
 }
@@ -55,7 +56,9 @@ public class MyStack : Stack
 | `TimeoutInSeconds` | `double` | `6` | Function timeout in seconds |
 | `PolicyStatements` | `PolicyStatement[]` | `[]` | Additional IAM policy statements |
 | `EnvironmentVariables` | `IDictionary<string, string>` | `{}` | Environment variables |
-| `IncludeOtelLayer` | `bool` | `true` | Enable OpenTelemetry layer |
+| `IncludeOtelLayer` | `bool` | `false` | Enable OpenTelemetry layer |
+| `OtelLayerVersion` | `string` | `"0-117-0"` | OpenTelemetry layer version |
+| `Architecture` | `string` | `"amd64"` | Lambda architecture (amd64/arm64) |
 | `Permissions` | `List<LambdaPermission>` | `[]` | Lambda invocation permissions |
 | `EnableSnapStart` | `bool` | `false` | Enable SnapStart for improved cold starts |
 | `GenerateUrl` | `bool` | `false` | Generate Function URL for HTTP access |
@@ -142,6 +145,25 @@ var lambda = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFunctionCon
 });
 ```
 
+### Lambda with OpenTelemetry Configuration
+
+```csharp
+var lambda = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "my-api",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda-deployment.zip",
+    RoleName = "my-api-role",
+    PolicyName = "my-api-policy",
+    IncludeOtelLayer = true,           // Enable OpenTelemetry layer
+    Architecture = "arm64",            // Use ARM64 architecture
+    OtelLayerVersion = "0-117-0"       // Specify OTEL layer version
+});
+```
+
+!!! warning "Breaking Change in v2.0.0"
+    Starting with version 2.0.0, the OpenTelemetry layer is **disabled by default**. You must explicitly set `IncludeOtelLayer = true` to enable it. This change allows for better control over observability costs and layer dependencies.
+
 ## Public Properties
 
 ### LambdaFunction
@@ -175,9 +197,9 @@ The Lambda functions use the following runtime configuration:
 !!! info "Runtime Details"
     - **Runtime**: `PROVIDED_AL2023` (Amazon Linux 2023)
     - **Handler**: `bootstrap` (for custom runtimes)
-    - **Architecture**: x86_64
+    - **Architecture**: Configurable (amd64/arm64, default: amd64)
     - **Log Retention**: 2 weeks
-    - **OpenTelemetry Layer**: AWS managed layer (us-east-1 region)
+    - **OpenTelemetry Layer**: Configurable AWS managed layer (disabled by default in v2.0+)
 
 ## IAM Permissions
 

@@ -45,7 +45,8 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 **LambdaFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/LambdaFunctionConstruct.cs`)
 - Main CDK construct that creates Lambda functions with comprehensive configuration
 - Automatically creates IAM roles and policies with CloudWatch Logs permissions
-- Supports OpenTelemetry layer integration via AWS managed layer
+- Supports configurable OpenTelemetry layer integration via AWS managed layer (disabled by default)
+- Configurable OTEL layer version and architecture (amd64/arm64)
 - Supports AWS Lambda SnapStart for improved cold start performance
 - Creates function versions and aliases for deployment management
 - Handles Lambda permissions for multiple targets (function, version, alias)
@@ -82,12 +83,31 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 1. **Construct Pattern**: Uses AWS CDK construct pattern for reusable infrastructure components
 2. **Interface + Record Pattern**: Props classes use both interface and record for flexibility and immutability
 3. **Multi-Target Permissions**: Automatically applies permissions to function, version, and alias
-4. **OpenTelemetry Integration**: Built-in support for AWS OTEL collector layer
+4. **OpenTelemetry Integration**: Configurable support for AWS OTEL collector layer with version and architecture options
 5. **Versioning Strategy**: Creates new versions on every deployment with "live" alias
 
 ### Target Frameworks
 - .NET 8.0 and .NET 9.0
 - Uses AWS CDK v2 (Amazon.CDK.Lib 2.203.1)
+
+### OpenTelemetry Configuration (v2.0.0+)
+Starting with version 2.0.0, the OpenTelemetry layer configuration has been updated:
+
+- **Default Behavior**: OTEL layer is now **disabled by default** (breaking change from v1.x)
+- **Architecture Support**: Configurable architecture via `Architecture` property (default: "amd64")
+- **Version Control**: Configurable OTEL layer version via `OtelLayerVersion` property (default: "0-117-0")
+- **Layer ARN Format**: `arn:aws:lambda:{region}:901920570463:layer:aws-otel-collector-{architecture}-ver-{version}:1`
+
+To enable OTEL layer in v2.0.0+:
+```csharp
+var props = new LambdaFunctionConstructProps
+{
+    // ... other properties
+    IncludeOtelLayer = true,           // Explicitly enable
+    Architecture = "arm64",            // Optional: change architecture
+    OtelLayerVersion = "0-117-0"       // Optional: specify version
+};
+```
 
 ## Testing Framework
 
@@ -179,7 +199,7 @@ The library includes comprehensive testing helpers for consumers:
 
 ### AWS CDK Patterns
 - Uses `PROVIDED_AL2023` runtime for Lambda functions (supports custom runtimes)
-- Hardcoded OpenTelemetry layer ARN for us-east-1 region
+- Configurable OpenTelemetry layer version and architecture (defaults to version 0-117-0, amd64 architecture)
 - Default memory: 1024MB, timeout: 6 seconds, log retention: 2 weeks
 - Uses `RemovalPolicy.RETAIN` for Lambda versions to prevent deletion
 

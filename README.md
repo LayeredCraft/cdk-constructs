@@ -11,7 +11,7 @@ A comprehensive library of reusable AWS CDK constructs for .NET projects, design
 
 ## Features
 
-- **🚀 Lambda Functions**: Comprehensive Lambda construct with OpenTelemetry support, IAM management, and environment configuration
+- **🚀 Lambda Functions**: Comprehensive Lambda construct with configurable OpenTelemetry support, IAM management, and environment configuration
 - **🌐 Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, and Route53 DNS management
 - **📊 DynamoDB Tables**: Full-featured DynamoDB construct with streams, TTL, and global secondary indexes
 - **🧪 Testing Helpers**: Extensive testing utilities with fluent assertions and builders
@@ -45,6 +45,8 @@ public class MyStack : Stack
             RoleName = "my-api-role",
             PolicyName = "my-api-policy",
             GenerateUrl = true, // Creates Function URL for HTTP access
+            IncludeOtelLayer = true, // Enable OpenTelemetry (disabled by default in v2.0+)
+            Architecture = "arm64", // Optional: specify architecture (default: amd64)
             EnvironmentVariables = new Dictionary<string, string>
             {
                 { "ENVIRONMENT", "production" },

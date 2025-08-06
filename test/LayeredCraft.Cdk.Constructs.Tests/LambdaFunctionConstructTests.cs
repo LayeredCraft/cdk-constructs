@@ -155,7 +155,7 @@ public class LambdaFunctionConstructTests
         template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
         {
             { "TracingConfig", new Dictionary<string, object> { { "Mode", "Active" } } },
-            { "Layers", new object[] { Match.StringLikeRegexp(".*aws-otel-collector.*") } }
+            { "Layers", new object[] { Match.StringLikeRegexp(".*aws-otel-collector-amd64-ver-0-117-0.*") } }
         }));
     }
 
