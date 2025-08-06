@@ -49,6 +49,7 @@ public class ServerlessApiStack : Stack
             PolicyName = "user-api-policy",
             MemorySize = 1024,
             TimeoutInSeconds = 30,
+            IncludeOtelLayer = true, // Enable OpenTelemetry for observability
             PolicyStatements = [
                 new PolicyStatement(new PolicyStatementProps
                 {
@@ -277,6 +278,121 @@ var table = new DynamoDbTableConstruct(this, "ComplexTable", new DynamoDbTableCo
 });
 ```
 
+## OpenTelemetry Configuration Examples
+
+### Basic OTEL Enablement
+
+```csharp
+var lambda = new LambdaFunctionConstruct(this, "BasicOtelLambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "my-api",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda.zip",
+    RoleName = "my-api-role",
+    PolicyName = "my-api-policy",
+    IncludeOtelLayer = true // Enable OpenTelemetry (disabled by default in v2.0+)
+});
+```
+
+### ARM64 Architecture with OTEL
+
+```csharp
+var lambda = new LambdaFunctionConstruct(this, "Arm64OtelLambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "arm64-api",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda.zip",
+    RoleName = "arm64-api-role",
+    PolicyName = "arm64-api-policy",
+    IncludeOtelLayer = true,
+    Architecture = "arm64",           // Use ARM64 for better cost/performance
+    OtelLayerVersion = "0-117-0"     // Specify exact OTEL version
+});
+```
+
+### Different OTEL Layer Versions
+
+```csharp
+// Production with latest stable OTEL
+var prodLambda = new LambdaFunctionConstruct(this, "ProdLambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "prod-api",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda.zip",
+    RoleName = "prod-api-role",
+    PolicyName = "prod-api-policy",
+    IncludeOtelLayer = true,
+    OtelLayerVersion = "0-117-0"     // Latest stable version
+});
+
+// Development with specific OTEL version for consistency
+var devLambda = new LambdaFunctionConstruct(this, "DevLambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "dev-api",
+    FunctionSuffix = "dev",
+    AssetPath = "./lambda.zip",
+    RoleName = "dev-api-role",
+    PolicyName = "dev-api-policy",
+    IncludeOtelLayer = true,
+    OtelLayerVersion = "0-115-0"     // Previous version for testing
+});
+```
+
+### Migration from v1.x Example
+
+```csharp
+// v1.x approach (OTEL enabled by default)
+// var lambda = new LambdaFunctionConstruct(this, "Lambda", props);
+
+// v2.0+ approach (OTEL must be explicitly enabled)
+var lambda = new LambdaFunctionConstruct(this, "Lambda", new LambdaFunctionConstructProps
+{
+    FunctionName = "migrated-api",
+    FunctionSuffix = "prod",
+    AssetPath = "./lambda.zip",
+    RoleName = "migrated-api-role",
+    PolicyName = "migrated-api-policy",
+    IncludeOtelLayer = true,         // Must be explicit in v2.0+
+    Architecture = "amd64",          // Default, but now configurable
+    OtelLayerVersion = "0-117-0"     // Latest version
+});
+```
+
+### Environment-Specific OTEL Configuration
+
+```csharp
+public class OtelConfig
+{
+    public bool EnableOtel { get; set; }
+    public string Architecture { get; set; } = "amd64";
+    public string OtelVersion { get; set; } = "0-117-0";
+}
+
+public void CreateLambda(string environment, OtelConfig otelConfig)
+{
+    var lambda = new LambdaFunctionConstruct(this, $"{environment}Lambda", new LambdaFunctionConstructProps
+    {
+        FunctionName = "my-api",
+        FunctionSuffix = environment,
+        AssetPath = "./lambda.zip",
+        RoleName = $"my-api-{environment}-role",
+        PolicyName = $"my-api-{environment}-policy",
+        IncludeOtelLayer = otelConfig.EnableOtel,
+        Architecture = otelConfig.Architecture,
+        OtelLayerVersion = otelConfig.OtelVersion,
+        EnvironmentVariables = new Dictionary<string, string>
+        {
+            { "ENVIRONMENT", environment },
+            { "OTEL_ENABLED", otelConfig.EnableOtel.ToString() }
+        }
+    });
+}
+
+// Usage:
+// CreateLambda("prod", new OtelConfig { EnableOtel = true, Architecture = "arm64" });
+// CreateLambda("dev", new OtelConfig { EnableOtel = false }); // No observability costs in dev
+```
+
 ## Testing Examples
 
 ### Complete Test Suite
@@ -373,7 +489,8 @@ public class MyStack : Stack
             PolicyName = $"my-function-{config.Environment}-policy",
             MemorySize = config.LambdaMemory,
             TimeoutInSeconds = config.LambdaTimeout,
-            IncludeOtelLayer = config.EnableTracing
+            IncludeOtelLayer = config.EnableTracing,
+            Architecture = "amd64" // Configurable architecture
         });
 
         if (!string.IsNullOrEmpty(config.DomainName))
