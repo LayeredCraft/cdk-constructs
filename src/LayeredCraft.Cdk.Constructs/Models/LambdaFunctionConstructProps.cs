@@ -14,6 +14,8 @@ public interface ILambdaFunctionConstructProps
     PolicyStatement[] PolicyStatements { get; set; }
     IDictionary<string, string> EnvironmentVariables { get; set; }
     bool IncludeOtelLayer { get; set; }
+    string OtelLayerVersion { get; set; }
+    string Architecture { get; set; }
     List<LambdaPermission> Permissions { get; set; }
     bool EnableSnapStart { get; set; }
     bool GenerateUrl { get; set; }
@@ -29,8 +31,10 @@ public sealed record LambdaFunctionConstructProps : ILambdaFunctionConstructProp
     public double TimeoutInSeconds { get; set; } = 6;
     public PolicyStatement[] PolicyStatements { get; set; } = [];
     public IDictionary<string, string> EnvironmentVariables { get; set; } = new Dictionary<string, string>();
-    public bool IncludeOtelLayer { get; set; } = true;
+    public bool IncludeOtelLayer { get; set; } = false;
+    public string OtelLayerVersion { get; set; } = "0-117-0";
+    public string Architecture { get; set; } = "amd64";
     public List<LambdaPermission> Permissions { get; set; } = [];
-    public bool EnableSnapStart { get; set; } = false;
-    public bool GenerateUrl { get; set; } = false;
+    public bool EnableSnapStart { get; set; }
+    public bool GenerateUrl { get; set; }
 }

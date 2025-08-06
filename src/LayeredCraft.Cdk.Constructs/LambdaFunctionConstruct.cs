@@ -89,7 +89,7 @@ public class LambdaFunctionConstruct : Construct
         if (props.IncludeOtelLayer)
         {
             LambdaFunction.AddLayers(LayerVersion.FromLayerVersionArn(this, "OTELLambdaLayer",
-                $"arn:aws:lambda:{region}:901920570463:layer:aws-otel-collector-amd64-ver-0-102-1:1"));
+                $"arn:aws:lambda:{region}:901920570463:layer:aws-otel-collector-{props.Architecture}-ver-{props.OtelLayerVersion}:1"));
         }
 
         // ✅ Create a new version on every deployment

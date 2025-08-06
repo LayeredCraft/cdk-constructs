@@ -3,7 +3,7 @@ using LayeredCraft.Cdk.Constructs.Models;
 
 namespace LayeredCraft.Cdk.Constructs.Tests.TestKit.Customizations;
 
-public class LambdaFunctionConstructCustomization(bool includeOtelLayer = true, bool includePermissions = true, bool generateUrl = false)
+public class LambdaFunctionConstructCustomization(bool includeOtelLayer = false, bool includePermissions = true, bool generateUrl = false)
     : ICustomization
 {
     public void Customize(IFixture fixture)
@@ -33,6 +33,8 @@ public class LambdaFunctionConstructCustomization(bool includeOtelLayer = true, 
                 { "TEST_VAR", "test-value" }
             })
             .With(props => props.IncludeOtelLayer, includeOtelLayer)
+            .With(props => props.OtelLayerVersion, "0-117-0")
+            .With(props => props.Architecture, "amd64")
             .With(props => props.Permissions, includePermissions 
                 ? [fixture.Create<LambdaPermission>()]
                 : [])

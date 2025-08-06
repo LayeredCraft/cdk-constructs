@@ -18,7 +18,9 @@ public class LambdaFunctionConstructPropsBuilder
     private double _timeoutInSeconds = 6;
     private readonly List<PolicyStatement> _policyStatements = new();
     private readonly Dictionary<string, string> _environmentVariables = new();
-    private bool _includeOtelLayer = true;
+    private bool _includeOtelLayer = false;
+    private string _otelLayerVersion = "0-117-0";
+    private string _architecture = "amd64";
     private readonly List<LambdaPermission> _permissions = new();
     private bool _enableSnapStart = false;
     private bool _generateUrl = false;
@@ -86,6 +88,28 @@ public class LambdaFunctionConstructPropsBuilder
     public LambdaFunctionConstructPropsBuilder WithOtelEnabled(bool enabled = true)
     {
         _includeOtelLayer = enabled;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the OpenTelemetry layer version.
+    /// </summary>
+    /// <param name="version">The OTEL layer version (e.g., "0-117-0")</param>
+    /// <returns>The builder instance for method chaining</returns>
+    public LambdaFunctionConstructPropsBuilder WithOtelLayerVersion(string version)
+    {
+        _otelLayerVersion = version;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Lambda function architecture.
+    /// </summary>
+    /// <param name="architecture">The architecture (e.g., "amd64", "arm64")</param>
+    /// <returns>The builder instance for method chaining</returns>
+    public LambdaFunctionConstructPropsBuilder WithArchitecture(string architecture)
+    {
+        _architecture = architecture;
         return this;
     }
 
@@ -273,6 +297,8 @@ public class LambdaFunctionConstructPropsBuilder
             PolicyStatements = [.. _policyStatements],
             EnvironmentVariables = _environmentVariables,
             IncludeOtelLayer = _includeOtelLayer,
+            OtelLayerVersion = _otelLayerVersion,
+            Architecture = _architecture,
             Permissions = _permissions,
             EnableSnapStart = _enableSnapStart,
             GenerateUrl = _generateUrl
