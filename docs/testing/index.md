@@ -109,10 +109,29 @@ var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZi
     .WithS3Access("my-bucket")
     .WithApiGatewayPermission("arn:aws:execute-api:us-east-1:123456789012:abcdef123/*")
     .WithOtelEnabled(true)
+    .WithOtelLayerVersion("0-117-0")
+    .WithArchitecture("arm64")
     .WithSnapStart(true)
     .WithGenerateUrl(true)
     .Build();
 ```
+
+### OpenTelemetry Configuration (v2.0+)
+
+The props builder includes new methods for configuring OpenTelemetry settings:
+
+```csharp
+var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+    .WithOtelEnabled(true)                    // Enable OTEL layer (disabled by default in v2.0+)
+    .WithOtelLayerVersion("0-117-0")         // Specify OTEL layer version
+    .WithArchitecture("arm64")               // Specify architecture (default: amd64)
+    .Build();
+```
+
+**Available OTEL methods:**
+- `WithOtelEnabled(bool)` - Enable/disable OpenTelemetry layer
+- `WithOtelLayerVersion(string)` - Specify OTEL layer version (e.g., "0-117-0")  
+- `WithArchitecture(string)` - Specify Lambda architecture ("amd64" or "arm64")
 
 ### Assertion Methods
 
@@ -239,10 +258,10 @@ public void Should_Create_Lambda_With_Custom_Settings(LambdaFunctionConstructPro
 
 ```csharp
 [Theory]
-[InlineData(true, true)]   // OTEL enabled, permissions included
-[InlineData(true, false)]  // OTEL enabled, no permissions
-[InlineData(false, true)]  // OTEL disabled, permissions included
-[InlineData(false, false)] // OTEL disabled, no permissions
+[InlineData(true, true)]   // OTEL explicitly enabled, permissions included
+[InlineData(true, false)]  // OTEL explicitly enabled, no permissions  
+[InlineData(false, true)]  // OTEL disabled (default in v2.0+), permissions included
+[InlineData(false, false)] // OTEL disabled (default in v2.0+), no permissions
 public void Should_Handle_Different_Configurations(bool includeOtel, bool includePermissions)
 {
     var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
