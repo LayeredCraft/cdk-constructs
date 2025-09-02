@@ -51,6 +51,29 @@ public class MyStack : Stack
 | `ApiDomain` | `string?` | `null` | API domain for proxy behavior |
 | `AlternateDomains` | `string[]` | `[]` | Additional domains to include in certificate |
 
+## Construct Properties
+
+The `StaticSiteConstruct` exposes the following properties after instantiation:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `SiteDomain` | `string` | Fully qualified domain name of the site (e.g., "www.example.com") |
+
+### Accessing Site Domain
+
+```csharp
+var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
+{
+    SiteBucketName = "my-website-bucket",
+    DomainName = "example.com",
+    SiteSubDomain = "www",
+    AssetPath = "./website-build"
+});
+
+// Access the computed site domain
+var domain = site.SiteDomain; // "www.example.com"
+```
+
 ## Advanced Examples
 
 ### Website with Subdomain
