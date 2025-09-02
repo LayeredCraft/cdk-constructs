@@ -58,6 +58,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Configures Route53 DNS records for primary domain and alternates
 - Supports optional API proxying via CloudFront behaviors for `/api/*` paths
 - Includes automatic asset deployment with cache invalidation
+- Exposes `SiteDomain` property containing the fully qualified domain name
 
 **DynamoDbTableConstruct** (`src/LayeredCraft.Cdk.Constructs/DynamoDbTableConstruct.cs`)
 - Comprehensive CDK construct for DynamoDB table creation and configuration
@@ -88,7 +89,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 ### Target Frameworks
 - .NET 8.0 and .NET 9.0
-- Uses AWS CDK v2 (Amazon.CDK.Lib 2.203.1)
+- Uses AWS CDK v2 (Amazon.CDK.Lib 2.213.0)
 
 ### OpenTelemetry Configuration (v2.0.0+)
 Starting with version 2.0.0, the OpenTelemetry layer configuration has been updated:

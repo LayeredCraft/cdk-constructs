@@ -20,6 +20,11 @@ namespace LayeredCraft.Cdk.Constructs;
 public class StaticSiteConstruct : Construct
 {
     /// <summary>
+    /// Gets the fully qualified domain name of the static site (e.g., "www.example.com").
+    /// This property is set during construct initialization and combines the site subdomain with the domain name.
+    /// </summary>
+    public string SiteDomain { get; private set; }
+    /// <summary>
     /// Initializes a new instance of the StaticSiteConstruct class.
     /// </summary>
     /// <param name="scope">The parent construct</param>
@@ -33,12 +38,12 @@ public class StaticSiteConstruct : Construct
             DomainName = props.DomainName
         });
 
-        var siteDomain = $"{props.SiteSubDomain}.{props.DomainName}";
+        SiteDomain = $"{props.SiteSubDomain}.{props.DomainName}";
         
         // Create S3 bucket for static website hosting
         var siteBucket = new Bucket(this, $"{id}-bucket", new BucketProps
         {
-            BucketName = siteDomain,
+            BucketName = SiteDomain,
             WebsiteIndexDocument = "index.html",
             WebsiteErrorDocument = "index.html",
             PublicReadAccess = true,
@@ -62,7 +67,7 @@ public class StaticSiteConstruct : Construct
         // Create SSL certificate for HTTPS with DNS validation
         var certificate = new Certificate(this, $"{id}-certificate", new CertificateProps
         {
-            DomainName = siteDomain,
+            DomainName = SiteDomain,
             Validation = CertificateValidation.FromDns(zone),
             SubjectAlternativeNames = props.AlternateDomains,
         });
@@ -70,7 +75,7 @@ public class StaticSiteConstruct : Construct
         // Create CloudFront distribution for global content delivery
         var distribution = new Distribution(this, $"{id}-cdn", new DistributionProps
         {
-            DomainNames = [siteDomain, ..props.AlternateDomains],
+            DomainNames = [SiteDomain, ..props.AlternateDomains],
             DefaultBehavior = new BehaviorOptions
             {
                 Origin = new S3StaticWebsiteOrigin(siteBucket, new S3StaticWebsiteOriginProps
@@ -112,7 +117,7 @@ public class StaticSiteConstruct : Construct
         _ = new ARecord(this, $"{id}-alias-record", new ARecordProps
         {
             Zone = zone,
-            RecordName = siteDomain,
+            RecordName = SiteDomain,
             Target = RecordTarget.FromAlias(new CloudFrontTarget(distribution)),
         });
 
