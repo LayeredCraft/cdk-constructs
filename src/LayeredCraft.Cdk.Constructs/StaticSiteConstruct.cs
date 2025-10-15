@@ -133,12 +133,16 @@ public class StaticSiteConstruct : Construct
             });
         }
 
+        var distRef = Distribution.FromDistributionAttributes(this, "DistRef", new DistributionAttributes {
+            DistributionId = distribution.DistributionId,
+            DomainName     = distribution.DomainName
+        });
         // Deploy static assets to S3 bucket and invalidate CloudFront cache
         _ = new BucketDeployment(this, $"{id}-deployment", new BucketDeploymentProps
         {
             Sources = [Source.Asset(props.AssetPath)],
             DestinationBucket = siteBucket,
-            Distribution = distribution,
+            Distribution = distRef,
             DistributionPaths = ["/*"],
             MemoryLimit = 1024
         });
