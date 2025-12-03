@@ -15,9 +15,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Amazon.CDK.Lib" Version="2.220.0" />
-      <PackageReference Include="Amazon.JSII.Runtime" Version="1.116.0" />
-      <PackageReference Include="Constructs" Version="10.4.2" />
+      <PackageReference Include="Amazon.CDK.Lib" Version="2.231.0" />
     </ItemGroup>
     <ItemGroup>
         <None Include="..\..\docs\assets\icon.png" Pack="true" PackagePath="" Visible="False" />
