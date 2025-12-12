@@ -7,12 +7,15 @@ on:
 permissions: write-all
 jobs:
   build:
-    uses: LayeredCraft/devops-templates/.github/workflows/pr-build.yaml@v5.0
+    uses: LayeredCraft/devops-templates/.github/workflows/pr-build.yaml@v6.2
     with:
-      solution: LayeredCraft.Cdk.Constructs.sln
+      solution: LayeredCraft.Cdk.Constructs.slnx
       hasTests: true
+      useMtpRunner: true
+      testDirectory: "test"
       dotnetVersion: |
         8.0.x
         9.0.x
+        10.0.x
       runCdk: false
     secrets: inherit
