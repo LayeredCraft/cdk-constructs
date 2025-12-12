@@ -4,13 +4,12 @@ The `StaticSiteConstruct` provides complete static website hosting with S3, Clou
 
 ## :globe_with_meridians: Features
 
-- **:file_cabinet: S3 Website Hosting**: Optimized S3 bucket configuration for static websites
-- **:zap: CloudFront CDN**: Global content delivery with custom error pages
-- **:lock: SSL Certificates**: Automatic SSL certificate provisioning and management
+- **:file_cabinet: S3 Website Hosting**: Public S3 website bucket optimized for static sites (auto-delete on stack removal)
+- **:zap: CloudFront CDN**: Global content delivery with SPA-friendly 403 handling
+- **:lock: SSL Certificates**: DNS-validated certificate for the primary site domain and alternates
 - **:globe_with_meridians: Route53 DNS**: DNS record management for primary and alternate domains
-- **:arrows_counterclockwise: API Proxy Support**: Optional CloudFront behavior for `/api/*` paths
+- **:arrows_counterclockwise: API Proxy Support**: Optional CloudFront behavior for `/api/*` paths (API domain served directly from origin)
 - **:package: Asset Deployment**: Automatic deployment with cache invalidation
-- **:warning: Custom Error Pages**: 404 and 403 error page handling
 
 ## Basic Usage
 
@@ -23,13 +22,13 @@ public class MyStack : Stack
 {
     public MyStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
     {
-        var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
-        {
-            SiteBucketName = "my-website-bucket",
-            DomainName = "example.com",
-            AssetPath = "./website-build"
-        });
-    }
+var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
+{
+    DomainName = "example.com",
+    SiteSubDomain = "www",
+    AssetPath = "./website-build"
+});
+}
 }
 ```
 
@@ -39,17 +38,16 @@ public class MyStack : Stack
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `SiteBucketName` | `string` | Name of the S3 bucket for website hosting |
-| `DomainName` | `string` | Primary domain name (e.g., "example.com") |
-| `AssetPath` | `string` | Path to static website assets |
+| `DomainName` | `string` | Root domain name (e.g., "example.com") used for Route53 hosted zone lookup |
+| `SiteSubDomain` | `string` | Subdomain to prefix (e.g., `www`). Final site domain is `{SiteSubDomain}.{DomainName}` |
+| `AssetPath` | `string` | Path to static website assets that will be uploaded to S3 |
 
 ### Optional Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `SiteSubDomain` | `string?` | `null` | Subdomain for the site (e.g., "www") |
-| `ApiDomain` | `string?` | `null` | API domain for proxy behavior |
-| `AlternateDomains` | `string[]` | `[]` | Additional domains to include in certificate |
+| `ApiDomain` | `string?` | `null` | Optional API origin for `/api/*` requests (served directly from the origin) |
+| `AlternateDomains` | `string[]` | `[]` | Additional domains included in the certificate and DNS records |
 
 ## Construct Properties
 
@@ -81,7 +79,6 @@ var domain = site.SiteDomain; // "www.example.com"
 ```csharp
 var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
 {
-    SiteBucketName = "my-website-bucket",
     DomainName = "example.com",
     SiteSubDomain = "www", // Creates www.example.com
     AssetPath = "./website-build"
@@ -93,7 +90,6 @@ var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
 ```csharp
 var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
 {
-    SiteBucketName = "my-website-bucket",
     DomainName = "example.com",
     ApiDomain = "api.example.com", // Proxies /api/* to api.example.com
     AssetPath = "./website-build"
@@ -105,7 +101,6 @@ var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
 ```csharp
 var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
 {
-    SiteBucketName = "my-website-bucket",
     DomainName = "example.com",
     AlternateDomains = ["www.example.com", "example.org", "www.example.org"],
     AssetPath = "./website-build"
@@ -117,7 +112,6 @@ var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
 ```csharp
 var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
 {
-    SiteBucketName = "my-website-bucket",
     DomainName = "example.com",
     SiteSubDomain = "www",
     ApiDomain = "api.example.com",
@@ -131,25 +125,24 @@ var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
 The construct automatically resolves domains based on configuration:
 
 ### Primary Domain
-- If `SiteSubDomain` is provided: `{SiteSubDomain}.{DomainName}`
-- If no subdomain: `{DomainName}`
+- Site domain is always `{SiteSubDomain}.{DomainName}`. Root/apex domains are not currently supported.
 
 ### Certificate Domains
 The SSL certificate includes:
-1. Primary domain (resolved as above)
-2. All domains from `AlternateDomains` array
-3. API domain (if `ApiDomain` is provided)
+1. Primary site domain (resolved as above)
+2. All domains from `AlternateDomains`
+   - `ApiDomain` is **not** added to the certificate; the API origin must serve its own valid certificate.
 
 ### Route53 Records
 A records are created for:
-- Primary domain
+- Primary site domain
 - All alternate domains
 
 ## CloudFront Configuration
 
 ### Default Behavior
-- **Origin**: S3 website endpoint
-- **Viewer Protocol**: Redirect HTTP to HTTPS
+- **Origin**: S3 website endpoint (bucket is public; no OAC/OAI)
+- **Viewer Protocol**: Allows HTTP and HTTPS (no automatic redirect)
 - **Caching**: Optimized for static assets
 - **Index Document**: `index.html`
 
@@ -160,17 +153,15 @@ A records are created for:
 - **Caching**: Disabled for API requests
 
 ### Error Pages
-- **404 Errors**: Redirected to `/index.html` (for SPA routing)
 - **403 Errors**: Redirected to `/index.html`
 
 ## S3 Bucket Configuration
 
 The S3 bucket is configured with:
-- **Public read access** for website hosting
+- **Public read access** for website hosting (no OAC/OAI)
 - **Website hosting** enabled
 - **Index document**: `index.html`
 - **Error document**: `index.html` (for SPA routing)
-- **CORS configuration** for cross-origin requests
 
 ## Asset Deployment
 
@@ -181,10 +172,9 @@ The construct automatically:
 
 ## Security Considerations
 
-- **HTTPS Enforcement**: All traffic is redirected to HTTPS
-- **Public Access**: S3 bucket allows public read access (required for website hosting)
-- **CORS**: Configured to allow necessary cross-origin requests
-- **Certificate Management**: SSL certificates are automatically provisioned and renewed
+- **HTTPS Enforcement**: CloudFront allows HTTP; add a `ViewerProtocolPolicy.REDIRECT_TO_HTTPS` behavior if strict HTTPS is required
+- **Public Access**: S3 bucket is publicly readable because the origin is the website endpoint
+- **Certificate Management**: SSL certificates are automatically provisioned for the site domain(s); API domains must present their own valid certificate
 
 ## Regional Considerations
 
@@ -198,8 +188,8 @@ The construct automatically:
 ```csharp
 var spa = new StaticSiteConstruct(this, "SPA", new StaticSiteConstructProps
 {
-    SiteBucketName = "my-spa-bucket",
     DomainName = "myapp.com",
+    SiteSubDomain = "www",
     AssetPath = "./build" // React/Vue/Angular build output
 });
 ```
@@ -208,7 +198,6 @@ var spa = new StaticSiteConstruct(this, "SPA", new StaticSiteConstructProps
 ```csharp
 var blog = new StaticSiteConstruct(this, "Blog", new StaticSiteConstructProps
 {
-    SiteBucketName = "my-blog-bucket",
     DomainName = "myblog.com",
     SiteSubDomain = "www",
     ApiDomain = "api.myblog.com", // For comments, search, etc.
@@ -220,8 +209,8 @@ var blog = new StaticSiteConstruct(this, "Blog", new StaticSiteConstructProps
 ```csharp
 var docs = new StaticSiteConstruct(this, "Docs", new StaticSiteConstructProps
 {
-    SiteBucketName = "my-docs-bucket",
     DomainName = "docs.mycompany.com",
+    SiteSubDomain = "www",
     AssetPath = "./docs-build" // Documentation generator output
 });
 ```

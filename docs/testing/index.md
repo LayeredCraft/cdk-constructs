@@ -111,9 +111,10 @@ var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZi
     .WithOtelEnabled(true)
     .WithOtelLayerVersion("0-117-0")
     .WithArchitecture("arm64")
-    .WithSnapStart(true)
     .WithGenerateUrl(true)
     .Build();
+
+// SnapStart is only supported for Java runtimes; avoid enabling it with the default runtime.
 ```
 
 ### OpenTelemetry Configuration (v2.0+)
@@ -143,7 +144,6 @@ template.ShouldHaveTimeout(30);
 
 // Advanced features
 template.ShouldHaveOtelLayer();
-template.ShouldHaveSnapStart();
 template.ShouldHaveFunctionUrl();
 template.ShouldHaveFunctionUrlOutput("test-stack", "test-construct");
 
@@ -159,6 +159,8 @@ template.ShouldHaveEnvironmentVariables(new Dictionary<string, string>
 template.ShouldHaveVersionAndAlias("live");
 template.ShouldHaveLogGroup("my-function-prod", 14);
 ```
+
+SnapStart-specific assertions (`template.ShouldHaveSnapStart()`) apply only when you are using a Java runtime; the default `PROVIDED_AL2023` runtime does not support SnapStart.
 
 ## Static Site Testing
 
@@ -343,7 +345,7 @@ template.ShouldNotHaveOtelLayer();   // When disabled
 ### 5. Use Meaningful Test Names
 ```csharp
 [Fact]
-public void Should_Enable_SnapStart_When_Configured()
+public void Should_Enable_Tracing_When_Configured()
 {
     // Clear what the test is verifying
 }

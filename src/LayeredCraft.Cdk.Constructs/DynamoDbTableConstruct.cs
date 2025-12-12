@@ -41,6 +41,9 @@ public class DynamoDbTableConstruct : Construct
     /// <param name="props">The configuration properties for the DynamoDB table</param>
     public DynamoDbTableConstruct(Construct scope, string id, IDynamoDbTableConstructProps props) : base(scope, id)
     {
+        if (props.PartitionKey is null)
+            throw new ArgumentException("PartitionKey is required to create a DynamoDB table", nameof(props.PartitionKey));
+
         var tableProps = new TableProps
         {
             TableName = props.TableName,
@@ -61,9 +64,10 @@ public class DynamoDbTableConstruct : Construct
         Table = new Table(this, id, tableProps);
 
         var stack = Stack.Of(this);
-        for (var i = 0; i < props.GlobalSecondaryIndexes.Length; i++)
+        var globalSecondaryIndexes = props.GlobalSecondaryIndexes ?? [];
+        for (var i = 0; i < globalSecondaryIndexes.Length; i++)
         {
-            var index = props.GlobalSecondaryIndexes[i];
+            var index = globalSecondaryIndexes[i];
             Table.AddGlobalSecondaryIndex(index);
             _ = new CfnOutput(this, $"{id}-gsi-{i}", new CfnOutputProps
             {

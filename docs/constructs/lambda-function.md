@@ -58,9 +58,9 @@ public class MyStack : Stack
 | `EnvironmentVariables` | `IDictionary<string, string>` | `{}` | Environment variables |
 | `IncludeOtelLayer` | `bool` | `false` | Enable OpenTelemetry layer |
 | `OtelLayerVersion` | `string` | `"0-117-0"` | OpenTelemetry layer version |
-| `Architecture` | `string` | `"amd64"` | Lambda architecture (amd64/arm64) |
+| `Architecture` | `string` | `"amd64"` | Lambda architecture applied to both the function and OTEL layer (amd64/arm64) |
 | `Permissions` | `List<LambdaPermission>` | `[]` | Lambda invocation permissions |
-| `EnableSnapStart` | `bool` | `false` | Enable SnapStart for improved cold starts |
+| `EnableSnapStart` | `bool` | `false` | Enable SnapStart (Java runtimes only; the default `PROVIDED_AL2023` runtime is not eligible) |
 | `GenerateUrl` | `bool` | `false` | Generate Function URL for HTTP access |
 
 ## Advanced Examples
@@ -141,7 +141,7 @@ var lambda = new LambdaFunctionConstruct(this, "MyLambda", new LambdaFunctionCon
     AssetPath = "./lambda-deployment.zip",
     RoleName = "my-api-role",
     PolicyName = "my-api-policy",
-    EnableSnapStart = true // Improves cold start performance
+    EnableSnapStart = true // SnapStart is only supported for Java runtimes
 });
 ```
 
@@ -197,9 +197,10 @@ The Lambda functions use the following runtime configuration:
 !!! info "Runtime Details"
     - **Runtime**: `PROVIDED_AL2023` (Amazon Linux 2023)
     - **Handler**: `bootstrap` (for custom runtimes)
-    - **Architecture**: Configurable (amd64/arm64, default: amd64)
+    - **Architecture**: Configurable (amd64/arm64, default: amd64) and applied to both function and OTEL layer
     - **Log Retention**: 2 weeks
     - **OpenTelemetry Layer**: Configurable AWS managed layer (disabled by default in v2.0+)
+    - **SnapStart**: Supported only for Java runtimes; enabling it with the default runtime is not allowed
 
 ## IAM Permissions
 

@@ -1,3 +1,4 @@
+using System;
 using Amazon.CDK;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
@@ -81,6 +82,7 @@ public class LambdaFunctionConstruct : Construct
             Environment = props.EnvironmentVariables,
             LogGroup = logGroup,
             Tracing = props.IncludeOtelLayer ? Tracing.ACTIVE : Tracing.DISABLED,
+            Architecture = ResolveArchitecture(props.Architecture),
             CurrentVersionOptions = new VersionOptions
             {
                 RemovalPolicy = RemovalPolicy.RETAIN
@@ -97,6 +99,11 @@ public class LambdaFunctionConstruct : Construct
 
         if (props.EnableSnapStart)
         {
+            if (LambdaFunction.Runtime.Family != RuntimeFamily.JAVA)
+            {
+                throw new NotSupportedException("SnapStart is only supported for Java runtimes. Set EnableSnapStart = false or use a Java runtime.");
+            }
+
             var cfnFunction = (CfnFunction)LambdaFunction.Node.DefaultChild!;
             cfnFunction.AddPropertyOverride("SnapStart", new Dictionary<string, object>
             {
@@ -155,5 +162,12 @@ public class LambdaFunctionConstruct : Construct
             version.AddPermission($"{baseId}-ver-{index}", permission);
             alias?.AddPermission($"{baseId}-alias-{index}", permission);
         }
+    }
+
+    private static Architecture ResolveArchitecture(string architecture)
+    {
+        return string.Equals(architecture, "arm64", StringComparison.OrdinalIgnoreCase)
+            ? Architecture.ARM_64
+            : Architecture.X86_64;
     }
 }
