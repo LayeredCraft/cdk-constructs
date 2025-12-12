@@ -1,3 +1,4 @@
+using System;
 using Amazon.CDK;
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
@@ -304,11 +305,11 @@ public class LambdaFunctionConstructTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
         });
         
-        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
-        var template = Template.FromStack(stack);
+        Action act = () => _ = new LambdaFunctionConstruct(stack, "test-construct", props);
 
-        // Verify that SnapStart is enabled for published versions
-        template.ShouldHaveSnapStart();
+        // SnapStart is only supported on Java runtimes; default runtime should reject it
+        act.Should().Throw<NotSupportedException>()
+            .WithMessage("*SnapStart is only supported for Java runtimes*");
     }
 
     [Fact]

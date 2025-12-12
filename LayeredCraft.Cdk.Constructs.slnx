@@ -1,0 +1,43 @@
+<Solution>
+  <Folder Name="/docs/">
+    <File Path="docs/index.md" />
+    <File Path="mkdocs.yml" />
+    <File Path="requirements.txt" />
+  </Folder>
+  <Folder Name="/docs/assets/">
+    <File Path="docs/assets/icon.png" />
+  </Folder>
+  <Folder Name="/docs/assets/css/">
+    <File Path="docs/assets/css/style.scss" />
+  </Folder>
+  <Folder Name="/docs/constructs/">
+    <File Path="docs/constructs/dynamodb-table.md" />
+    <File Path="docs/constructs/lambda-function.md" />
+    <File Path="docs/constructs/static-site.md" />
+  </Folder>
+  <Folder Name="/docs/examples/">
+    <File Path="docs/examples/index.md" />
+  </Folder>
+  <Folder Name="/docs/testing/">
+    <File Path="docs/testing/index.md" />
+  </Folder>
+  <Folder Name="/git/">
+    <File Path=".github/dependabot.yml" />
+    <File Path=".github/workflows/build.yaml" />
+    <File Path=".github/workflows/docs.yml" />
+    <File Path=".github/workflows/pr-build.yaml" />
+    <File Path=".gitignore" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="CLAUDE.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/LayeredCraft.Cdk.Constructs/LayeredCraft.Cdk.Constructs.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/LayeredCraft.Cdk.Constructs.Tests/LayeredCraft.Cdk.Constructs.Tests.csproj" />
+  </Folder>
+</Solution>

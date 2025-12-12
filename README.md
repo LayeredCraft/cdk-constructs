@@ -62,7 +62,6 @@ public class MyStack : Stack
 ```csharp
 var website = new StaticSiteConstruct(this, "Website", new StaticSiteConstructProps
 {
-    SiteBucketName = "my-website-bucket",
     DomainName = "example.com",
     SiteSubDomain = "www",
     AssetPath = "./website-build"

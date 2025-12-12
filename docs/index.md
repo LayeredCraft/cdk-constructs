@@ -50,8 +50,8 @@ public class MyStack : Stack
         // Create a static website
         var site = new StaticSiteConstruct(this, "MySite", new StaticSiteConstructProps
         {
-            SiteBucketName = "my-website-bucket",
             DomainName = "example.com",
+            SiteSubDomain = "www",
             AssetPath = "./website-build"
         });
     }

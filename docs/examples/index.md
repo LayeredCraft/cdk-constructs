@@ -16,6 +16,7 @@ A complete serverless API with Lambda, DynamoDB, and API Gateway.
 
 ```csharp
 using Amazon.CDK;
+using Amazon.CDK.AWS.DynamoDB;
 using Amazon.CDK.AWS.IAM;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
@@ -28,15 +29,17 @@ public class ServerlessApiStack : Stack
         var userTable = new DynamoDbTableConstruct(this, "UserTable", new DynamoDbTableConstructProps
         {
             TableName = "users",
-            PartitionKey = new AttributeDefinition { AttributeName = "userId", AttributeType = AttributeType.STRING },
+            PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
             GlobalSecondaryIndexes = [
-                new GlobalSecondaryIndex
+                new GlobalSecondaryIndexProps
                 {
                     IndexName = "email-index",
-                    PartitionKey = new AttributeDefinition { AttributeName = "email", AttributeType = AttributeType.STRING },
+                    PartitionKey = new Attribute { Name = "email", Type = AttributeType.STRING },
                     ProjectionType = ProjectionType.ALL
                 }
-            ]
+            ],
+            RemovalPolicy = RemovalPolicy.DESTROY,
+            BillingMode = BillingMode.PAY_PER_REQUEST
         });
 
         // Create Lambda function for API
@@ -92,7 +95,6 @@ public class WebsiteStack : Stack
         // Create static website with API proxy
         var website = new StaticSiteConstruct(this, "Website", new StaticSiteConstructProps
         {
-            SiteBucketName = "my-website-bucket",
             DomainName = "mywebsite.com",
             SiteSubDomain = "www",
             ApiDomain = apiLambda.LiveAliasFunctionUrlDomain!, // Proxy /api/* to Lambda
@@ -115,16 +117,20 @@ public class EventDrivenStack : Stack
         var eventTable = new DynamoDbTableConstruct(this, "EventTable", new DynamoDbTableConstructProps
         {
             TableName = "events",
-            PartitionKey = new AttributeDefinition { AttributeName = "aggregateId", AttributeType = AttributeType.STRING },
-            SortKey = new AttributeDefinition { AttributeName = "timestamp", AttributeType = AttributeType.NUMBER },
-            StreamSpecification = StreamViewType.NEW_AND_OLD_IMAGES
+            PartitionKey = new Attribute { Name = "aggregateId", Type = AttributeType.STRING },
+            SortKey = new Attribute { Name = "timestamp", Type = AttributeType.NUMBER },
+            Stream = StreamViewType.NEW_AND_OLD_IMAGES,
+            RemovalPolicy = RemovalPolicy.DESTROY,
+            BillingMode = BillingMode.PAY_PER_REQUEST
         });
 
         // Read model table
         var readModelTable = new DynamoDbTableConstruct(this, "ReadModelTable", new DynamoDbTableConstructProps
         {
             TableName = "user-projections",
-            PartitionKey = new AttributeDefinition { AttributeName = "userId", AttributeType = AttributeType.STRING }
+            PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+            RemovalPolicy = RemovalPolicy.DESTROY,
+            BillingMode = BillingMode.PAY_PER_REQUEST
         });
 
         // Event processor Lambda
@@ -253,28 +259,30 @@ var website = new StaticSiteConstruct(this, "Website", new StaticSiteConstructPr
 var table = new DynamoDbTableConstruct(this, "ComplexTable", new DynamoDbTableConstructProps
 {
     TableName = "user-activities",
-    PartitionKey = new AttributeDefinition { AttributeName = "userId", AttributeType = AttributeType.STRING },
-    SortKey = new AttributeDefinition { AttributeName = "timestamp", AttributeType = AttributeType.NUMBER },
+    PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "timestamp", Type = AttributeType.NUMBER },
     GlobalSecondaryIndexes = [
         // Query by activity type
-        new GlobalSecondaryIndex
+        new GlobalSecondaryIndexProps
         {
             IndexName = "activity-type-index",
-            PartitionKey = new AttributeDefinition { AttributeName = "activityType", AttributeType = AttributeType.STRING },
-            SortKey = new AttributeDefinition { AttributeName = "timestamp", AttributeType = AttributeType.NUMBER },
+            PartitionKey = new Attribute { Name = "activityType", Type = AttributeType.STRING },
+            SortKey = new Attribute { Name = "timestamp", Type = AttributeType.NUMBER },
             ProjectionType = ProjectionType.ALL
         },
         // Query by status
-        new GlobalSecondaryIndex
+        new GlobalSecondaryIndexProps
         {
             IndexName = "status-index",
-            PartitionKey = new AttributeDefinition { AttributeName = "status", AttributeType = AttributeType.STRING },
-            SortKey = new AttributeDefinition { AttributeName = "timestamp", AttributeType = AttributeType.NUMBER },
+            PartitionKey = new Attribute { Name = "status", Type = AttributeType.STRING },
+            SortKey = new Attribute { Name = "timestamp", Type = AttributeType.NUMBER },
             ProjectionType = ProjectionType.KEYS_ONLY
         }
     ],
-    StreamSpecification = StreamViewType.NEW_AND_OLD_IMAGES,
-    TimeToLiveAttribute = "expiresAt"
+    Stream = StreamViewType.NEW_AND_OLD_IMAGES,
+    TimeToLiveAttribute = "expiresAt",
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 

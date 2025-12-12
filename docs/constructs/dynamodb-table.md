@@ -16,6 +16,7 @@ The `DynamoDbTableConstruct` provides a comprehensive, production-ready DynamoDB
 
 ```csharp
 using Amazon.CDK;
+using Amazon.CDK.AWS.DynamoDB;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 
@@ -23,12 +24,14 @@ public class MyStack : Stack
 {
     public MyStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
     {
-        var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
-        {
-            TableName = "users",
-            PartitionKey = new AttributeDefinition { AttributeName = "userId", AttributeType = AttributeType.STRING }
-        });
-    }
+var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
+{
+    TableName = "users",
+    PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
+});
+}
 }
 ```
 
@@ -39,17 +42,20 @@ public class MyStack : Stack
 | Property | Type | Description |
 |----------|------|-------------|
 | `TableName` | `string` | Name of the DynamoDB table |
-| `PartitionKey` | `AttributeDefinition` | Primary partition key definition |
+| `PartitionKey` | `IAttribute` | Primary partition key definition |
+| `RemovalPolicy` | `RemovalPolicy` | Behavior when the stack is deleted (e.g., `RemovalPolicy.DESTROY`) |
+| `BillingMode` | `BillingMode` | Billing mode for the table (`PAY_PER_REQUEST` or `PROVISIONED`) |
 
 ### Optional Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `SortKey` | `AttributeDefinition?` | `null` | Primary sort key definition |
-| `GlobalSecondaryIndexes` | `GlobalSecondaryIndex[]` | `[]` | GSI definitions |
-| `StreamSpecification` | `StreamViewType?` | `null` | DynamoDB stream configuration |
+| `SortKey` | `IAttribute?` | `null` | Primary sort key definition |
+| `GlobalSecondaryIndexes` | `GlobalSecondaryIndexProps[]` | `[]` | GSI definitions |
+| `Stream` | `StreamViewType?` | `null` | DynamoDB stream configuration |
 | `TimeToLiveAttribute` | `string?` | `null` | TTL attribute name |
-| `BillingMode` | `BillingMode` | `PAY_PER_REQUEST` | Table billing mode |
+
+> PartitionKey is required. The construct validates this at creation time and will throw if it is missing to avoid synth/deploy failures.
 
 ## Advanced Examples
 
@@ -59,26 +65,30 @@ public class MyStack : Stack
 var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
 {
     TableName = "user-sessions",
-    PartitionKey = new AttributeDefinition { AttributeName = "userId", AttributeType = AttributeType.STRING },
-    SortKey = new AttributeDefinition { AttributeName = "sessionId", AttributeType = AttributeType.STRING }
+    PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "sessionId", Type = AttributeType.STRING },
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 
 ### Table with Global Secondary Index
 
 ```csharp
-var gsi = new GlobalSecondaryIndex
+var gsi = new GlobalSecondaryIndexProps
 {
     IndexName = "email-index",
-    PartitionKey = new AttributeDefinition { AttributeName = "email", AttributeType = AttributeType.STRING },
+    PartitionKey = new Attribute { Name = "email", Type = AttributeType.STRING },
     ProjectionType = ProjectionType.ALL
 };
 
 var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
 {
     TableName = "users",
-    PartitionKey = new AttributeDefinition { AttributeName = "userId", AttributeType = AttributeType.STRING },
-    GlobalSecondaryIndexes = [gsi]
+    PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+    GlobalSecondaryIndexes = [gsi],
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 
@@ -88,8 +98,10 @@ var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstru
 var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
 {
     TableName = "events",
-    PartitionKey = new AttributeDefinition { AttributeName = "eventId", AttributeType = AttributeType.STRING },
-    StreamSpecification = StreamViewType.NEW_AND_OLD_IMAGES
+    PartitionKey = new Attribute { Name = "eventId", Type = AttributeType.STRING },
+    Stream = StreamViewType.NEW_AND_OLD_IMAGES,
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 
@@ -99,37 +111,41 @@ var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstru
 var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
 {
     TableName = "sessions",
-    PartitionKey = new AttributeDefinition { AttributeName = "sessionId", AttributeType = AttributeType.STRING },
-    TimeToLiveAttribute = "expiresAt" // Unix timestamp field
+    PartitionKey = new Attribute { Name = "sessionId", Type = AttributeType.STRING },
+    TimeToLiveAttribute = "expiresAt", // Unix timestamp field
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 
 ### Complete Configuration
 
 ```csharp
-var emailGsi = new GlobalSecondaryIndex
+var emailGsi = new GlobalSecondaryIndexProps
 {
     IndexName = "email-index",
-    PartitionKey = new AttributeDefinition { AttributeName = "email", AttributeType = AttributeType.STRING },
+    PartitionKey = new Attribute { Name = "email", Type = AttributeType.STRING },
     ProjectionType = ProjectionType.ALL
 };
 
-var statusGsi = new GlobalSecondaryIndex
+var statusGsi = new GlobalSecondaryIndexProps
 {
     IndexName = "status-index",
-    PartitionKey = new AttributeDefinition { AttributeName = "status", AttributeType = AttributeType.STRING },
-    SortKey = new AttributeDefinition { AttributeName = "createdAt", AttributeType = AttributeType.NUMBER },
+    PartitionKey = new Attribute { Name = "status", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "createdAt", Type = AttributeType.NUMBER },
     ProjectionType = ProjectionType.KEYS_ONLY
 };
 
 var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
 {
     TableName = "users",
-    PartitionKey = new AttributeDefinition { AttributeName = "userId", AttributeType = AttributeType.STRING },
-    SortKey = new AttributeDefinition { AttributeName = "createdAt", AttributeType = AttributeType.NUMBER },
+    PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "createdAt", Type = AttributeType.NUMBER },
     GlobalSecondaryIndexes = [emailGsi, statusGsi],
-    StreamSpecification = StreamViewType.NEW_AND_OLD_IMAGES,
-    TimeToLiveAttribute = "expiresAt"
+    Stream = StreamViewType.NEW_AND_OLD_IMAGES,
+    TimeToLiveAttribute = "expiresAt",
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 
@@ -141,8 +157,10 @@ The construct provides a convenient method to attach Lambda functions to DynamoD
 var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstructProps
 {
     TableName = "events",
-    PartitionKey = new AttributeDefinition { AttributeName = "eventId", AttributeType = AttributeType.STRING },
-    StreamSpecification = StreamViewType.NEW_AND_OLD_IMAGES
+    PartitionKey = new Attribute { Name = "eventId", Type = AttributeType.STRING },
+    Stream = StreamViewType.NEW_AND_OLD_IMAGES,
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 
 // Create a Lambda function to process stream events
@@ -167,9 +185,8 @@ The construct automatically creates CloudFormation outputs:
 var table = new DynamoDbTableConstruct(this, "MyTable", props);
 
 // Outputs created:
-// - {StackName}-MyTable-table-arn-output
-// - {StackName}-MyTable-table-name-output
-// - {StackName}-MyTable-table-stream-arn-output (if streams enabled)
+// - Export names follow: {stack-name}-{construct-id}-{qualifier} (all lowercase)
+//   - Qualifiers: arn, name, stream-arn (stream only when enabled)
 ```
 
 ## Stream View Types
@@ -216,11 +233,11 @@ var table = new DynamoDbTableConstruct(this, "MyTable", new DynamoDbTableConstru
 ### GSI Example with Projection
 
 ```csharp
-var gsi = new GlobalSecondaryIndex
+var gsi = new GlobalSecondaryIndexProps
 {
     IndexName = "status-index",
-    PartitionKey = new AttributeDefinition { AttributeName = "status", AttributeType = AttributeType.STRING },
-    SortKey = new AttributeDefinition { AttributeName = "updatedAt", AttributeType = AttributeType.NUMBER },
+    PartitionKey = new Attribute { Name = "status", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "updatedAt", Type = AttributeType.NUMBER },
     ProjectionType = ProjectionType.INCLUDE,
     NonKeyAttributes = ["name", "email"] // Only with INCLUDE projection
 };
@@ -233,15 +250,17 @@ var gsi = new GlobalSecondaryIndex
 var userTable = new DynamoDbTableConstruct(this, "UserTable", new DynamoDbTableConstructProps
 {
     TableName = "users",
-    PartitionKey = new AttributeDefinition { AttributeName = "userId", AttributeType = AttributeType.STRING },
+    PartitionKey = new Attribute { Name = "userId", Type = AttributeType.STRING },
     GlobalSecondaryIndexes = [
-        new GlobalSecondaryIndex
+        new GlobalSecondaryIndexProps
         {
             IndexName = "email-index",
-            PartitionKey = new AttributeDefinition { AttributeName = "email", AttributeType = AttributeType.STRING },
+            PartitionKey = new Attribute { Name = "email", Type = AttributeType.STRING },
             ProjectionType = ProjectionType.ALL
         }
-    ]
+    ],
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 
@@ -250,8 +269,10 @@ var userTable = new DynamoDbTableConstruct(this, "UserTable", new DynamoDbTableC
 var sessionTable = new DynamoDbTableConstruct(this, "SessionTable", new DynamoDbTableConstructProps
 {
     TableName = "sessions",
-    PartitionKey = new AttributeDefinition { AttributeName = "sessionId", AttributeType = AttributeType.STRING },
-    TimeToLiveAttribute = "expiresAt"
+    PartitionKey = new Attribute { Name = "sessionId", Type = AttributeType.STRING },
+    TimeToLiveAttribute = "expiresAt",
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 
@@ -260,9 +281,11 @@ var sessionTable = new DynamoDbTableConstruct(this, "SessionTable", new DynamoDb
 var eventTable = new DynamoDbTableConstruct(this, "EventTable", new DynamoDbTableConstructProps
 {
     TableName = "events",
-    PartitionKey = new AttributeDefinition { AttributeName = "aggregateId", AttributeType = AttributeType.STRING },
-    SortKey = new AttributeDefinition { AttributeName = "timestamp", AttributeType = AttributeType.NUMBER },
-    StreamSpecification = StreamViewType.NEW_AND_OLD_IMAGES
+    PartitionKey = new Attribute { Name = "aggregateId", Type = AttributeType.STRING },
+    SortKey = new Attribute { Name = "timestamp", Type = AttributeType.NUMBER },
+    Stream = StreamViewType.NEW_AND_OLD_IMAGES,
+    RemovalPolicy = RemovalPolicy.DESTROY,
+    BillingMode = BillingMode.PAY_PER_REQUEST
 });
 ```
 
