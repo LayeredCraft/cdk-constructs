@@ -15,7 +15,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Amazon.CDK.Lib" Version="2.233.0" />
+      <PackageReference Include="Amazon.CDK.Lib" />
     </ItemGroup>
     <ItemGroup>
         <None Include="..\..\docs\assets\icon.png" Pack="true" PackagePath="" Visible="False" />
