@@ -7,14 +7,13 @@ on:
 permissions: write-all
 jobs:
   build:
-    uses: LayeredCraft/devops-templates/.github/workflows/pr-build.yaml@refactor/simplify-mtp-test-coverage
+    uses: LayeredCraft/devops-templates/.github/workflows/pr-build.yaml@v7.0
     with:
       solution: LayeredCraft.Cdk.Constructs.slnx
       hasTests: true
       useMtpRunner: true
       enableCodeCoverage: true
       coverageThreshold: 80
-      testDirectory: "test"
       dotnetVersion: |
         8.0.x
         9.0.x
