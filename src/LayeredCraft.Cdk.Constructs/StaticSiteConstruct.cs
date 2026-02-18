@@ -100,17 +100,22 @@ public class StaticSiteConstruct : Construct
         // Add API proxying behavior if API domain is specified
         if (!string.IsNullOrWhiteSpace(props.ApiDomain))
         {
-            distribution.AddBehavior("/api/*", new HttpOrigin(props.ApiDomain, new HttpOriginProps
+            var apiOrigin = new HttpOrigin(props.ApiDomain, new HttpOriginProps
             {
                 ProtocolPolicy = OriginProtocolPolicy.HTTPS_ONLY
-            }), new BehaviorOptions
+            });
+
+            var apiBehaviorOptions = new BehaviorOptions
             {
                 AllowedMethods = AllowedMethods.ALLOW_ALL,
                 CachePolicy = CachePolicy.CACHING_DISABLED,
                 OriginRequestPolicy = OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
                 ViewerProtocolPolicy = ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 Compress = true
-            });
+            };
+
+            distribution.AddBehavior("/api", apiOrigin, apiBehaviorOptions);
+            distribution.AddBehavior("/api/*", apiOrigin, apiBehaviorOptions);
         }
         
         // Create primary DNS A record for the site domain

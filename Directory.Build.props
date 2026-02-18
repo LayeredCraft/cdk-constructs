@@ -1,6 +1,6 @@
 <Project>
     <PropertyGroup>
-        <VersionPrefix>2.1.4</VersionPrefix>
+        <VersionPrefix>2.1.5</VersionPrefix>
         <!-- SPDX license identifier for MIT -->
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
