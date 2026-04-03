@@ -335,7 +335,10 @@ public sealed class CognitoUserPoolConstruct : Construct
 
             var authDomain = $"{props.Domain.AuthSubDomain}.{props.Domain.DomainName}";
 
-            Certificate = new Certificate(this, $"{id}-certificate", new CertificateProps
+            // Use a caller-supplied certificate (required when the stack is not in us-east-1,
+            // since Cognito custom domains require an ACM certificate in us-east-1).
+            // When none is provided, create one in the stack's region (valid for us-east-1 stacks).
+            Certificate = props.Domain.Certificate ?? new Certificate(this, $"{id}-certificate", new CertificateProps
             {
                 DomainName = authDomain,
                 Validation = CertificateValidation.FromDns(zone),
