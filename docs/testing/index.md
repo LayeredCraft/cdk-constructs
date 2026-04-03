@@ -228,6 +228,54 @@ template.ShouldHaveTimeToLiveAttribute("expiresAt");
 template.ShouldHaveTableOutputs("test-stack", "test-construct");
 ```
 
+## Cognito User Pool Testing
+
+### Props Builder
+
+```csharp
+var props = new CognitoUserPoolConstructPropsBuilder()
+    .WithUserPoolName("my-pool")
+    .WithSelfSignUpEnabled(true)
+    .WithCognitoDomain("my-pool-auth")
+    .AddResourceServer("My API", "my-api",
+        scopes: [new CognitoResourceServerScopeProps { Name = "read", Description = "Read access" }])
+    .AddWebAppClient(
+        name: "web-app",
+        callbackUrls: ["https://example.com/callback"],
+        logoutUrls: ["https://example.com"])
+    .AddGroup("admin", description: "Administrators", precedence: 1)
+    .Build();
+
+// Convenience preset for a standard web application setup
+var webAppProps = new CognitoUserPoolConstructPropsBuilder()
+    .ForWebApplication(userPoolName: "my-pool", cognitoDomainPrefix: "my-pool-auth")
+    .Build();
+```
+
+### Assertion Methods
+
+```csharp
+// Pool and domain
+template.ShouldHaveUserPool("my-app-users");
+template.ShouldHaveCognitoUserPoolDomain("my-pool-auth");
+
+// App clients and resource servers
+template.ShouldHaveUserPoolClient("web-app");
+template.ShouldHaveResourceServer("my-api");
+
+// Groups
+template.ShouldHaveUserPoolGroup("admin");
+
+// Managed Login branding
+template.ShouldHaveManagedLoginBranding();
+template.ShouldNotHaveManagedLoginBranding();
+
+// CloudFormation exports
+template.ShouldExportUserPoolId("test-stack", "auth-pool");
+template.ShouldExportUserPoolArn("test-stack", "auth-pool");
+template.ShouldExportAppClientId("test-stack", "auth-pool", "web-app");
+```
+
 ## AutoFixture Integration
 
 ### Custom Attributes
@@ -253,6 +301,7 @@ public void Should_Create_Lambda_With_Custom_Settings(LambdaFunctionConstructPro
 - `LambdaFunctionConstructAutoDataAttribute`: Generates Lambda props
 - `StaticSiteConstructAutoDataAttribute`: Generates static site props
 - `DynamoDbTableConstructAutoDataAttribute`: Generates DynamoDB props
+- `CognitoUserPoolConstructAutoDataAttribute`: Generates Cognito user pool props (pass `includeBranding: true` to include Managed Login branding)
 
 ## Testing Patterns
 
@@ -371,3 +420,4 @@ For complete testing examples, see the test files in the repository:
 - `LambdaFunctionConstructTests.cs`
 - `StaticSiteConstructTests.cs`
 - `DynamoDbTableConstructTests.cs`
+- `CognitoUserPoolConstructTests.cs`

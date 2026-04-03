@@ -14,6 +14,7 @@ A comprehensive library of reusable AWS CDK constructs for .NET projects, design
 - **🚀 Lambda Functions**: Comprehensive Lambda construct with configurable OpenTelemetry support, IAM management, and environment configuration
 - **🌐 Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, and Route53 DNS management
 - **📊 DynamoDB Tables**: Full-featured DynamoDB construct with streams, TTL, and global secondary indexes
+- **🔐 Cognito User Pools**: Complete Cognito user pool with custom domains, resource servers, OAuth clients, and Managed Login branding
 - **🧪 Testing Helpers**: Extensive testing utilities with fluent assertions and builders
 - **📝 Type Safety**: Full intellisense and compile-time validation
 - **⚡ Performance**: Optimized for cold starts with AWS Lambda SnapStart support
@@ -93,6 +94,7 @@ var table = new DynamoDbTableConstruct(this, "UserTable", new DynamoDbTableConst
 - **[Lambda Function Construct](https://layeredcraft.github.io/cdk-constructs/constructs/lambda-function)** - Full-featured Lambda functions with OpenTelemetry, IAM, and more
 - **[Static Site Construct](https://layeredcraft.github.io/cdk-constructs/constructs/static-site)** - Complete static website hosting with CloudFront and SSL
 - **[DynamoDB Table Construct](https://layeredcraft.github.io/cdk-constructs/constructs/dynamodb-table)** - Production-ready DynamoDB tables with streams and indexes
+- **[Cognito User Pool Construct](https://layeredcraft.github.io/cdk-constructs/constructs/cognito-user-pool)** - Full-featured Cognito user pool with custom domains, OAuth clients, and branding
 - **[Testing Guide](https://layeredcraft.github.io/cdk-constructs/testing)** - Comprehensive testing utilities and patterns
 - **[Examples](https://layeredcraft.github.io/cdk-constructs/examples)** - Real-world usage examples and patterns
 

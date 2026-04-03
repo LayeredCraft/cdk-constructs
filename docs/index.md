@@ -90,6 +90,16 @@ Production-ready DynamoDB tables with:
 - TTL configuration
 - Lambda stream integration
 
+### [Cognito User Pool Construct](constructs/cognito-user-pool.md)
+
+Full-featured Cognito User Pool with:
+
+- Custom and Cognito-hosted domains
+- Resource servers and OAuth scopes
+- App clients with configurable OAuth flows
+- User groups
+- Managed Login v2 branding
+
 ## Documentation
 
 - **[Testing Guide](testing/index.md)** - Comprehensive testing utilities and patterns

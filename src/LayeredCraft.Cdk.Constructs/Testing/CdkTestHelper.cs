@@ -227,4 +227,19 @@ public static class CdkTestHelper
         return new DynamoDbTableConstructPropsBuilder()
             .WithPartitionKey("pk", Amazon.CDK.AWS.DynamoDB.AttributeType.STRING);
     }
+
+    /// <summary>
+    /// Creates a <see cref="CognitoUserPoolConstructPropsBuilder"/> with sensible test defaults.
+    /// The builder defaults to a Cognito-hosted domain prefix to avoid requiring AWS environment
+    /// context (account/region) for Route 53 and certificate lookups.
+    /// </summary>
+    /// <param name="userPoolName">Optional user pool name override. Defaults to <c>"test-user-pool"</c>.</param>
+    /// <returns>A configured builder for creating Cognito user pool test props</returns>
+    public static CognitoUserPoolConstructPropsBuilder CreateCognitoUserPoolPropsBuilder(
+        string userPoolName = "test-user-pool")
+    {
+        return new CognitoUserPoolConstructPropsBuilder()
+            .WithUserPoolName(userPoolName)
+            .WithCognitoDomain(userPoolName);
+    }
 }
