@@ -338,6 +338,18 @@ public sealed class CognitoUserPoolConstruct : Construct
             // Use a caller-supplied certificate (required when the stack is not in us-east-1,
             // since Cognito custom domains require an ACM certificate in us-east-1).
             // When none is provided, create one in the stack's region (valid for us-east-1 stacks).
+            if (props.Domain.Certificate is null)
+            {
+                var stackRegion = Stack.Of(this).Region;
+                if (!Token.IsUnresolved(stackRegion) && stackRegion != "us-east-1")
+                {
+                    throw new ArgumentException(
+                        $"Cognito custom domains require an ACM certificate in us-east-1, but this stack is in '{stackRegion}'. " +
+                        "Create the certificate in a us-east-1 stack and supply it via props.Domain.Certificate.",
+                        nameof(props));
+                }
+            }
+
             Certificate = props.Domain.Certificate ?? new Certificate(this, $"{id}-certificate", new CertificateProps
             {
                 DomainName = authDomain,
