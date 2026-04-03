@@ -11,6 +11,7 @@
     <File Path="docs/assets/css/style.scss" />
   </Folder>
   <Folder Name="/docs/constructs/">
+    <File Path="docs/constructs/cognito-user-pool.md" />
     <File Path="docs/constructs/dynamodb-table.md" />
     <File Path="docs/constructs/lambda-function.md" />
     <File Path="docs/constructs/static-site.md" />

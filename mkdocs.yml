@@ -109,6 +109,7 @@ nav:
     - Lambda Function: constructs/lambda-function.md
     - Static Site: constructs/static-site.md
     - DynamoDB Table: constructs/dynamodb-table.md
+    - Cognito User Pool: constructs/cognito-user-pool.md
   - Testing: testing/index.md
   - Examples: examples/index.md
 
