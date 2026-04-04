@@ -59,6 +59,7 @@ public sealed class CognitoUserPoolConstruct : Construct
             },
             AccountRecovery = AccountRecovery.EMAIL_ONLY,
             Mfa = props.Mfa,
+            MfaSecondFactor = props.MfaSecondFactor,
             RemovalPolicy = props.RemovalPolicy,
         });
 
