@@ -13,6 +13,8 @@ public interface ICognitoUserPoolConstructProps
 
     Mfa Mfa { get; }
 
+    MfaSecondFactor? MfaSecondFactor { get; }
+
     int PasswordMinLength { get; }
     
     IReadOnlyList<ICognitoResourceServerProps> ResourceServers { get; }
@@ -30,6 +32,8 @@ public sealed record CognitoUserPoolConstructProps : ICognitoUserPoolConstructPr
     public RemovalPolicy RemovalPolicy { get; init; } = RemovalPolicy.DESTROY;
 
     public Mfa Mfa { get; init; } = Mfa.OFF;
+
+    public MfaSecondFactor? MfaSecondFactor { get; init; }
 
     public int PasswordMinLength { get; init; } = 12;
     public IReadOnlyList<ICognitoResourceServerProps> ResourceServers { get; init; } = [];
