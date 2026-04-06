@@ -42,5 +42,5 @@ public sealed record CognitoUserPoolConstructProps : ICognitoUserPoolConstructPr
     public IReadOnlyList<ICognitoUserPoolAppClientProps> AppClients { get; init; } = [];
     public ICognitoUserPoolDomainProps? Domain { get; init; }
     public IReadOnlyCollection<ICognitoUserPoolGroupProps>? Groups { get; init; } = [];
-    public IFunction? PostConfirmationTrigger { get; init; }
+    public IFunction? PostConfirmationTrigger { get; init; } = null;
 }
