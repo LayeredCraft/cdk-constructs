@@ -2,6 +2,8 @@ using System.Text.Json;
 using Amazon.CDK;
 using Amazon.CDK.AWS.CertificateManager;
 using Amazon.CDK.AWS.Cognito;
+using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.Route53;
 using Amazon.CDK.AWS.Route53.Targets;
 using Constructs;
@@ -62,6 +64,16 @@ public sealed class CognitoUserPoolConstruct : Construct
             MfaSecondFactor = props.MfaSecondFactor,
             RemovalPolicy = props.RemovalPolicy,
         });
+
+        if (props.PostConfirmationTrigger is not null)
+        {
+            UserPool.AddTrigger(UserPoolOperation.POST_CONFIRMATION, props.PostConfirmationTrigger);
+            props.PostConfirmationTrigger.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+            {
+                Actions = ["cognito-idp:AdminAddUserToGroup"],
+                Resources = ["*"],
+            }));
+        }
 
         var resourceServers = CreateResourceServers(props);
 

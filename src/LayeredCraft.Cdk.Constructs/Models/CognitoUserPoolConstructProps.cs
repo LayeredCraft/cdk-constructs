@@ -1,5 +1,6 @@
 using Amazon.CDK;
 using Amazon.CDK.AWS.Cognito;
+using Amazon.CDK.AWS.Lambda;
 
 namespace LayeredCraft.Cdk.Constructs.Models;
 
@@ -21,6 +22,7 @@ public interface ICognitoUserPoolConstructProps
     IReadOnlyList<ICognitoUserPoolAppClientProps> AppClients { get; }
     ICognitoUserPoolDomainProps? Domain { get; }
     IReadOnlyCollection<ICognitoUserPoolGroupProps>? Groups { get; }
+    IFunction? PostConfirmationTrigger { get; }
 }
 
 public sealed record CognitoUserPoolConstructProps : ICognitoUserPoolConstructProps
@@ -40,4 +42,5 @@ public sealed record CognitoUserPoolConstructProps : ICognitoUserPoolConstructPr
     public IReadOnlyList<ICognitoUserPoolAppClientProps> AppClients { get; init; } = [];
     public ICognitoUserPoolDomainProps? Domain { get; init; }
     public IReadOnlyCollection<ICognitoUserPoolGroupProps>? Groups { get; init; } = [];
+    public IFunction? PostConfirmationTrigger { get; init; } = null;
 }

@@ -72,6 +72,27 @@ public class StaticSiteConstruct : Construct
             SubjectAlternativeNames = props.AlternateDomains,
         });
 
+        // CloudFront Function: rewrite SPA routes (no file extension) to /index.html
+        // so client-side routes are handled by the app rather than returning 404.
+        // Requests with a file extension pass through unchanged, preserving normal
+        // asset serving and ensuring API 404s (served via the /api/* behavior) are
+        // never affected — they never reach this default behavior.
+        var spaRewriteFunction = new Amazon.CDK.AWS.CloudFront.Function(this, $"{id}-spa-rewrite",
+            new Amazon.CDK.AWS.CloudFront.FunctionProps
+            {
+                Code = FunctionCode.FromInline("""
+                    function handler(event) {
+                        var uri = event.request.uri;
+                        if (!uri.match(/\.[a-zA-Z0-9]+$/)) {
+                            event.request.uri = '/index.html';
+                        }
+                        return event.request;
+                    }
+                    """),
+                Runtime = FunctionRuntime.JS_2_0,
+                Comment = "Rewrite SPA routes to /index.html for client-side routing"
+            });
+
         // Create CloudFront distribution for global content delivery
         var distribution = new Distribution(this, $"{id}-cdn", new DistributionProps
         {
@@ -83,7 +104,15 @@ public class StaticSiteConstruct : Construct
                     ProtocolPolicy = OriginProtocolPolicy.HTTP_ONLY
                 }),
                 AllowedMethods = AllowedMethods.ALLOW_GET_HEAD,
-                Compress = true
+                Compress = true,
+                FunctionAssociations =
+                [
+                    new FunctionAssociation
+                    {
+                        Function = spaRewriteFunction,
+                        EventType = FunctionEventType.VIEWER_REQUEST
+                    }
+                ]
             },
             Certificate = certificate,
             ErrorResponses =
