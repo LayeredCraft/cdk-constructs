@@ -7,7 +7,7 @@ on:
 permissions: write-all
 jobs:
   build:
-    uses: LayeredCraft/devops-templates/.github/workflows/pr-build.yaml@v7.1
+    uses: LayeredCraft/devops-templates/.github/workflows/pr-build.yaml@v8.1
     with:
       solution: LayeredCraft.Cdk.Constructs.slnx
       hasTests: true
@@ -18,5 +18,6 @@ jobs:
         8.0.x
         9.0.x
         10.0.x
+        11.0.x
       runCdk: false
     secrets: inherit
