@@ -1,0 +1,32 @@
+name: Publish Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'ROADMAP.md'
+      - 'mkdocs.yml'
+      - 'requirements.txt'
+
+permissions: write-all
+
+jobs:
+  # To add support for additional .NET versions (e.g. net9, net11), add release branches
+  # (e.g. release/net9) and wire up separate caller workflows targeting those branches.
+
+  publish:
+    uses: LayeredCraft/devops-templates/.github/workflows/publish-preview.yml@v8.1
+    with:
+      solution: LayeredCraft.Cdk.Constructs.slnx
+      dotnetVersion:  |
+        8.0.x
+        9.0.x
+        10.0.x
+        11.0.x
+      prereleaseIdentifier: alpha
+      hasTests: true
+    secrets: inherit
