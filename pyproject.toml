@@ -1,0 +1,10 @@
+[project]
+name = "layeredcraft-cdk-constructs-docs"
+version = "0.0.0"
+description = "Documentation build dependencies for LayeredCraft CDK Constructs."
+requires-python = ">=3.12"
+dependencies = [
+    "mkdocs>=1.5.3",
+    "mkdocs-material>=9.4.6",
+    "mkdocs-minify-plugin>=0.7.1",
+]
