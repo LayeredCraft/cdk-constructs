@@ -3,11 +3,11 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup Label="Build">
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.301" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.9.0" />
   </ItemGroup>
   <ItemGroup Label="AWS">
-    <PackageVersion Include="Amazon.CDK.Lib" Version="2.263.0" />
+    <PackageVersion Include="Amazon.CDK.Lib" Version="2.264.0" />
   </ItemGroup>
   <ItemGroup Label="Testing">
     <PackageVersion Include="AutoFixture" Version="4.18.1" />
