@@ -74,6 +74,8 @@ Exactly one of `CognitoDomainPrefix` or (`DomainName` + `AuthSubDomain`) must be
 | `AuthSubDomain` | `string?` | `null` | Subdomain for custom domain (e.g., `auth` → `auth.example.com`) |
 | `ManagedLoginVersion` | `CognitoManagedLoginVersion` | `ManagedLogin` | `ClassicHostedUi` or `ManagedLogin` (v2) |
 | `CreateRoute53Record` | `bool` | `true` | Whether to create an A-alias record in the hosted zone (custom domain only) |
+| `Certificate` | `ICertificate?` | `null` | Existing ACM certificate (must be in `us-east-1`); when `null`, one is created with DNS validation (custom domain only) |
+| `HostedZone` | `IHostedZone?` | `null` | Public hosted zone for `DomainName`; when supplied, no `HostedZone.FromLookup` context lookup is performed, so the stack synthesizes without AWS credentials (custom domain only) |
 
 ### App Client Properties (`CognitoUserPoolAppClientProps`)
 
@@ -148,7 +150,17 @@ var pool = new CognitoUserPoolConstruct(this, "auth-pool", new CognitoUserPoolCo
 });
 ```
 
-> The hosted zone for `DomainName` must already exist in the same account. The construct performs a `HostedZone.FromLookup` and creates an ACM certificate with DNS validation automatically.
+> The hosted zone for `DomainName` must already exist in the same account. Unless `HostedZone` is supplied, the construct performs a `HostedZone.FromLookup` (a synth-time context lookup that needs AWS credentials or a cached `cdk.context.json` value). It creates an ACM certificate with DNS validation automatically unless `Certificate` is supplied.
+>
+> To synthesize without AWS credentials (for example, in CI), pass a zone you already know:
+>
+> ```csharp
+> HostedZone = HostedZone.FromHostedZoneAttributes(this, "zone", new HostedZoneAttributes
+> {
+>     HostedZoneId = "Z0123456789EXAMPLE",
+>     ZoneName = "example.com",
+> }),
+> ```
 
 ### Resource Servers and API Scopes
 

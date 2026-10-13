@@ -1,4 +1,5 @@
 using Amazon.CDK.AWS.CertificateManager;
+using Amazon.CDK.AWS.Route53;
 
 namespace LayeredCraft.Cdk.Constructs.Models;
 
@@ -23,6 +24,14 @@ public interface ICognitoUserPoolDomainProps
     /// in the stack's region (valid when the stack is already deployed to <c>us-east-1</c>).
     /// </summary>
     ICertificate? Certificate { get; }
+
+    /// <summary>
+    /// The public hosted zone for <see cref="DomainName"/>, used to validate a created certificate and
+    /// to create the alias record. When provided, the construct performs no hosted-zone context lookup,
+    /// so the stack synthesizes without AWS credentials. If <see langword="null"/>, the zone is found
+    /// with <c>HostedZone.FromLookup</c>.
+    /// </summary>
+    IHostedZone? HostedZone => null;
 }
 
 public sealed record CognitoUserPoolDomainProps : ICognitoUserPoolDomainProps
@@ -40,6 +49,9 @@ public sealed record CognitoUserPoolDomainProps : ICognitoUserPoolDomainProps
 
     /// <inheritdoc />
     public ICertificate? Certificate { get; init; }
+
+    /// <inheritdoc />
+    public IHostedZone? HostedZone { get; init; }
 }
 
 public enum CognitoManagedLoginVersion

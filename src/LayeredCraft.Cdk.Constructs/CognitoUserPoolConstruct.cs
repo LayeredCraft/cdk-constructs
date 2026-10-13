@@ -341,7 +341,7 @@ public sealed class CognitoUserPoolConstruct : Construct
         }
         else
         {
-            var zone = HostedZone.FromLookup(this, $"{id}-hosted-zone", new HostedZoneProviderProps
+            var zone = props.Domain.HostedZone ?? HostedZone.FromLookup(this, $"{id}-hosted-zone", new HostedZoneProviderProps
             {
                 DomainName = props.Domain.DomainName!,
             });

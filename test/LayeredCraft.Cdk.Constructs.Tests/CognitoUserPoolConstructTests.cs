@@ -1,5 +1,6 @@
 using Amazon.CDK;
 using Amazon.CDK.Assertions;
+using Amazon.CDK.AWS.Route53;
 using AwesomeAssertions;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
@@ -79,6 +80,47 @@ public class CognitoUserPoolConstructTests
 
         construct.Domain.Should().BeNull();
         template.ResourceCountIs("AWS::Cognito::UserPoolDomain", 0);
+    }
+
+    [Fact]
+    public void Construct_ShouldUseSuppliedHostedZone_WithoutContextLookup_WhenCustomDomainHasHostedZone()
+    {
+        var app = new App();
+        var stack = CreateEnvironmentStack(app);
+        var zone = HostedZone.FromHostedZoneAttributes(stack, "zone", new HostedZoneAttributes
+        {
+            HostedZoneId = "Z0123456789EXAMPLE",
+            ZoneName = "example.com",
+        });
+
+        _ = new CognitoUserPoolConstruct(stack, "test-pool", CustomDomainProps(new CognitoUserPoolDomainProps
+        {
+            DomainName = "example.com",
+            AuthSubDomain = "auth",
+            HostedZone = zone,
+        }));
+
+        app.Synth().Manifest.Missing.Should().BeNullOrEmpty();
+        Template.FromStack(stack).HasResourceProperties("AWS::Route53::RecordSet", new Dictionary<string, object>
+        {
+            ["Name"] = "auth.example.com.",
+            ["HostedZoneId"] = "Z0123456789EXAMPLE",
+        });
+    }
+
+    [Fact]
+    public void Construct_ShouldLookUpHostedZone_WhenCustomDomainHasNoHostedZone()
+    {
+        var app = new App();
+        var stack = CreateEnvironmentStack(app);
+
+        _ = new CognitoUserPoolConstruct(stack, "test-pool", CustomDomainProps(new CognitoUserPoolDomainProps
+        {
+            DomainName = "example.com",
+            AuthSubDomain = "auth",
+        }));
+
+        app.Synth().Manifest.Missing.Should().ContainSingle().Which.Key.Should().StartWith("hosted-zone:");
     }
 
     // -------------------------------------------------------------------------
@@ -270,4 +312,19 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     private static Stack CreateStack() => new(new App(), "test-stack");
+
+    // Context lookups require an explicit account and region.
+    private static Stack CreateEnvironmentStack(App app) => new(app, "test-stack", new StackProps
+    {
+        Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" },
+    });
+
+    private static CognitoUserPoolConstructProps CustomDomainProps(CognitoUserPoolDomainProps domain)
+    {
+        var props = CdkTestHelper.CreateCognitoUserPoolPropsBuilder()
+            .AddWebAppClient("client", ["https://example.com/callback"], ["https://example.com"])
+            .Build();
+
+        return props with { Domain = domain };
+    }
 }
