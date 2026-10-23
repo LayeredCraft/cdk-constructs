@@ -590,4 +590,191 @@ public class Program
 }
 ```
 
+## Web Function Examples
+
+These examples use the [Web Function Construct](../constructs/web-function.md). They assume a stack with an explicit
+`Env` and the usings `Amazon.CDK`, `Amazon.CDK.AWS.CloudFront`, `Amazon.CDK.AWS.CloudFront.Origins`,
+`Amazon.CDK.AWS.CertificateManager`, `Amazon.CDK.AWS.Route53`, `Amazon.CDK.AWS.Route53.Targets`, `Amazon.CDK.AWS.S3`,
+`Amazon.CDK.AWS.DynamoDB`, `LayeredCraft.Cdk.Constructs`, and `LayeredCraft.Cdk.Constructs.Models`.
+
+### ASP.NET Core API (Node.js `execve` shim)
+
+```csharp
+// Artifacts are published by CI to a versioned bucket owned by another stack (its policy grants
+// lambda.amazonaws.com read on web-function/acme-*/revision/*).
+var artifacts = Bucket.FromBucketName(this, "artifacts", $"acme-artifacts-{Account}");
+
+var api = new WebFunctionConstruct(this, "api", new WebFunctionConstructProps
+{
+    FunctionName = "acme-prod-api",
+    Code = WebFunctionCode.FromBucket(artifacts, $"{artifactTag}/api.zip", new WebFunctionCodeFromBucketOptions
+    {
+        BucketPolicy = WebFunctionCodeBucketPolicy.ExternallyManaged,
+    }),
+    // index.js at the zip root is the execve shim; no EntryPoint needed.
+    EnvironmentVariables = new Dictionary<string, string>
+    {
+        ["ASPNETCORE_ENVIRONMENT"] = "Production",
+        ["Acme__TableName"] = table.TableName,
+    },
+    MaxConcurrencyPerEnvironment = 16,
+    Endpoint = new WebFunctionEndpointOptions
+    {
+        AuthType = WebFunctionAuthType.IamAuth,   // only granted callers reach Kestrel
+        MaxEnvironments = 10,
+        RateLimit = 100,
+    },
+});
+table.GrantReadWriteData(api);                    // WebFunctionConstruct is IGrantable
+```
+
+### Next.js application
+
+```csharp
+var web = new WebFunctionConstruct(this, "web", new WebFunctionConstructProps
+{
+    FunctionName = "acme-prod-web",
+    Code = WebFunctionCode.FromBucket(codeBucket, $"{artifactTag}/web.zip", new WebFunctionCodeFromBucketOptions
+    {
+        ObjectVersion = webZipVersionId,          // optional: pin an exact object version
+    }),                                           // codeBucket is owned in this stack, so the construct
+                                                  // manages the bucket policy (Automatic); the artifact must
+                                                  // already be uploaded when the stack deploys
+    // The zip's index.js sets HOSTNAME/PORT from AWS_LAMBDA_HTTP_ENDPOINT, then require("./server.js").
+    EnvironmentVariables = new Dictionary<string, string>
+    {
+        ["NODE_ENV"] = "production",
+        ["NEXT_TELEMETRY_DISABLED"] = "1",
+        ["ACME_API_URL"] = api.DefaultEndpoint.Url,  // consumer-owned wiring
+    },
+    Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+});
+```
+
+### Next.js granted permission to invoke the API
+
+```csharp
+// Identity policy on web's execution role: lambda:InvokeWebFunctionEndpoint on api's "default" endpoint ARN only.
+// Same account → no resource-policy statement and no AWS::Lambda::ResourcePolicy on api.
+api.DefaultEndpoint.GrantInvoke(web);
+
+// The BFF signs requests itself (SigV4, service "lambda", region of the API endpoint,
+// x-amz-content-sha256: UNSIGNED-PAYLOAD). The construct does not inject signing configuration.
+```
+
+Cross-account variant. It must be explicit, because `Automatic` fails at synthesis for a role in another account:
+
+```csharp
+var partner = Role.FromRoleArn(this, "partner", "arn:aws:iam::222233334444:role/caller");
+api.DefaultEndpoint.GrantInvoke(partner, new WebFunctionInvokeGrantOptions
+{
+    CallerPolicy = WebFunctionCallerPolicy.ExternallyManaged,
+});
+// Writes only api's resource-policy statement (principal = that role ARN, resource = the endpoint ARN) and adds an
+// info annotation. Invocation works only after account 222233334444 attaches an identity policy allowing
+// lambda:InvokeWebFunctionEndpoint on this endpoint ARN to its role.
+```
+
+### CloudFront distribution with an IAM-protected Web Function origin (OAC)
+
+```csharp
+var origin = WebFunctionOrigin.WithOriginAccessControl(web.DefaultEndpoint, new WebFunctionOriginWithOacProps
+{
+    CustomHeaders = new Dictionary<string, string> { ["x-origin-verify"] = secret },
+});
+
+var distribution = new Distribution(this, "distribution", new DistributionProps
+{
+    DefaultBehavior = new BehaviorOptions
+    {
+        Origin = origin,
+        ViewerProtocolPolicy = ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        AllowedMethods = AllowedMethods.ALLOW_ALL,
+        CachePolicy = CachePolicy.CACHING_DISABLED,                        // personalized SSR
+        OriginRequestPolicy = OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER, // never forward Host
+    },
+    AdditionalBehaviors = new Dictionary<string, IBehaviorOptions>
+    {
+        ["/_next/static/*"] = new BehaviorOptions { Origin = origin, CachePolicy = CachePolicy.CACHING_OPTIMIZED },
+    },
+    DomainNames = ["app.example.com"],
+    Certificate = certificate,
+});
+// Bind created one FunctionUrlOriginAccessControl (lambda/always-amz-auth/sigv4) and added to web's resource policy:
+//   cloudfront.amazonaws.com → lambda:InvokeWebFunctionEndpoint on web's default endpoint,
+//   StringEquals aws:SourceArn = arn:aws:cloudfront::{account}:distribution/{distribution id}
+```
+
+### Custom domain and Route 53
+
+There is no library DNS construct to integrate with; composition is plain CDK, matching `CognitoUserPoolConstruct`'s
+injected `ICertificate`/`IHostedZone`, and the same certificate can be shared with a Cognito custom domain:
+
+```csharp
+var zone = HostedZone.FromHostedZoneAttributes(this, "zone", new HostedZoneAttributes { HostedZoneId = zoneId, ZoneName = "example.com" });
+var certificate = new Certificate(this, "cert", new CertificateProps   // CloudFront certificates live in us-east-1
+{
+    DomainName = "*.example.com",
+    Validation = CertificateValidation.FromDns(zone),
+});
+// ... distribution with DomainNames = ["app.example.com"], Certificate = certificate ...
+var target = RecordTarget.FromAlias(new CloudFrontTarget(distribution));
+_ = new ARecord(this, "app-a", new ARecordProps { Zone = zone, RecordName = "app", Target = target });
+_ = new AaaaRecord(this, "app-aaaa", new AaaaRecordProps { Zone = zone, RecordName = "app", Target = target });
+
+var auth = new CognitoUserPoolConstruct(this, "users", new CognitoUserPoolConstructProps
+{
+    UserPoolName = "acme",
+    Domain = new CognitoUserPoolDomainProps { DomainName = "example.com", AuthSubDomain = "auth", Certificate = certificate, HostedZone = zone },
+});
+```
+
+### Web Functions without CloudFront or without inter-function IAM
+
+```csharp
+// (a) Public API, no CloudFront: the application authenticates every request.
+var publicApi = new WebFunctionConstruct(this, "public-api", new WebFunctionConstructProps
+{
+    FunctionName = "acme-public-api",
+    Code = WebFunctionCode.FromBucket(codeBucket, "public-api.zip"),
+    Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.ApplicationManaged },
+});
+// publicApi.DefaultEndpoint.Url → https://….lambda-web.us-east-1.on.aws
+
+// (b) IAM-only internal service invoked by a classic Lambda (no CloudFront):
+var worker = new WebFunctionConstruct(this, "internal", new WebFunctionConstructProps
+{
+    FunctionName = "acme-internal",
+    Code = WebFunctionCode.FromBucket(codeBucket, "internal.zip"),
+    Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+});
+worker.DefaultEndpoint.GrantInvoke(existingLambdaConstruct.LambdaFunction);
+
+// (c) Two endpoints on one function: public for webhooks, IamAuth for CloudFront.
+var hooks = web.AddEndpoint("webhooks", new WebFunctionEndpointOptions
+{
+    EndpointName = "webhooks",
+    AuthType = WebFunctionAuthType.ApplicationManaged,
+    RateLimit = 100,
+});
+```
+
+### Imported endpoint as a CloudFront origin (externally managed permissions)
+
+```csharp
+var shared = WebFunctionEndpointConstruct.FromEndpointAttributes(this, "shared", new WebFunctionEndpointAttributes
+{
+    EndpointArn = "arn:aws:lambda:us-east-1:111122223333:web-function/shared/endpoint/default",
+    DomainName = "abc123.lambda-web.us-east-1.on.aws",
+    AuthType = WebFunctionAuthType.IamAuth,
+});
+var origin = WebFunctionOrigin.WithOriginAccessControl(shared, new WebFunctionOriginWithOacProps
+{
+    Permissions = WebFunctionOriginPermissions.ExternallyManaged,  // Automatic would fail synthesis
+});
+// The owner of "shared" must allow this distribution (aws:SourceArn) in the function's resource policy.
+// With a token EndpointArn (e.g. from SSM), this origin use still works. Identity grants
+// (shared.GrantInvoke(...)) additionally need a literal Account on the attributes.
+```
+
 For more examples, see the test files in the [repository](https://github.com/LayeredCraft/cdk-constructs/tree/main/test) which demonstrate comprehensive usage patterns.
