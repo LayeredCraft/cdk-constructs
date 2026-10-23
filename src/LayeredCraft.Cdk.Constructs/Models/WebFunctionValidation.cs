@@ -34,6 +34,10 @@ internal static class WebFunctionValidation
         "^[A-Za-z][A-Za-z0-9_]*$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static readonly Regex CloudFrontDistributionArnPattern = new(
+        "^arn:[a-z0-9-]+:cloudfront::[0-9]{12}:distribution/[A-Za-z0-9]+$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     /// <summary>Validates a Web Function name: 1–64 characters matching the Lambda name rules.</summary>
     internal static void ValidateFunctionName(string? functionName, string parameterName = "FunctionName")
     {
@@ -60,6 +64,22 @@ internal static class WebFunctionValidation
             throw new ArgumentException(
                 $"Endpoint name '{endpointName}' is invalid. It must be 1-64 characters long and contain only " +
                 "letters, digits, hyphens, and underscores.",
+                parameterName);
+        }
+    }
+
+    /// <summary>Validates a CloudFront distribution ARN: literal values are checked, tokens are skipped.</summary>
+    internal static void ValidateCloudFrontDistributionArn(
+        string? distributionArn,
+        string parameterName = "distributionArn")
+    {
+        if (distributionArn is null || Token.IsUnresolved(distributionArn))
+            return;
+
+        if (!CloudFrontDistributionArnPattern.IsMatch(distributionArn))
+        {
+            throw new ArgumentException(
+                $"'{distributionArn}' is not a CloudFront distribution ARN.",
                 parameterName);
         }
     }

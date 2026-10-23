@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Amazon.CDK;
+using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 using Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
@@ -12,7 +13,7 @@ namespace LayeredCraft.Cdk.Constructs;
 /// A Web Function endpoint. Owns a single <c>AWS::Lambda::WebFunctionEndpoint</c> whose logical child id is
 /// <c>Resource</c>. Instances are created by <see cref="WebFunctionConstruct"/>.
 /// </summary>
-public sealed class WebFunctionEndpointConstruct : Resource
+public sealed class WebFunctionEndpointConstruct : Resource, IResourceWithPolicyV2
 {
     private readonly CfnWebFunctionEndpoint _resource;
 
@@ -87,6 +88,78 @@ public sealed class WebFunctionEndpointConstruct : Resource
 
     /// <summary>The endpoint URL.</summary>
     public string Url => $"https://{DomainName}";
+
+    /// <summary>
+    /// Adds a statement to the Web Function's single resource policy. The statement must target exactly this
+    /// endpoint's ARN.
+    /// </summary>
+    /// <param name="statement">The statement, scoped to <see cref="EndpointArn"/>.</param>
+    /// <returns>The result of adding the statement.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="statement"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when the statement does not target exactly this endpoint's ARN.</exception>
+    public AddToResourcePolicyResult AddToResourcePolicy(PolicyStatement statement)
+    {
+        ArgumentNullException.ThrowIfNull(statement);
+
+        var resources = statement.Resources;
+        if (resources is null
+            || resources.Length != 1
+            || !string.Equals(resources[0], EndpointArn, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A statement added to a Web Function endpoint must target exactly that endpoint's ARN.",
+                nameof(statement));
+        }
+
+        var policy = WebFunction.AddResourcePolicyStatement(statement);
+
+        return new AddToResourcePolicyResult
+        {
+            StatementAdded = true,
+            PolicyDependable = policy,
+        };
+    }
+
+    IAddToResourcePolicyResult IResourceWithPolicyV2.AddToResourcePolicy(PolicyStatement statement)
+        => AddToResourcePolicy(statement);
+
+    /// <summary>
+    /// Allows a CloudFront distribution to invoke this endpoint. Only supported for endpoints that use
+    /// <see cref="WebFunctionAuthType.IamAuth"/>.
+    /// </summary>
+    /// <param name="distributionArn">The CloudFront distribution ARN, literal or token.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the endpoint does not use IAM authentication.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="distributionArn"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when a literal <paramref name="distributionArn"/> is not a distribution ARN.</exception>
+    public void GrantCloudFrontInvoke(string distributionArn)
+    {
+        if (AuthType != WebFunctionAuthType.IamAuth)
+        {
+            throw new InvalidOperationException(
+                $"The '{EndpointName}' endpoint uses ApplicationManaged authentication, so CloudFront cannot invoke " +
+                "it. Use an IamAuth endpoint.");
+        }
+
+        ArgumentNullException.ThrowIfNull(distributionArn);
+        WebFunctionValidation.ValidateCloudFrontDistributionArn(distributionArn);
+
+        var statement = new PolicyStatement(new PolicyStatementProps
+        {
+            Effect = Effect.ALLOW,
+            Actions = ["lambda:InvokeWebFunctionEndpoint"],
+            Resources = [EndpointArn],
+            Principals = [new ServicePrincipal("cloudfront.amazonaws.com")],
+            Conditions = new Dictionary<string, object>
+            {
+                ["StringEquals"] = new Dictionary<string, string>
+                {
+                    ["aws:SourceArn"] = distributionArn,
+                },
+            },
+        });
+
+        AddToResourcePolicy(statement);
+    }
 
     internal CfnWebFunctionEndpoint CfnEndpoint => _resource;
 }

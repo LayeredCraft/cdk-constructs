@@ -1,0 +1,186 @@
+{
+  "Resources": {
+    "webfunctionFunction46F1F768": {
+      "Type": "AWS::Lambda::WebFunction",
+      "Properties": {
+        "FunctionName": "golden-web-function"
+      }
+    },
+    "webfunctionExecutionRole7793F0D5": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "webfunctionLogGroup5C9D8E36": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/web/golden-web-function",
+        "RetentionInDays": 14
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "webfunctionRevisionB2BF6DC1": {
+      "Type": "AWS::Lambda::WebFunctionRevision",
+      "Properties": {
+        "BuildConfig": {
+          "CodeConfig": {
+            "S3Object": {
+              "Bucket": "golden-artifacts",
+              "Key": "app.zip"
+            }
+          },
+          "RuntimeConfig": {
+            "Runtime": "nodejs24.x"
+          }
+        },
+        "FunctionName": "golden-web-function",
+        "ServiceConfig": {
+          "ExecutionRoleArn": {
+            "Fn::GetAtt": [
+              "webfunctionExecutionRole7793F0D5",
+              "Arn"
+            ]
+          },
+          "TelemetryConfig": {
+            "LoggingConfig": {
+              "LogGroup": {
+                "Ref": "webfunctionLogGroup5C9D8E36"
+              }
+            }
+          },
+          "TimeoutSeconds": 30
+        }
+      },
+      "DependsOn": [
+        "webfunctionExecutionRole7793F0D5",
+        "webfunctionFunction46F1F768",
+        "webfunctionLogGroup5C9D8E36"
+      ]
+    },
+    "webfunctionDefaultEndpoint8A7C111C": {
+      "Type": "AWS::Lambda::WebFunctionEndpoint",
+      "Properties": {
+        "AuthType": "IamAuth",
+        "EndpointName": "default",
+        "EndpointType": "HomeRegion",
+        "FunctionName": "golden-web-function",
+        "RevisionWeights": [
+          {
+            "RevisionId": {
+              "Fn::GetAtt": [
+                "webfunctionRevisionB2BF6DC1",
+                "RevisionId"
+              ]
+            },
+            "Weight": 100
+          }
+        ]
+      },
+      "DependsOn": [
+        "webfunctionRevisionB2BF6DC1"
+      ]
+    },
+    "webfunctionpublicA3203CC5": {
+      "Type": "AWS::Lambda::WebFunctionEndpoint",
+      "Properties": {
+        "AuthType": "ApplicationManaged",
+        "EndpointName": "public",
+        "EndpointType": "HomeRegion",
+        "FunctionName": "golden-web-function",
+        "RevisionWeights": [
+          {
+            "RevisionId": {
+              "Fn::GetAtt": [
+                "webfunctionRevisionB2BF6DC1",
+                "RevisionId"
+              ]
+            },
+            "Weight": 100
+          }
+        ]
+      },
+      "DependsOn": [
+        "webfunctionRevisionB2BF6DC1"
+      ]
+    },
+    "webfunctionResourcePolicy42508DAE": {
+      "Type": "AWS::Lambda::ResourcePolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "lambda:InvokeWebFunctionEndpoint",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": "arn:aws:cloudfront::123456789012:distribution/E1111111111111"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::GetAtt": [
+                  "webfunctionDefaultEndpoint8A7C111C",
+                  "EndpointArn"
+                ]
+              }
+            },
+            {
+              "Action": "lambda:InvokeWebFunctionEndpoint",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": "arn:aws:cloudfront::123456789012:distribution/E2222222222222"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::GetAtt": [
+                  "webfunctionDefaultEndpoint8A7C111C",
+                  "EndpointArn"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ResourceArn": {
+          "Fn::GetAtt": [
+            "webfunctionFunction46F1F768",
+            "FunctionArn"
+          ]
+        }
+      }
+    }
+  }
+}

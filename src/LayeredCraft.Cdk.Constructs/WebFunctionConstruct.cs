@@ -17,6 +17,10 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
 {
     private readonly CfnWebFunction _function;
     private readonly CfnWebFunctionRevision _revision;
+    private readonly List<WebFunctionEndpointConstruct> _endpoints = [];
+    private readonly HashSet<string> _endpointNames = new(StringComparer.Ordinal);
+    private PolicyDocument? _resourcePolicy;
+    private Amazon.CDK.AWS.Lambda.CfnResourcePolicy? _resourcePolicyResource;
 
     /// <summary>Creates a Web Function.</summary>
     /// <param name="scope">The construct scope.</param>
@@ -89,8 +93,8 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
 
         LogGroup = logGroup;
 
-        DefaultEndpoint = new WebFunctionEndpointConstruct(this, "DefaultEndpoint", this, props.Endpoint);
-        DefaultEndpoint.CfnEndpoint.AddResourceDependency(_revision, "The endpoint serves the revision.");
+        _endpointNames.Add(props.Endpoint.EndpointName);
+        DefaultEndpoint = CreateEndpoint("DefaultEndpoint", props.Endpoint);
     }
 
     /// <summary>The Web Function name.</summary>
@@ -116,6 +120,57 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
 
     /// <summary>The default endpoint.</summary>
     public WebFunctionEndpointConstruct DefaultEndpoint { get; }
+
+    /// <summary>All endpoints owned by this Web Function, starting with <see cref="DefaultEndpoint"/>.</summary>
+    public IReadOnlyList<WebFunctionEndpointConstruct> Endpoints => _endpoints;
+
+    /// <summary>
+    /// Adds an endpoint. Every endpoint routes 100% of traffic to the current revision.
+    /// </summary>
+    /// <param name="id">The construct id for the new endpoint.</param>
+    /// <param name="options">The endpoint configuration. Its name must be unique within the function.</param>
+    /// <returns>The created endpoint.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> or <paramref name="options"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an endpoint with the same name already exists.</exception>
+    public WebFunctionEndpointConstruct AddEndpoint(string id, IWebFunctionEndpointOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (!_endpointNames.Add(options.EndpointName))
+        {
+            throw new InvalidOperationException(
+                $"An endpoint named '{options.EndpointName}' already exists on Web Function '{FunctionName}'.");
+        }
+
+        return CreateEndpoint(id, options);
+    }
+
+    private WebFunctionEndpointConstruct CreateEndpoint(string id, IWebFunctionEndpointOptions options)
+    {
+        var endpoint = new WebFunctionEndpointConstruct(this, id, this, options);
+        endpoint.CfnEndpoint.AddResourceDependency(_revision, "The endpoint serves the revision.");
+        _endpoints.Add(endpoint);
+        return endpoint;
+    }
+
+    /// <summary>Adds a statement to the function's single resource policy, creating it on first use.</summary>
+    internal Amazon.CDK.AWS.Lambda.CfnResourcePolicy AddResourcePolicyStatement(PolicyStatement statement)
+    {
+        _resourcePolicy ??= new PolicyDocument();
+        _resourcePolicy.AddStatements(statement);
+
+        _resourcePolicyResource ??= new Amazon.CDK.AWS.Lambda.CfnResourcePolicy(
+            this,
+            "ResourcePolicy",
+            new Amazon.CDK.AWS.Lambda.CfnResourcePolicyProps
+            {
+                ResourceArn = _function.AttrFunctionArn,
+                PolicyDocument = _resourcePolicy,
+            });
+
+        return _resourcePolicyResource;
+    }
 
     private IRole CreateExecutionRole()
     {

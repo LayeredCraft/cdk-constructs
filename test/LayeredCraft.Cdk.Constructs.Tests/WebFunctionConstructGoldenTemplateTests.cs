@@ -145,4 +145,35 @@ public class WebFunctionConstructGoldenTemplateTests
 
         GoldenTemplate.AssertMatches(stack, "web-function-externally-managed.json");
     }
+
+    [Fact]
+    public void WebFunction_MultiEndpointWithCloudFrontGrants_ShouldMatchGoldenTemplate()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack("golden-web-function");
+
+        var artifacts = Bucket.FromBucketName(stack, "Artifacts", "golden-artifacts");
+
+        var construct = new WebFunctionConstruct(stack, "web-function", new WebFunctionConstructProps
+        {
+            FunctionName = "golden-web-function",
+            Code = WebFunctionCode.FromBucket(
+                artifacts,
+                "app.zip",
+                new WebFunctionCodeFromBucketOptions { BucketPolicy = WebFunctionCodeBucketPolicy.ExternallyManaged }),
+            Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+        });
+
+        construct.AddEndpoint("public", new WebFunctionEndpointOptions
+        {
+            EndpointName = "public",
+            AuthType = WebFunctionAuthType.ApplicationManaged,
+        });
+
+        construct.DefaultEndpoint.GrantCloudFrontInvoke(
+            "arn:aws:cloudfront::123456789012:distribution/E1111111111111");
+        construct.DefaultEndpoint.GrantCloudFrontInvoke(
+            "arn:aws:cloudfront::123456789012:distribution/E2222222222222");
+
+        GoldenTemplate.AssertMatches(stack, "web-function-multi-endpoint.json");
+    }
 }
