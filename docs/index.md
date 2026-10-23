@@ -12,6 +12,7 @@ A comprehensive library of reusable AWS CDK constructs for .NET projects, design
 ## Key Features
 
 - **🚀 Lambda Functions**: Comprehensive Lambda construct with configurable OpenTelemetry support, IAM management, and environment configuration
+- **🕸️ Web Functions**: AWS Lambda Web Functions served from an S3 artifact, with IAM or application-managed endpoints, endpoint-scoped grants, and CloudFront OAC origin integration
 - **🌐 Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, and Route53 DNS management
 - **📊 DynamoDB Tables**: Full-featured DynamoDB construct with streams, TTL, and global secondary indexes
 - **🧪 Testing Helpers**: Extensive testing utilities with fluent assertions and builders
@@ -71,6 +72,16 @@ Full-featured Lambda functions with:
 - SnapStart support
 - Versioning and aliases
 
+### [Web Function Construct](constructs/web-function.md)
+
+AWS Lambda Web Functions with:
+
+- S3-backed artifacts (`WebFunctionCode.FromBucket`)
+- IAM or application-managed endpoints
+- Endpoint-scoped invocation grants
+- CloudFront OAC origin integration
+- A single resource policy per function
+
 ### [Static Site Construct](constructs/static-site.md)
 
 Complete static website hosting with:
@@ -104,11 +115,12 @@ Full-featured Cognito User Pool with:
 
 - **[Testing Guide](testing/index.md)** - Comprehensive testing utilities and patterns
 - **[Examples](examples/index.md)** - Real-world usage examples and patterns
+- **[Web Function Workloads](examples/web-functions.md)** - Next.js, ASP.NET Core, and Blazor Static SSR recipes
 
 ## Requirements
 
 - **.NET 8.0** or **.NET 9.0**
-- **AWS CDK v2** (Amazon.CDK.Lib 2.203.1+)
+- **AWS CDK v2** (Amazon.CDK.Lib 2.274.0+)
 - **AWS CLI** configured with appropriate permissions
 - **Node.js** (for CDK deployment)
 

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a .NET library that provides reusable AWS CDK constructs for serverless applications and static websites. The library is designed specifically for LayeredCraft projects and includes:
 
 - **Lambda Functions**: Comprehensive Lambda construct with integrated OpenTelemetry support, IAM management, and environment configuration
+- **Web Functions**: AWS Lambda Web Functions served from an S3 artifact, with IAM or application-managed endpoints, endpoint-scoped grants, and CloudFront OAC origin integration
 - **Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, Route53 DNS, and optional API proxying
 
 ## Commands
@@ -51,6 +52,13 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Creates function versions and aliases for deployment management
 - Handles Lambda permissions for multiple targets (function, version, alias)
 
+**WebFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/WebFunctionConstruct.cs`)
+- Creates an AWS Lambda Web Function from a versioned S3 artifact (`WebFunctionCode.FromBucket`), plus its immutable revision, default endpoint, execution role (optional), log group (optional), and the function's **single** resource-based policy
+- `WebFunctionEndpointConstruct` (`IWebFunctionEndpoint`) represents each endpoint; `AddEndpoint` adds more; `GrantInvoke` (identity- or resource-policy based) and `GrantCloudFrontInvoke` are endpoint-scoped
+- `WebFunctionOrigin` returns a CloudFront `IOrigin` that configures origin access control (OAC) and the required resource-policy statement for `IamAuth` endpoints
+- Workload-neutral: Next.js, ASP.NET Core, and Blazor Static SSR deploy through the same public API; the differences live in the artifacts and configuration only
+- Requires `Amazon.CDK.Lib` 2.274.0+ (Lambda Web Functions have L1-only support in CDK)
+
 **StaticSiteConstruct** (`src/LayeredCraft.Cdk.Constructs/StaticSiteConstruct.cs`)
 - Comprehensive CDK construct for static website hosting
 - Creates S3 bucket with public access for website hosting
@@ -74,6 +82,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - `LambdaPermission`: Record for defining Lambda invocation permissions
 - `StaticSiteConstructProps`: Configuration interface and record for static site construct
 - `DynamoDbTableConstructProps`: Configuration interface and record for DynamoDB table construct
+- `WebFunctionConstructProps`, `WebFunctionCode`/`WebFunctionCodeFromBucketOptions`/`WebFunctionCodeBucketPolicy`, `WebFunctionEndpointOptions`/`IWebFunctionEndpointOptions`, `WebFunctionEndpointAttributes`, `WebFunctionLogs`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionCallerPolicy`/`WebFunctionInvokeGrantOptions`, `WebFunctionOriginProps`/`WebFunctionOriginWithOacProps`/`WebFunctionOriginPermissions`: Web Function configuration (see `docs/constructs/web-function.md`)
 
 **Extensions** (`src/LayeredCraft.Cdk.Constructs/Extensions/`)
 - `StackExtensions`: Utility methods for CDK Stack operations
@@ -89,7 +98,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 ### Target Frameworks
 - .NET 8.0 and .NET 9.0
-- Uses AWS CDK v2 (Amazon.CDK.Lib 2.213.0)
+- Uses AWS CDK v2 (Amazon.CDK.Lib 2.274.0 minimum; the Web Function constructs require the 2.274.0 enum values)
 
 ### OpenTelemetry Configuration (v2.0.0+)
 Starting with version 2.0.0, the OpenTelemetry layer configuration has been updated:
@@ -121,10 +130,12 @@ var props = new LambdaFunctionConstructProps
 ### Test Architecture
 **Custom Attributes**:
 - `LambdaFunctionConstructAutoDataAttribute`: AutoFixture attribute with customizable parameters
+- `WebFunctionConstructAutoDataAttribute`: AutoFixture attribute supplying deterministic Web Function props (imported, externally managed artifact bucket)
 - `BaseFixtureFactory`: Factory for creating configured AutoFixture instances
 
 **Test Customizations**:
 - `LambdaFunctionConstructCustomization`: Configures realistic test data for Lambda constructs
+- `WebFunctionConstructCustomization`: Configures realistic test data for Web Function constructs
 - `StaticSiteConstructCustomization`: Configures realistic test data for static site constructs
 - Supports parameterized test scenarios for Lambda (OTEL layer on/off, permissions included/excluded) and static sites (API domain on/off, alternate domains included/excluded)
 
@@ -146,6 +157,7 @@ The library includes comprehensive testing helpers for consumers:
 - `CreatePropsBuilder()`: Creates fluent builder with Lambda test defaults
 - `CreateStaticSitePropsBuilder()`: Creates fluent builder with static site test defaults
 - `CreateDynamoDbTablePropsBuilder()`: Creates fluent builder with DynamoDB table test defaults
+- `CreateWebFunctionPropsBuilder()`: Creates fluent builder with Web Function test defaults (choose the auth mode explicitly)
 
 **LambdaFunctionConstructAssertions** (`LambdaFunctionConstructAssertions.cs`):
 - Extension methods for Template assertions
@@ -170,6 +182,20 @@ The library includes comprehensive testing helpers for consumers:
 **DynamoDbTableConstructPropsBuilder** (`DynamoDbTableConstructPropsBuilder.cs`):
 - Fluent builder for creating DynamoDB table test props with scenario-based configurations
 - Methods like `WithTableName()`, `WithPartitionKey()`, `WithSortKey()`, `WithGlobalSecondaryIndex()`, `WithStream()`, `WithTimeToLiveAttribute()`, `ForUserTable()`, `ForSessionTable()`, `ForEventSourcing()`
+
+**WebFunctionConstructAssertions** (`WebFunctionConstructAssertions.cs`):
+- Extension methods for `Template` assertions specific to Web Functions
+- `ShouldHaveWebFunction()`, `ShouldHaveRevision()`, `ShouldHaveRevisionCode()`, `ShouldHaveEndpoint()`, `ShouldHaveEndpointScaling()`, `ShouldHaveInvokeGrant()`, `ShouldHaveSingleResourcePolicy()`, `ShouldHaveNoResourcePolicy()`, `ShouldAllowCloudFront()`, `ShouldAllowResourcePolicyPrincipal()`, `ShouldHaveWebFunctionOac()`, `ShouldHaveCodeBucketReadStatement()`
+- Match by function and endpoint **names**, not logical IDs; require `Effect = Allow` with the expected action and endpoint resource
+
+**WebFunctionConstructPropsBuilder** (`WebFunctionConstructPropsBuilder.cs`):
+- Fluent builder for Web Function props: `WithFunctionName()`, `WithCode()`, `WithTestArtifact()`, `WithIamAuthEndpoint()`, `WithApplicationManagedEndpoint()`, `WithEndpoint()`, `WithEnvironmentVariable()`, `WithEntryPoint()`, `WithTimeout()`, `WithMaxConcurrencyPerEnvironment()`, `WithRole()`, `WithLogs()`, `Build()`
+- `Build()` throws without code or an endpoint; the builder never selects an auth mode
+
+**Golden Templates** (`test/LayeredCraft.Cdk.Constructs.Tests/GoldenTemplates/`):
+- Full synthesized templates pinned for every construct via `GoldenTemplate.AssertMatches(stack, "<file>.json")`
+- Existing-construct goldens must show **zero diff** on any dependency or `Amazon.CDK.Lib` bump
+- Regenerate intentionally with `UPDATE_GOLDEN_TEMPLATES=1` (the harness rewrites the checked-in file and fails once so the change is reviewed)
 
 **Critical Testing Pattern**: 
 - Always create CDK templates AFTER adding constructs to stacks
@@ -203,6 +229,11 @@ The library includes comprehensive testing helpers for consumers:
 - Configurable OpenTelemetry layer version and architecture (defaults to version 0-117-0, amd64 architecture)
 - Default memory: 1024MB, timeout: 6 seconds, log retention: 2 weeks
 - Uses `RemovalPolicy.RETAIN` for Lambda versions to prevent deletion
+
+### CDK Upgrade Regression Rule
+- The Web Function constructs classify IAM principals and decide whether to write an identity policy partly from the concrete .NET types jsii materializes (exported `Role`/`User`/`Group`/`LazyRole`/`PrincipalWithConditions`) versus interface proxies for CDK-private classes (immutable/imported roles). A `Amazon.CDK.Lib` upgrade can silently change that materialization and therefore the authorization outcome.
+- Every `Amazon.CDK.Lib` upgrade — including Dependabot bumps — MUST run the focused real-CDK Web Function security tests, especially the `CdkUpgradeGuard_*` suite in `WebFunctionSecurityTests.cs`, before the upgrade is accepted. A failure blocks the upgrade until the behavior is re-verified.
+- Authorization-behavior changes surface as an assertion mismatch on the expected policy direction (identity policy vs. resource policy vs. thrown error), not as a compile error. Review the `CdkUpgradeGuard_*` failures first when a CDK bump changes IAM output; the library fails closed when authorization cannot be established.
 
 ## Testing Patterns
 
