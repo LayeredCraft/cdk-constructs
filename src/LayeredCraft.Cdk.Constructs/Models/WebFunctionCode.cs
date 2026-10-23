@@ -128,22 +128,44 @@ internal sealed class WebFunctionCodeFromBucket : WebFunctionCode
         // Resolving through the stack gives the plain object that was actually configured.
         var stack = Stack.Of(Bucket);
 
-        var versioningRaw = cfnBucket.VersioningConfiguration;
-        if (versioningRaw is null)
+        ValidateVersioning(stack, cfnBucket);
+        ValidateEncryption(stack, cfnBucket);
+    }
+
+    // Owned-bucket inspection only judges literal values. A token or an unrecognized structure can be shown neither
+    // compliant nor non-compliant, so it is skipped and never rejected (design §14, revision 4).
+    private static void ValidateVersioning(Stack stack, CfnBucket cfnBucket)
+    {
+        // No versioning configuration at all is a literal, known-disabled state.
+        if (cfnBucket.VersioningConfiguration is null)
             throw new InvalidOperationException(VersioningMessage);
 
-        var versioning = stack.Resolve(versioningRaw);
-        if (versioning is IDictionary<string, object> versioningMap
-            && !string.Equals(GetString(versioningMap, "status"), "Enabled", StringComparison.OrdinalIgnoreCase))
+        var versioning = stack.Resolve(cfnBucket.VersioningConfiguration);
+        if (versioning is not IDictionary<string, object> versioningMap
+            || !TryGetValue(versioningMap, "status", out var statusRaw))
         {
-            throw new InvalidOperationException(VersioningMessage);
+            return;
         }
 
-        var encryptionRaw = cfnBucket.BucketEncryption;
-        if (encryptionRaw is null)
+        var status = LiteralString(statusRaw);
+        if (status is null)
             return;
 
-        var encryption = stack.Resolve(encryptionRaw);
+        if (string.Equals(status, "Enabled", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        // Only a literal, known-disabled value is a violation. Any other literal is an unrecognized state and is
+        // skipped rather than rejected.
+        if (string.Equals(status, "Suspended", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(VersioningMessage);
+    }
+
+    private static void ValidateEncryption(Stack stack, CfnBucket cfnBucket)
+    {
+        if (cfnBucket.BucketEncryption is null)
+            return;
+
+        var encryption = stack.Resolve(cfnBucket.BucketEncryption);
         if (encryption is not IDictionary<string, object> encryptionMap
             || !TryGetValue(encryptionMap, "serverSideEncryptionConfiguration", out var rulesRaw)
             || rulesRaw is not IEnumerable<object?> rules
@@ -151,20 +173,64 @@ internal sealed class WebFunctionCodeFromBucket : WebFunctionCode
             || !TryGetValue(rule, "serverSideEncryptionByDefault", out var byDefaultRaw)
             || byDefaultRaw is not IDictionary<string, object> byDefault)
         {
+            // Unrecognized structure: unknown, never rejected.
             return;
         }
 
-        if (UsesAwsManagedKey(GetString(byDefault, "sseAlgorithm"), GetString(byDefault, "kmsMasterKeyId")))
+        var algorithm = LiteralString(GetValue(byDefault, "sseAlgorithm"));
+        if (algorithm is null)
+            return;
+
+        if (string.Equals(algorithm, "aws:kms", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
-                "An owned artifact bucket cannot use an AWS-managed KMS key. Use S3-managed encryption or a " +
-                "customer-managed key the function role can read.");
+            ValidateKmsKey(byDefault, dsse: false);
+            return;
         }
+
+        if (string.Equals(algorithm, "aws:kms:dsse", StringComparison.OrdinalIgnoreCase))
+        {
+            ValidateKmsKey(byDefault, dsse: true);
+            return;
+        }
+
+        // S3-managed encryption (AES256) and any other literal algorithm are supported.
+    }
+
+    private static void ValidateKmsKey(IDictionary<string, object> byDefault, bool dsse)
+    {
+        if (!TryGetValue(byDefault, "kmsMasterKeyId", out var keyRaw) || keyRaw is null)
+        {
+            // SSE-KMS without a key id is the AWS-managed key.
+            throw new InvalidOperationException(dsse ? DsseManagedMessage : KmsManagedMessage);
+        }
+
+        var kmsKeyId = LiteralString(keyRaw);
+        if (kmsKeyId is null)
+        {
+            // The key id is unresolved. Do not assume it is an AWS-managed key; skip it.
+            return;
+        }
+
+        var isAwsManaged = kmsKeyId.Length == 0
+            || string.Equals(kmsKeyId, "aws/s3", StringComparison.OrdinalIgnoreCase);
+
+        if (!isAwsManaged)
+            return;
+
+        throw new InvalidOperationException(dsse ? DsseManagedMessage : KmsManagedMessage);
     }
 
     private const string VersioningMessage =
         "An owned artifact bucket must have versioning enabled so a revision keeps the artifact version it was " +
         "created with.";
+
+    private const string KmsManagedMessage =
+        "An owned artifact bucket cannot use the AWS-managed KMS key (aws/s3) for SSE-KMS. Use S3-managed " +
+        "encryption or a customer-managed key the function role can read.";
+
+    private const string DsseManagedMessage =
+        "An owned artifact bucket cannot use DSSE without a customer-managed KMS key. Use SSE-KMS with a " +
+        "customer-managed key the function role can read, or S3-managed encryption.";
 
     private static bool TryGetValue(IDictionary<string, object> map, string key, out object? value)
     {
@@ -181,18 +247,16 @@ internal sealed class WebFunctionCodeFromBucket : WebFunctionCode
         return false;
     }
 
-    private static string? GetString(IDictionary<string, object> map, string key)
-        => TryGetValue(map, key, out var value) ? value?.ToString() : null;
+    private static object? GetValue(IDictionary<string, object> map, string key)
+        => TryGetValue(map, key, out var value) ? value : null;
 
-    private static bool UsesAwsManagedKey(string? algorithm, string? kmsKeyId)
+    // Returns the literal string only when the value is genuinely a literal. A resolved token (for example a
+    // { Ref = ... } map) or a tokenized string is unresolved and returns null.
+    private static string? LiteralString(object? value)
     {
-        if (string.Equals(algorithm, "aws:kms:dsse", StringComparison.OrdinalIgnoreCase))
-            return true;
+        if (value is not string text)
+            return null;
 
-        if (!string.Equals(algorithm, "aws:kms", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        return string.IsNullOrEmpty(kmsKeyId)
-               || string.Equals(kmsKeyId, "aws/s3", StringComparison.OrdinalIgnoreCase);
+        return text.Contains("${Token[", StringComparison.Ordinal) ? null : text;
     }
 }

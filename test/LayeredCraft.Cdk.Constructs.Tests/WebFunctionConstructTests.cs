@@ -64,6 +64,27 @@ public class WebFunctionConstructTests
             : [dependsOn.GetString()!];
     }
 
+    private static CfnBucket CfnBucketOf(Bucket bucket) => (CfnBucket)bucket.Node.DefaultChild!;
+
+    private static void SetOwnedBucketVersioningStatus(Bucket bucket, string status)
+        => CfnBucketOf(bucket).VersioningConfiguration = new CfnBucket.VersioningConfigurationProperty { Status = status };
+
+    private static void SetOwnedBucketEncryption(Bucket bucket, string algorithm, string? keyId)
+        => CfnBucketOf(bucket).BucketEncryption = new CfnBucket.BucketEncryptionProperty
+        {
+            ServerSideEncryptionConfiguration = new object[]
+            {
+                new CfnBucket.ServerSideEncryptionRuleProperty
+                {
+                    ServerSideEncryptionByDefault = new CfnBucket.ServerSideEncryptionByDefaultProperty
+                    {
+                        SseAlgorithm = algorithm,
+                        KmsMasterKeyId = keyId,
+                    },
+                },
+            },
+        };
+
     private static WebFunctionConstructProps DefaultProps(
         IBucket artifacts,
         WebFunctionCodeBucketPolicy bucketPolicy = WebFunctionCodeBucketPolicy.ExternallyManaged)
@@ -533,6 +554,223 @@ public class WebFunctionConstructTests
         var act = () => new WebFunctionConstruct(functionStack, "web-function", props);
 
         act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Construct_ShouldAcceptEnabledOwnedBucketWithS3ManagedEncryption()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps
+        {
+            Versioned = true,
+            Encryption = BucketEncryption.S3_MANAGED,
+        });
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.Automatic));
+
+        act.Should().NotThrow();
+        ResourceOfType(TemplateJson(stack), "AWS::S3::BucketPolicy").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Construct_ShouldThrowForDisabledOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = false });
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*versioning*");
+    }
+
+    [Fact]
+    public void Construct_ShouldThrowForSuspendedOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketVersioningStatus(artifacts, "Suspended");
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*versioning*");
+    }
+
+    [Fact]
+    public void Construct_ShouldSkipTokenizedVersioningStatus()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketVersioningStatus(artifacts, Fn.Ref("VersioningStatus"));
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.Automatic));
+
+        act.Should().NotThrow();
+        ResourceOfType(TemplateJson(stack), "AWS::S3::BucketPolicy").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Construct_ShouldSkipUnrecognizedVersioningStatus()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketVersioningStatus(artifacts, "SomeFutureState");
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Construct_ShouldThrowForAwsManagedKmsOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketEncryption(artifacts, "aws:kms", "aws/s3");
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*aws/s3*");
+    }
+
+    [Fact]
+    public void Construct_ShouldAcceptCustomerManagedKmsOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketEncryption(
+            artifacts,
+            "aws:kms",
+            "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111");
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Construct_ShouldSkipTokenizedKmsKeyOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketEncryption(artifacts, "aws:kms", Fn.Ref("KmsKeyId"));
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Construct_ShouldAcceptDssEWithCustomerManagedKeyOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketEncryption(
+            artifacts,
+            "aws:kms:dsse",
+            "arn:aws:kms:us-east-1:123456789012:key/11111111-1111-1111-1111-111111111111");
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Construct_ShouldThrowForDssEManagedOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketEncryption(artifacts, "aws:kms:dsse", null);
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*DSSE*customer-managed*");
+    }
+
+    [Fact]
+    public void Construct_ShouldThrowForDssEWithAwsManagedKeyOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        SetOwnedBucketEncryption(artifacts, "aws:kms:dsse", "aws/s3");
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*customer-managed*");
+    }
+
+    [Fact]
+    public void Construct_ShouldSkipUnrecognizedEncryptionStructureOwnedBucket()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var artifacts = new Bucket(stack, "Artifacts", new BucketProps { Versioned = true });
+        CfnBucketOf(artifacts).BucketEncryption = new CfnBucket.BucketEncryptionProperty
+        {
+            ServerSideEncryptionConfiguration = new object[]
+            {
+                new CfnBucket.ServerSideEncryptionRuleProperty(),
+            },
+        };
+
+        var act = () => new WebFunctionConstruct(
+            stack,
+            "web-function",
+            DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Construct_ShouldNotRequireResolvedFunctionEnvForExternallyManagedCrossStackBucket()
+    {
+        var app = new App();
+        var functionStack = new Stack(app, "FunctionStack");
+        var bucketStack = new Stack(app, "BucketStack", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" },
+        });
+
+        var artifacts = new Bucket(bucketStack, "Artifacts", new BucketProps { Versioned = true });
+        var props = DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged);
+
+        var act = () => new WebFunctionConstruct(functionStack, "web-function", props);
+
+        // ExternallyManaged renders no bucket policy, so the Automatic-only cross-stack account/Region guard
+        // must not apply. (The function stack itself cannot be synthesized: the cross-environment bucket
+        // reference is a CDK-level restriction independent of this validation.)
+        act.Should().NotThrow();
     }
 
     [Fact]
