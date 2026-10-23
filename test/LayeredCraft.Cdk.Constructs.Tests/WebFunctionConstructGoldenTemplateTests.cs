@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Amazon.CDK;
+using Amazon.CDK.AWS.CloudFront;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.Logs;
@@ -207,5 +208,45 @@ public class WebFunctionConstructGoldenTemplateTests
             new WebFunctionInvokeGrantOptions { CallerPolicy = WebFunctionCallerPolicy.ExternallyManaged });
 
         GoldenTemplate.AssertMatches(stack, "web-function-invoke-grants.json");
+    }
+
+    [Fact]
+    public void WebFunction_CloudFrontOacOrigin_ShouldMatchGoldenTemplate()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack("golden-web-function");
+
+        var artifacts = Bucket.FromBucketName(stack, "Artifacts", "golden-artifacts");
+
+        var construct = new WebFunctionConstruct(stack, "web-function", new WebFunctionConstructProps
+        {
+            FunctionName = "golden-web-function",
+            Code = WebFunctionCode.FromBucket(
+                artifacts,
+                "app.zip",
+                new WebFunctionCodeFromBucketOptions { BucketPolicy = WebFunctionCodeBucketPolicy.ExternallyManaged }),
+            Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+        });
+
+        var origin = WebFunctionOrigin.WithOriginAccessControl(construct.DefaultEndpoint);
+
+        _ = new Amazon.CDK.AWS.CloudFront.Distribution(stack, "distribution", new DistributionProps
+        {
+            DefaultBehavior = new BehaviorOptions
+            {
+                Origin = origin,
+                CachePolicy = CachePolicy.CACHING_DISABLED,
+                OriginRequestPolicy = OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+            },
+            AdditionalBehaviors = new Dictionary<string, IBehaviorOptions>
+            {
+                ["/_next/static/*"] = new BehaviorOptions
+                {
+                    Origin = origin,
+                    CachePolicy = CachePolicy.CACHING_OPTIMIZED,
+                },
+            },
+        });
+
+        GoldenTemplate.AssertMatches(stack, "web-function-cloudfront-oac.json");
     }
 }
