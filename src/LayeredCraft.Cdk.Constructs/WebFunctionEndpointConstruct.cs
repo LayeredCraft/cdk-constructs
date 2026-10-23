@@ -111,7 +111,12 @@ public sealed class WebFunctionEndpointConstruct : Resource, IWebFunctionEndpoin
                 nameof(statement));
         }
 
-        var policy = WebFunction.AddResourcePolicyStatement(statement);
+        WebFunctionValidation.ValidateResourcePolicyStatement(statement);
+
+        var stored = statement.Copy(null);
+        stored.Freeze();
+
+        var policy = WebFunction.AddResourcePolicyStatement(stored);
 
         return new AddToResourcePolicyResult
         {

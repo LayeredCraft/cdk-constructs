@@ -1,11 +1,15 @@
 using Amazon.CDK;
 using Amazon.CDK.AWS.IAM;
+using LayeredCraft.Cdk.Constructs.Models;
 
-namespace LayeredCraft.Cdk.Constructs.Models;
+namespace LayeredCraft.Cdk.Constructs;
 
 /// <summary>
-/// A Web Function endpoint. Owned endpoints are created by <see cref="WebFunctionConstruct"/>; imported
-/// endpoints are created with <c>WebFunctionEndpointConstruct.FromEndpointAttributes</c> and own no resources.
+/// A Web Function endpoint. Owned endpoints are created by <see cref="WebFunctionConstruct"/> and own the
+/// function's single resource policy; imported endpoints are created with
+/// <see cref="WebFunctionEndpointConstruct.FromEndpointAttributes"/> and own no resources, so their resource policy
+/// stays externally owned. Invoke grants are endpoint-scoped and always target <c>lambda:InvokeWebFunctionEndpoint</c>
+/// on this endpoint's ARN.
 /// </summary>
 public interface IWebFunctionEndpoint : IResource
 {
@@ -28,8 +32,10 @@ public interface IWebFunctionEndpoint : IResource
     WebFunctionEndpointType EndpointType { get; }
 
     /// <summary>
-    /// Grants a principal permission to invoke this endpoint, configuring the caller's identity policy when the
-    /// caller's account is established in this deployment.
+    /// Grants a principal permission to invoke this endpoint. By default the library writes the caller's identity
+    /// policy only when the caller's account can be established in this deployment; otherwise the grant fails closed.
+    /// Service principals, wildcard principals, account principals, and principals wrapped with conditions are
+    /// rejected.
     /// </summary>
     /// <param name="grantee">The principal that may invoke the endpoint.</param>
     /// <returns>The grant describing the statements that were added.</returns>
@@ -37,7 +43,10 @@ public interface IWebFunctionEndpoint : IResource
 
     /// <summary>
     /// Grants a principal permission to invoke this endpoint, controlling who maintains the caller's identity
-    /// policy.
+    /// policy. With <see cref="WebFunctionCallerPolicy.Automatic"/> the library writes the identity policy when the
+    /// caller's account is established; with <see cref="WebFunctionCallerPolicy.ExternallyManaged"/> it writes only
+    /// an endpoint-scoped resource-policy statement and leaves the caller's identity policy to the caller's own
+    /// account.
     /// </summary>
     /// <param name="grantee">The principal that may invoke the endpoint.</param>
     /// <param name="options">The grant options.</param>

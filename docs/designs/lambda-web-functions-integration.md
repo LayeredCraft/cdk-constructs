@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Approved** (revision 3, 2026-10-22) for implementation planning ([#98](https://github.com/LayeredCraft/cdk-constructs/issues/98)). Implementation proceeds through separately planned tasks. |
-| **Date** | 2026-10-22 (revisions 2–3 address review feedback; see [§21](#21-revision-history)) |
+| **Status** | **Approved** (revision 4, 2026-10-23) for implementation planning ([#98](https://github.com/LayeredCraft/cdk-constructs/issues/98)). Implementation proceeds through separately planned tasks. |
+| **Date** | 2026-10-22 (revisions 2–3 address design review feedback; revision 4, 2026-10-23, records corrections from the independent T1–T3b implementation review; see [§21](#21-revision-history)) |
 | **Authority** | This document is the authoritative architectural record for the feature. No standalone ADRs are written for it at this time. |
 | **Target package** | `LayeredCraft.Cdk.Constructs` (next minor after v2.5.0) |
 | **AWS CDK floor** | `Amazon.CDK.Lib` 2.274.0 (raised from 2.273.0; see [§5.5](#55-cdk-version-floor)) |
@@ -372,6 +372,12 @@ Namespaces follow the repository: constructs and origin in `LayeredCraft.Cdk.Con
 code types in `LayeredCraft.Cdk.Constructs.Models`, test helpers in `LayeredCraft.Cdk.Constructs.Testing`. Signatures
 are normative for naming and shape. XML docs are abbreviated.
 
+**Revision 4:** the resource interface `IWebFunctionEndpoint` lives in `LayeredCraft.Cdk.Constructs`, next to
+`WebFunctionEndpointConstruct` (CDK's `IFoo`-beside-`Foo` convention). It is not a props, options, enum, or code type, and
+moving it after release would be a breaking change. `IWebFunctionEndpoint` is implemented by the library's own owned and
+imported endpoints; it is not intended for consumer implementation, and library code treats any implementation other
+than `WebFunctionEndpointConstruct` as imported.
+
 ### 8.1 Enums and value types (`Models/`)
 
 ```csharp
@@ -528,9 +534,10 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
     public ILogGroup? LogGroup { get; }        // the created or supplied group; null for ServiceDefault()
 
     public WebFunctionEndpointConstruct DefaultEndpoint { get; }
-    public IReadOnlyList<WebFunctionEndpointConstruct> Endpoints { get; }
+    public IReadOnlyList<WebFunctionEndpointConstruct> Endpoints { get; }   // a genuinely read-only view (rev 4)
 
-    /// <summary>Adds another endpoint for the current revision. EndpointName must be unique within the function.</summary>
+    /// <summary>Adds another endpoint for the current revision. EndpointName must be unique within the function.
+    /// The id must not be one of the reserved child IDs below (ArgumentException, rev 4).</summary>
     public WebFunctionEndpointConstruct AddEndpoint(string id, IWebFunctionEndpointOptions options);
 }
 ```
@@ -547,6 +554,11 @@ Resources created (stable child IDs, a public contract for `Node.FindChild` esca
 | `LogGroup` | `AWS::Logs::LogGroup` named `/aws/lambda/web/{FunctionName}` | `Logs = WebFunctionLogs.Create(...)` (default) |
 | `ResourcePolicy` | `AWS::Lambda::ResourcePolicy` (`ResourceArn` = function ARN) | first statement only |
 
+**Reserved child IDs (revision 4).** `Function`, `Revision`, `DefaultEndpoint`, `ExecutionRole`, `LogGroup`, and
+`ResourcePolicy` are reserved whether or not the corresponding resource exists in a given configuration. `AddEndpoint`
+rejects them with `ArgumentException`, so a lazily created child (the resource policy) or a later configuration change
+(switching `Logs` to `Create()`) can never collide with a consumer endpoint.
+
 Notes:
 
 - The created log group's name equals AWS's default, so switching between `Create()` and `ServiceDefault()` never
@@ -560,6 +572,15 @@ Notes:
 - `FunctionName` is passed as the **literal name** to `Revision.FunctionName` and `Endpoint.FunctionName`, with
   explicit `AddResourceDependency` (function ← revision ← endpoints). This is CloudFormation's documented form and
   Sharedale's deployed shape. Switching to `Ref` (an ARN) later would *replace every endpoint*, so it is pinned.
+- **Execution-role ordering (revision 4).** The revision depends on the execution role's `CfnRole` only: through its
+  `ExecutionRoleArn` reference, plus an explicit `DependsOn` on the role's `CfnRole` when the role is owned. It never
+  depends on the whole `Role` construct, because that subtree includes the role's `DefaultPolicy`. Invoke grants and
+  other permissions written to that policy reference other resources (for example another function's endpoint), and
+  depending on it creates CloudFormation cycles for mutual invocation, self-invocation, and BFF/API cross-references
+  (an API environment variable holding the BFF URL while the BFF is granted invoke on the API). Consequence: on a
+  first deployment, policy statements attached to the role may not yet have propagated when the revision activates.
+  This is an IAM eventual-consistency window, verified in the sandbox gate ([§19.1](#191-release-acceptance-criteria)),
+  not a correctness dependency the template can express without cycles.
 - No revision KMS key in v1 ([§8.7](#87-kms-scope-decision)).
 - Tags: `Tags.Of(construct)` reaches the taggable `CfnWebFunction`. Endpoints and revisions inherit function tags
   for ABAC.
@@ -622,7 +643,13 @@ public sealed class WebFunctionEndpointConstruct : Resource, IWebFunctionEndpoin
 
     /// <summary>IResourceWithPolicy: adds to the owning function's single resource policy. The statement's
     /// Resource must be exactly this endpoint's ARN (otherwise ArgumentException). This is the only public
-    /// resource-policy entry point; WebFunctionConstruct has none of its own.</summary>
+    /// resource-policy entry point; WebFunctionConstruct has none of its own.
+    /// Revision 4: the statement is validated, then a frozen copy is stored, so later mutation of the caller's
+    /// object cannot widen it. An Allow statement is rejected (ArgumentException) when it has no conditions and
+    /// names a wildcard principal ("*" / AnyPrincipal / StarPrincipal) or a service principal, or when it uses
+    /// NotPrincipal. Deny statements are not restricted. An explicit Allow statement with a wildcard principal AND
+    /// conditions (for example aws:PrincipalOrgID) is accepted: the consumer is responsible for ensuring the conditions
+    /// meaningfully restrict access. The library does not analyze condition semantics.</summary>
     public AddToResourcePolicyResult AddToResourcePolicy(PolicyStatement statement);
 
     public static IWebFunctionEndpoint FromEndpointAttributes(Construct scope, string id, WebFunctionEndpointAttributes attributes);
@@ -634,6 +661,9 @@ public sealed record WebFunctionEndpointAttributes
     public required string DomainName { get; init; }
     public required WebFunctionAuthType AuthType { get; init; }
     public WebFunctionEndpointType EndpointType { get; init; } = WebFunctionEndpointType.HomeRegion;
+    /// <summary>Revision 4: the endpoint's 12-digit account. Optional. Needed only when EndpointArn is a token and
+    /// identity grants are wanted; when EndpointArn is literal, its account is used and a supplied Account must match.</summary>
+    public string? Account { get; init; }
 }
 ```
 
@@ -642,10 +672,33 @@ Ownership semantics:
 - `WebFunctionEndpointConstruct` instances are created only by `WebFunctionConstruct` (internal constructor). The
   function owns the revision, the endpoints, and the resource policy. An endpoint never creates resources of its own
   beyond its L1.
-- An imported `IWebFunctionEndpoint` owns nothing. It can write identity policies on grantees whose account is
-  established (§10.2 E1/E2) and nothing else. `GrantCloudFrontInvoke` and any grant that needs the resource policy throw ("the resource policy of an
+- An imported `IWebFunctionEndpoint` owns nothing. It can write identity policies only on owned, mutable CDK
+  identities whose account is established (§10.2 rev-4 item 4; imported roles, mutable or not, are not written to)
+  and nothing else. `GrantCloudFrontInvoke` and any grant that needs the resource policy throw ("the resource policy of an
   imported endpoint is externally owned"). Endpoint name, account, and Region are parsed from the ARN when it is
-  literal. When the ARN is a token, the account is unresolved, so only owned (E1) grantees can be granted.
+  literal. ~~When the ARN is a token, the account is unresolved, so only owned (E1) grantees can be granted.~~
+  *(Superseded by the revision-4 account rule below.)*
+- **Imported endpoint validation (revision 4).**
+  - A literal `EndpointArn` must match
+    `arn:{partition}:lambda:{region}:{12-digit account}:web-function/{function}/endpoint/{endpoint}`.
+  - A literal `DomainName` must be non-empty (empty → `ArgumentException`; null → `ArgumentNullException`).
+  - A literal `Account` must be 12 digits. When both `Account` and a literal `EndpointArn` are supplied, they must be
+    equal (`ArgumentException`).
+  - Tokens are not validated.
+  - The imported resource's environment is the endpoint's, not the importing stack's: `Env.Account` is the literal ARN
+    account or else `Account`, and `Env.Region` comes from the ARN.
+- **Imported endpoint account rule (revision 4).** The *endpoint account* is the literal ARN's account, or else a
+  literal `Account`. Otherwise it is **not established**: a token ARN with no `Account` or with a token `Account`.
+  - When the endpoint account is not established, `GrantInvoke` throws for **every** grantee, owned ones included. The
+    message names both remedies: supply a literal `Account`, or configure the caller's access outside this app. Such an
+    endpoint remains fully usable as a CloudFront origin with `WebFunctionOriginPermissions.ExternallyManaged`, which
+    needs no `GrantInvoke`.
+  - When the endpoint account is established, a grantee is established only if its account is literally `SAME`: an
+    owned principal's stack account, or an imported principal's `PrincipalAccount`. `ONE_UNRESOLVED` (for example an
+    env-agnostic caller stack) and `BOTH_UNRESOLVED` are **not** established. The library cannot write the owner's
+    resource policy, and could otherwise report a cross-account grant as complete.
+  - An imported endpoint never writes a resource policy, so `ExternallyManaged` grants and `GrantCloudFrontInvoke` still
+    throw (revision 3).
 - The default endpoint and `AddEndpoint` endpoints have identical semantics. The only difference is that the default
   one is created from `props.Endpoint`. Leaving `EndpointName` at `"default"` in `AddEndpoint` fails as a duplicate.
 
@@ -962,6 +1015,8 @@ var origin = WebFunctionOrigin.WithOriginAccessControl(shared, new WebFunctionOr
     Permissions = WebFunctionOriginPermissions.ExternallyManaged,  // Automatic would fail synthesis
 });
 // The owner of "shared" must allow this distribution (aws:SourceArn) in the function's resource policy.
+// Revision 4: with a token EndpointArn (e.g. from SSM), this origin use still works. Identity grants
+// (shared.GrantInvoke(...)) additionally need a literal Account on the attributes.
 ```
 
 ---
@@ -1022,8 +1077,18 @@ Grant GrantInvoke(IGrantable grantee, WebFunctionInvokeGrantOptions options);
 
 - **(E1) Owned principal:** the grant principal is a construct created in this app (`Resource.IsOwnedResource`, for
   example a `Role` L2, the role of a `Function`, or a `WebFunctionConstruct`). Its stack deploys its policy, and
-  that stack's account must not be literally different from the endpoint stack's account. Both unresolved, or the
-  same stack, is accepted, because the construct deploys where the role is created.
+  that stack's account must not be literally different from the endpoint stack's account. ~~Both unresolved, or the
+  same stack, is accepted, because the construct deploys where the role is created.~~ *(Revision 4 clarification,
+  maintainer-approved 2026-10-23, replaces the struck sentence:)* E1 is established, and the identity side may be
+  written only for an owned mutable identity (rev-4 item 4), in exactly two cases:
+  - **Same stack:** the caller and an **owned** endpoint are in the same `Stack` (`Stack.Of` reference equality).
+    This holds even when the stack is environment-agnostic, because one stack deploys to one account.
+  - **Different stacks:** both stack accounts are literal and `SAME`.
+
+  Rejected, before any policy is written: different stacks where either account is unresolved (including two
+  env-agnostic stacks, `BOTH_UNRESOLVED`), different stacks with different literal accounts, and every imported
+  endpoint without a literal `SAME` account. The same-stack rule does not apply to imported endpoints: an imported
+  endpoint's account is the ARN's account (or `Account`), not the importing stack's.
 - **(E2) Imported principal with matching literal accounts:** the principal (for example `Role.FromRoleArn`) has a
   literal `PrincipalAccount` equal (`TokenComparison.SAME`) to a literal endpoint stack account.
 
@@ -1035,20 +1100,24 @@ Everything else is *not established*: imported principals with any unresolved ac
 
 1. `AuthType != IamAuth` → throw.
 2. **Identity side.** Only when the account is established: `Grant.AddToPrincipal(action
-   lambda:InvokeWebFunctionEndpoint, resource = this endpoint ARN)`. A mutable imported same-account role gets an
-   attached policy. An immutable one (`Mutable = false`) writes nothing; continue to step 3.
+   lambda:InvokeWebFunctionEndpoint, resource = this endpoint ARN)`. ~~A mutable imported same-account role gets an
+   attached policy. An immutable one (`Mutable = false`) writes nothing; continue to step 3.~~ *(Revision 4
+   clarification: the identity side is written only for an owned, mutable CDK identity (rev-4 item 4). Every imported
+   role, mutable or immutable, continues to step 3.)*
 3. **Resource side.** Write `{Principal = grantee principal, Action, Resource = endpoint ARN}` through the function's
    single policy when:
-   - the identity side was not written (an immutable same-account role, where a same-account resource-policy grant is
-     sufficient per AWS); or
-   - the principal is a **service principal** (complete without an identity policy); or
+   - the identity side was not written (an established same-account imported role, mutable or immutable, or an
+     owned role's `WithoutPolicyUpdates()` view, where a same-account resource-policy grant is sufficient per AWS); or
+   - ~~the principal is a **service principal** (complete without an identity policy)~~ *(superseded by revision 4:
+     `GrantInvoke` rejects service principals; see "Revision 4 corrections" below)*; or
    - `CallerPolicy = ExternallyManaged`.
 
    An imported endpoint cannot write the resource side. If the resource side is required there, it throws.
 4. **Completeness check under `Automatic`.** Synthesis fails unless invocation is fully configured by this app:
-   identity side written (E1/E2), or immutable same-account role with resource side written, or service principal with
-   resource side written. In particular these **fail**: an imported principal with an unresolved account, a
-   different literal account, and account or ARN principals of other accounts. The message names the grantee, the
+   identity side written (owned mutable identity), or established same-account role with resource side written ~~, or service principal
+   with resource side written~~ *(revision 4: service principals are rejected)*. In particular these **fail**: an
+   imported principal with an unresolved account, a different literal account, and account or ARN principals of other
+   accounts (revision 4: account principals of **any** account). The message names the grantee, the
    endpoint, the reason ("account of imported role 'X' cannot be established"), and the two remedies: give the stacks
    explicit, matching `Env` accounts (or import the role with a literal ARN in the deployment account), or pass
    `CallerPolicy = ExternallyManaged` and configure the caller's identity policy in its own account.
@@ -1062,16 +1131,118 @@ Everything else is *not established*: imported principals with any unresolved ac
 | Grantee | Option | Identity policy written | Resource policy written | Consumer must configure | Result |
 |---|---|---|---|---|---|
 | Role/Function/WebFunction created in this app (E1) | Automatic | ✅ | — | nothing | **Complete** |
-| `Role.FromRoleArn`, literal account = literal endpoint account (E2), mutable | Automatic | ✅ (role must exist) | — | nothing | **Complete** |
-| Same as above, `Mutable = false` | Automatic | ❌ | ✅ | nothing | **Complete** (resource grant suffices same-account); imported endpoint → **throws** |
+| ~~`Role.FromRoleArn`, literal account = literal endpoint account (E2), mutable~~ | ~~Automatic~~ | ~~✅ (role must exist)~~ | ~~—~~ | ~~nothing~~ | ~~**Complete**~~ *(superseded by the next row, rev 4)* |
+| `Role.FromRoleArn`, literal account = literal endpoint account (E2), **mutable or** `Mutable = false` (rev 4) | Automatic | ❌ | ✅ | nothing | **Complete** (resource grant suffices same-account); imported endpoint → **throws** |
+| Owned `Role`/`User`/`Group`/`LazyRole` (E1), imported endpoint whose account is literally `SAME` | Automatic | ✅ | — | nothing | **Complete** (rev 4) |
+| `PrincipalWithConditions` around any principal (for example `AccountPrincipal.WithConditions(...)` or `new PrincipalWithConditions(role, ...)`) | any | — | — | — | **Synthesis error** (rev 4), before any policy is written |
 | Imported role, any unresolved account | Automatic | — | — | — | **Synthesis error** with remedies |
 | Imported role, any unresolved account | ExternallyManaged | ❌ | ✅ | caller identity policy (in its account) | Partial by contract, annotated |
 | `Role.FromRoleArn`, different literal account | Automatic | — | — | — | **Synthesis error** |
 | `Role.FromRoleArn`, different literal account | ExternallyManaged | ❌ | ✅ | caller-account identity policy | Partial by contract, annotated |
-| Service principal | Automatic | ❌ (n/a) | ✅ | nothing | **Complete** |
-| `AccountPrincipal`/`ArnPrincipal` | Automatic | — | — | — | **Synthesis error** |
+| Service principal (bare or with conditions) | Automatic or ExternallyManaged | — | — | — | **Synthesis error** (rev 4). `cloudfront.amazonaws.com` → use `GrantCloudFrontInvoke`; other services → explicit, condition-scoped `AddToResourcePolicy` statement |
+| `AccountPrincipal`/`AccountRootPrincipal`/`ArnPrincipal`, **including the same account** | Automatic | — | — | — | **Synthesis error** (rev 4: a same-account account-root resource statement authorizes no caller by itself) |
 | `AccountPrincipal`/`ArnPrincipal` | ExternallyManaged | ❌ | ✅ | that account's identity policies | Partial by contract, annotated |
+| Any wildcard principal through `GrantInvoke`, conditioned or not (`AnyPrincipal`, `StarPrincipal`, `OrganizationPrincipal`, `"*"`) | any | — | — | — | **Synthesis error** (rev 4). Conditioned wildcards use an explicit `AddToResourcePolicy` statement; unconditioned wildcard Allow statements are rejected everywhere |
+| Any grantee, imported endpoint whose account is not established (token ARN, no literal `Account`) | Automatic | — | — | — | **Synthesis error** (rev 4); the endpoint stays usable as an origin with `ExternallyManaged` origin permissions |
+| `Role.WithoutPolicyUpdates()` of an owned role (same account) | Automatic | ❌ (not an owned mutable identity) | ✅ | nothing | **Complete**; imported endpoint → **throws** (rev 4) |
 | Any grantee, owned endpoint | ExternallyManaged | ❌ | ✅ | caller identity policy | Partial by contract (useful to keep identity policies in the caller's stack/app) |
+
+#### Revision 4 corrections (independent implementation review of T1–T3b)
+
+These rules supersede revision 3 where they conflict. Everything else in this section stands.
+
+1. **Service principals are not granted through `GrantInvoke`.** Revision 3 treated a service-principal grant as complete.
+   An unconditioned service-principal statement is a confused-deputy grant: for `cloudfront.amazonaws.com` it lets *any*
+   distribution in *any* account with an OAC origin for this endpoint invoke it. The library cannot establish which
+   condition keys (`aws:SourceArn`, `aws:SourceAccount`) a given service supplies for this action, so it neither adds
+   `aws:SourceAccount` automatically nor accepts arbitrary consumer conditions as proof of scoping. `GrantInvoke`
+   therefore throws `InvalidOperationException` for any principal whose policy fragment is a `Service` principal, under
+   either `CallerPolicy`:
+   - `cloudfront.amazonaws.com` (detected by resolving the service name, which CDK renders as a token): "use
+     `GrantCloudFrontInvoke(distributionArn)`".
+   - other services: "service-principal invocation is not supported by `GrantInvoke`; add an explicit statement with
+     `endpoint.AddToResourcePolicy(...)` that includes the scoping conditions the service documents".
+
+   A typed, condition-scoped service grant is **deferred** (additive later, if a second AWS service is documented to
+   invoke Web Function endpoints).
+2. **Wildcard principals.**
+   - `GrantInvoke` rejects every wildcard principal (`AWS: "*"` or `"*"`), conditioned or not, under either
+     `CallerPolicy`. A wildcard is never an automatically complete grant.
+   - `AddToResourcePolicy`, the single entry point for resource-policy statements, rejects Allow statements that have a
+     wildcard principal and no conditions, and Allow statements that use `NotPrincipal`.
+   - An explicit, conditioned wildcard Allow statement added through `AddToResourcePolicy` (for example with
+     `aws:PrincipalOrgID`) is supported. The consumer is responsible for ensuring its conditions meaningfully restrict
+     access. The library checks only that conditions are present; it does not include, and will not add, an
+     IAM-condition analyzer.
+3. **Account principals.** `AccountPrincipal` and `AccountRootPrincipal` (by type), and any principal whose literal AWS
+   principal is an account root ARN, are never "established". A matching account does not make the grant complete,
+   because a same-account resource statement naming the account root delegates to IAM and authorizes no caller by itself.
+4. **Verified identity writes (applies to owned and imported principals).** The returned `Grant` is never trusted as
+   evidence that a policy was written: CDK's `ImmutableRole` (from `Role.FromRoleArn(..., Mutable = false)`, a
+   cross-account literal ARN, or `Role.WithoutPolicyUpdates()`) reports `StatementAdded = true` and writes nothing.
+   Return values cannot be used uniformly either: in CDK 2.274.0 an owned `Role` returns an *empty* `DependencyGroup`
+   (filled later), and an `ImmutableRole` also returns an empty `DependencyGroup`. ~~The identity side counts as written
+   only when one of two positive signals holds: (a) … or (b) `AddToPrincipalPolicy` returned `StatementAdded == true`
+   and a `PolicyDependable` that is an `Amazon.CDK.AWS.IAM.Policy`.~~ *(Maintainer clarification, 2026-10-23: signal
+   (b) is withdrawn. It required calling `AddToPrincipalPolicy` as a speculative probe, which mutates IAM before the
+   grant is decided and can leave an unconditional identity Allow behind on a path that is later rejected, for
+   example a `PrincipalWithConditions` around an owned role. Through jsii, mutable and immutable imported roles both
+   arrive as `IRole`/`IPrincipal` proxies, so without probing they cannot be told apart.)*
+
+   The identity side is written only when the grant principal is classified, **before any IAM mutation**, as a
+   concrete, owned, mutable CDK identity: a .NET `Amazon.CDK.AWS.IAM.Role`, `User`, `Group`, or `LazyRole` instance
+   with `Resource.IsOwnedResource == true` (an `ImmutableRole`, including `WithoutPolicyUpdates()`, and every imported
+   role, user, or group is never materialized as one of these types). The library never calls `AddToPrincipalPolicy`
+   to discover a capability.
+
+   Clarified contract (maintainer-approved, 2026-10-23):
+   1. Owned mutable principals (above) may receive identity policies.
+   2. An established same-account imported role on an **owned** endpoint uses the endpoint's resource policy,
+      regardless of its `Mutable` setting. No `AWS::IAM::Policy` is attached to an imported role.
+   3. An **imported** endpoint uses an identity-side grant only where an effective write can be established without
+      speculative mutation, which means only an owned mutable principal whose account is literally `SAME` as the
+      endpoint's.
+   4. If neither side can be safely configured (for example an imported role, or a `WithoutPolicyUpdates()` view, on an
+      imported endpoint), `GrantInvoke` throws rather than report a complete grant.
+   5. The cross-account and unresolved caller-ownership restrictions above are unchanged.
+   6. `ExternallyManaged` semantics are unchanged: the resource-policy statement only, never an identity policy, and
+      an annotation for IAM identities.
+   7. The sandbox gate must show that a same-account caller authorized only by the resource-policy statement can
+      invoke (§19.1 item 3.3).
+
+   A false negative is therefore always safe (a resource-policy fallback or an error), never a silent no-op. The
+   classification is pinned by real-CDK regression tests, so a CDK upgrade that changes jsii type materialization
+   fails CI.
+
+   **Principal wrappers.** `GrantInvoke` rejects a `PrincipalWithConditions` around any principal (including
+   `AccountPrincipal.WithConditions(...)`) under either `CallerPolicy`, before any policy is written. The library cannot
+   verify exactly what authorization a conditioned wrapper produces on each side. Consumers grant the underlying
+   principal directly, or add an explicit statement with `AddToResourcePolicy`. Any other principal that is not an
+   owned mutable identity and whose account is not established (for example a `CompositePrincipal`) fails closed
+   under `Automatic`.
+
+   **Reliance on observed CDK/jsii behavior.** The owned-mutable-identity classification, and the classification of
+   service, wildcard, account, and wrapper principals, depend partly on behavior observed in `Amazon.CDK.Lib` 2.274.0:
+   - CDK's private principal classes (for example `ImmutableRole` and the imported role) not being exported types;
+   - jsii .NET type materialization (exported classes such as `Role` and `PrincipalWithConditions` arrive as concrete
+     types, including when jsii returns them from `WithConditions(...)`; private classes such as `ImmutableRole` and
+     the imported role arrive as interface proxies);
+   - the shape of `PolicyFragment`, for example service names rendered as tokens.
+
+   This is not a CDK contract. Therefore:
+   - every `Amazon.CDK.Lib` upgrade must pass the focused real-CDK regression tests for these behaviors (§15), and a
+     failure blocks the upgrade until the signals are re-verified;
+   - whenever successful authorization cannot be established, the library fails closed. It falls back to the
+     resource-policy statement on an owned endpoint, and throws otherwise. It never reports an unverified write as
+     complete, and it never mutates a principal's policy to find out.
+5. **Imported endpoints** use the stricter account rule (no grants when the endpoint account is not established),
+   the optional `Account` attribute, and the validation in [§8.4](#84-endpoints).
+6. **Diagnostics.** Errors and annotations identify the grantee by the construct path of the `IGrantable` when it is a
+   construct (jsii proxies for imported roles implement `IConstruct`). Otherwise they use the principal's rendered
+   policy fragment with tokens resolved, or its type name only as a last resort. The endpoint is identified by its
+   construct path and `EndpointName`, never by an unresolved ARN token. Human-facing text never contains
+   `${Token[...]}`. The `ExternallyManaged` annotation describes the caller-side identity policy only for IAM
+   identities.
 
 The library therefore never synthesizes an identity policy that could fail at deployment because the role is in
 another account. It also never silently produces a half-configured grant: anything short of complete requires the
@@ -1089,6 +1260,28 @@ consumer to state `ExternallyManaged`.
 - The only public entry points are on the endpoint: `AddToResourcePolicy` (whose `Resource` must be exactly that
   endpoint's ARN), `GrantInvoke`, `GrantCloudFrontInvoke`, and OAC binding. `WebFunctionConstruct` has no public
   `AddToResourcePolicy`, so every statement is endpoint-scoped by construction.
+- **Statement integrity (revision 4).** `AddToResourcePolicy` validates the caller's statement, then stores
+  `statement.Copy()` frozen with `Freeze()`, so mutating the caller's object afterwards cannot widen the stored
+  statement.
+- **Eager transactional validation (revision 4, approved implementation change).** Node-level synthesis validation
+  (`Node.AddValidation`) is not used: a C# implementation of `Constructs.IValidation` cannot be marshalled through
+  jsii in CDK 2.274.0. Instead every contribution is validated when it is added, as one transaction:
+  1. Statement-level checks (`WebFunctionValidation.ValidateResourcePolicyStatement`): Deny statements are
+     unrestricted; an Allow statement must not use `NotPrincipal`; an Allow statement naming a wildcard or service
+     principal must carry conditions.
+  2. The statement is copied (`Copy()`) and frozen (`Freeze()`).
+  3. A candidate `PolicyDocument` is built from every previously accepted statement plus the new copy, and
+     `candidate.ValidateForResourcePolicy()` is called. Any error (for example a statement without a principal)
+     throws `InvalidOperationException` naming the Web Function.
+  4. Only after validation succeeds is the copy recorded and added to the real `_resourcePolicy`, and the single
+     `CfnResourcePolicy` created on first use. A rejected statement therefore leaves no partial state: no stored
+     statement and no `ResourcePolicy` resource.
+
+  The full resulting policy is validated on each add, single-resource-policy ownership is unchanged, and statement
+  de-duplication still happens at `PolicyDocument` resolution. `Grant.AddStatementToResourcePolicy` calls
+  `AddToResourcePolicy` a second time with the same statement; the identical copies are de-duplicated (pinned by a
+  test). Because validation is eager, a statement whose content is still unresolved at add time is validated in the
+  form it has when added.
 - Contract (documented): no other `AWS::Lambda::ResourcePolicy` or `AWS::Lambda::Permission` may target the
   function. An out-of-band `aws lambda-web put-resource-policy` is overwritten on the next deployment that changes
   the policy (drift). No detection machinery is added.
@@ -1173,6 +1366,10 @@ The spike was disposable code under the session scratchpad, not committed (CDK 2
 `Bucket policy (Automatic) → Revision`, `Function → Revision → each Endpoint`, `Endpoint → Distribution (origin
 domain)`, `Endpoint + Distribution → ResourcePolicy`, `Role/LogGroup → Revision`. The S3 object (and the externally
 managed bucket policy) **must exist before the stack deploys**. The construct cannot verify that at synthesis.
+
+Revision 4: `Role → Revision` means the role's `CfnRole` only, never the role's `DefaultPolicy` ([§8.3](#83-webfunctionconstruct)
+notes). Permissions granted to the execution role through its default policy are therefore not ordered before the
+revision, which avoids cycles when functions reference each other.
 
 ### 12.2 Updates, replacement, rollback
 
@@ -1300,6 +1497,25 @@ does not own (distribution behaviors, supplied OACs, imported buckets).
 | OAC origin for `ApplicationManaged`; non-OAC origin for `IamAuth` | origin factory | `InvalidOperationException` |
 | Automatic OAC permissions with an imported endpoint or a cross-stack distribution | Bind | `InvalidOperationException` |
 | Props builder `Build()` without code or endpoint | Testing | `InvalidOperationException` |
+| *Revision 4:* `GrantInvoke` with a service principal (bare or conditioned; CloudFront gets a dedicated remedy) | endpoint | `InvalidOperationException` |
+| *Revision 4:* Allow statement with an unconditioned wildcard or service principal, or with `NotPrincipal` (`AddToResourcePolicy`, therefore also `ExternallyManaged` grants) | endpoint | `ArgumentException` |
+| *Revision 4:* `Automatic` grant to `AccountPrincipal`/`AccountRootPrincipal`, including the same account | endpoint | `InvalidOperationException` |
+| *Revision 4:* grantee is not an owned mutable identity (for example any imported role, or `WithoutPolicyUpdates()`) on an imported endpoint (§10.2 rev-4 item 4) | endpoint | `InvalidOperationException` |
+| *Revision 4:* `GrantInvoke` with a `PrincipalWithConditions` around any principal, under either `CallerPolicy` | endpoint | `InvalidOperationException` |
+| *Revision 4:* literal imported `EndpointArn` not a Web Function endpoint ARN; literal empty `DomainName`; literal `Account` not 12 digits or different from a literal ARN's account | `FromEndpointAttributes` | `ArgumentException` |
+| *Revision 4:* `GrantInvoke` on an imported endpoint whose account is not established (token ARN, no literal `Account`) | endpoint | `InvalidOperationException` |
+| *Revision 4:* `GrantInvoke` with any wildcard principal, conditioned or not | endpoint | `InvalidOperationException` |
+| *Revision 4:* `AddEndpoint` id is reserved (`Function`, `Revision`, `DefaultEndpoint`, `ExecutionRole`, `LogGroup`, `ResourcePolicy`) | `AddEndpoint` | `ArgumentException` |
+| *Revision 4:* resource-policy statement invalid for a resource policy (`ValidateForResourcePolicy` on the candidate document) | `AddToResourcePolicy` (eager, transactional; §10.3) | `InvalidOperationException` |
+
+Revision 4 clarification of the owned-bucket rule (implementation follow-up, not T3c). Owned-bucket inspection checks
+only literal values in the L2-rendered properties. It treats unresolved values conservatively: a token or unrecognized
+value (for example a token versioning `Status`, a token encryption algorithm, or a token key ID) can be shown neither
+compliant nor non-compliant, so it is skipped and never rejected. `DSSE_MANAGED`
+(DSSE without a customer key) is rejected; DSSE with a customer-managed key is allowed, like SSE-KMS with one. Messages
+name the actual problem. Versioning enabled only through an escape-hatch property override is not detected; that is a
+documented limitation, and the workaround is to reference such a bucket by name (`Bucket.FromBucketName`) with
+`ExternallyManaged`.
 
 Documented, not validated: forwarding the viewer `Host` (`AllViewer`) → 404; Lambda@Edge origin triggers → rejected by
 CloudFront; OAC with opt-in Regions on global endpoints → 403; a supplied OAC's configuration; imported buckets'
@@ -1329,21 +1545,68 @@ existing TestKit. The 80% coverage gate applies.
 **IAM (one test per row of the §10.2 table)**
 
 - E1 owned role, Function, or WebFunctionConstruct grantee → identity statement on the specific endpoint ARN only
-  (not `endpoint/*`, not other endpoints); **no** `AWS::Lambda::ResourcePolicy`. Also covers env-agnostic stacks
-  (both accounts unresolved).
-- E2 `Role.FromRoleArn` with literal account equal to the literal stack account → policy attached by name; no
-  resource policy.
-- E2 with `Mutable = false` → resource statement only; imported endpoint throws.
+  (not `endpoint/*`, not other endpoints); **no** `AWS::Lambda::ResourcePolicy`. Also covers an env-agnostic stack
+  with the caller and the endpoint in the **same** stack. *(Revision 4 clarification:)* different stacks with matching
+  literal accounts write the identity statement in the caller's stack; different stacks with an unresolved account
+  (including two env-agnostic stacks) or different literal accounts throw and write no policy.
+- ~~E2 `Role.FromRoleArn` with literal account equal to the literal stack account → policy attached by name; no
+  resource policy.~~ *(Revision 4 clarification:)* E2 `Role.FromRoleArn` with literal account equal to the literal
+  stack account, mutable **or** `Mutable = false` → resource statement only, **no** `AWS::IAM::Policy`; imported
+  endpoint throws and writes no `AWS::IAM::Policy`.
 - Imported role with a token ARN, or a literal ARN in an env-agnostic stack, under `Automatic` → throws, and **no**
   `AWS::IAM::Policy` is synthesized. Under `ExternallyManaged` → resource statement + annotation, no identity policy.
 - Different literal account: `Automatic` throws; `ExternallyManaged` → resource statement only + annotation; the
   returned `Grant` has no principal statements.
-- Service principal → resource only (complete). `AccountPrincipal`/`ArnPrincipal`: `Automatic` throws;
+- ~~Service principal → resource only (complete).~~ *(Revision 4: service principals throw; see below.)*
+  `AccountPrincipal`/`ArnPrincipal`: `Automatic` throws (revision 4: including the same account);
   `ExternallyManaged` → resource only.
 - `ExternallyManaged` with an E1 grantee → resource statement only, no identity policy.
 - `ApplicationManaged` → throws; `ExternallyManaged` on an imported endpoint → throws.
 - Regression test pinning the CDK pitfall: a fake `IResourceWithPolicy` returning `StatementAdded = false` makes
   `GrantInvoke` throw (it must not rely on `Grant.Success`).
+- *Revision 4 additions:*
+  - Service principals (CloudFront remedy text; another service; a conditioned one) throw under both policies.
+  - `GrantInvoke` with `AnyPrincipal`, `StarPrincipal`, or a conditioned `OrganizationPrincipal` throws under both
+    policies.
+  - Through `AddToResourcePolicy`: an unconditioned wildcard Allow throws; Allow with `NotPrincipal` throws; Deny with
+    `"*"` is accepted; an explicit Allow with `"*"` and an `aws:PrincipalOrgID` condition writes exactly that statement.
+  - Same-account `AccountPrincipal`/`AccountRootPrincipal` under `Automatic` throws.
+  - Real-CDK no-op identity writes go to the resource side (owned endpoint) or throw (imported endpoint), with **no**
+    `AWS::IAM::Policy`: `Role.FromRoleArn(Mutable = false)`, `Mutable = false` with `AddGrantsToResources = true`, and
+    `owned.WithoutPolicyUpdates()`.
+  - Real identity-policy assertions (statement content and exactly one statement) for an owned `Role`, a classic
+    `Function`, a `WebFunctionConstruct`, and an owned `User` and `Group`. ~~a mutable imported role, and an imported
+    user and group~~ *(clarification: a mutable imported role uses the resource-policy fallback on an owned endpoint
+    and throws on an imported endpoint, in both cases with no `AWS::IAM::Policy`.)*
+  - Principal wrappers: `PrincipalWithConditions` around an owned role, around `AccountPrincipal` (also as returned by
+    `AccountPrincipal.WithConditions(...)` through jsii), and around a service or organization principal each throw,
+    under both `CallerPolicy` values. The synthesized template then has **no** `AWS::IAM::Policy` (no leftover
+    unconditional identity Allow) and **no** `AWS::Lambda::ResourcePolicy`.
+  - No speculative mutation: no code path calls `AddToPrincipalPolicy` outside `Grant.AddToPrincipal` for an owned
+    mutable identity; the rejected-wrapper tests above are the observable guard.
+  - Alternate account-root forms (`ArnPrincipal("arn:…:root")`, `AccountPrincipal` with a token account) throw under
+    `Automatic` and leave no authorization statement.
+  - An owned mutable `Role` granted on an imported endpoint whose account is literally `SAME` writes exactly one
+    identity statement on the literal endpoint ARN.
+  - An env-agnostic stack with a literal imported role ARN under `Automatic` throws.
+  - Imported endpoints:
+    - An invalid literal ARN, an empty domain, a non-12-digit `Account`, or an `Account` that differs from a literal
+      ARN's account each throw.
+    - `Env` is the endpoint's.
+    - A literal ARN with an env-agnostic owned caller throws.
+    - A token ARN without `Account` throws for owned and imported callers alike, and writes no `AWS::IAM::Policy`.
+    - A token ARN with a literal matching `Account` and an owned caller in that account writes the identity side.
+    - Constructing a token-ARN endpoint without `Account` succeeds; it is usable for an `ExternallyManaged` origin,
+      exercised in T4.
+  - Upgrade guard: the real-CDK principal-behavior tests (identity-write signals and principal classification) are
+    grouped and named so a CDK upgrade PR's failure points directly to the changed behavior.
+  - Error and annotation text names the grantee path or principal and the endpoint, and contains no `${Token[`.
+  - `ExternallyManaged` annotations are asserted.
+  - Cycles: mutual invocation, self-invocation, and the BFF/API cross-reference all synthesize (`Template.FromStack`
+    succeeds).
+  - Statement integrity: mutation after `AddToResourcePolicy` does not change the template; a principal-less statement
+    fails eager validation at `AddToResourcePolicy` and leaves no `ResourcePolicy` resource behind.
+  - Reserved `AddEndpoint` ids throw; `Endpoints` cannot be cast to a mutable list.
 
 **Resource-policy ownership**
 
@@ -1435,6 +1698,9 @@ regional `RateLimit` variance; deployment-time 403 windows.
 | Upstream L2 lands with different semantics, and consumers expect parity | Public API independent of upstream; adoption gated by full golden-template equivalence (§12.4) |
 | jsii override behavior changes across CDK versions | Spike-proven on 2.273/2.274; origin tests run in CI on every CDK bump |
 | CDK `Grant` semantics change | `GrantInvoke` checks `StatementAdded` itself; a regression test pins the behavior (§15) |
+| Identity-write detection depends on jsii type materialization (rev 4) | One positive classification (owned mutable `Role`/`User`/`Group`/`LazyRole`) decided before any IAM mutation, so a false negative is a safe fallback or an error (§10.2 rev-4 item 4); real-CDK regression tests fail on any CDK bump that changes it |
+| Same-account imported roles are authorized only by the resource-policy statement (rev 4 clarification) | Sandbox gate verifies resource-policy-only invocation for a mutable and an immutable imported role (§19.1 3.3) |
+| Execution-role permissions not yet propagated when a new revision activates (rev 4, no `DefaultPolicy` dependency) | Sandbox gate observes first-deploy behavior (§19.1 3.3); documented |
 | Consumers assume `GrantInvoke` configured a cross-account caller | §10.2 table, annotation, XML docs, and user docs state the caller-side requirement |
 | Misconfigured CloudFront behaviors (Host forwarded, Lambda@Edge) are not caught at synthesis | Documented; the deployed smoke test exercises the documented configuration; AWS fails loudly (404 / config rejection) |
 | Opt-in Region global endpoints with OAC | Documented; AWS answers 403, which fails closed |
@@ -1479,7 +1745,8 @@ Implementation-phase questions (no maintainer input needed unless the result cha
 | T1 | Models: enums, `WebFunctionRuntime`, `WebFunctionCode.FromBucket` + options, `WebFunctionLogs`, endpoint options/attributes; validation local to the new types | T0 | Unit tests for every §14 rule on these types |
 | T2 | `WebFunctionConstruct`: function, revision, default endpoint, role, logs, code-bucket policy, dependencies, child IDs; golden templates | T1 | |
 | T3 | Endpoints: `WebFunctionEndpointConstruct` (`Resource`, `IResourceWithPolicy`), `AddEndpoint`, single-owner resource policy, `GrantInvoke` (§10.2 algorithm), `GrantCloudFrontInvoke`, `FromEndpointAttributes` | T2 | IAM and policy test matrix |
-| T4 | `WebFunctionOrigin` (OAC, automatic/explicit permissions, imported and cross-stack guards) | T3 | Origin test matrix |
+| T3c | *Revision 4:* corrective task for the independent T1–T3b review (service/wildcard/account principals, verified identity writes, role-dependency cycles, imported-endpoint validation and account rule, statement integrity, reserved ids, read-only `Endpoints`, diagnostics, `IWebFunctionEndpoint` namespace) | T3 | Blocks T4 |
+| T4 | `WebFunctionOrigin` (OAC, automatic/explicit permissions, imported and cross-stack guards) | T3, T3c | Origin test matrix |
 | T4a | *Optional*, time-boxed spike: narrow `AllViewer` warning (§11.1) | T4 | Drop if it needs template resolution |
 | T5 | Testing helpers: assertions, props builder, `CdkTestHelper` entry; consumer-example and workload tests | T3, T4 | |
 | T6 | Docs: `docs/constructs/web-function.md` + nav, three workload recipes, examples, testing page, README, CHANGELOG, `CLAUDE.md` | T4 (API stable) | Can run in parallel with T5 |
@@ -1505,6 +1772,18 @@ The feature is **not published** until all of the following hold:
    2. **Revision activation**: function, revision, and endpoints reach `Active`; a second deployment with a changed
       artifact activates a new revision and moves the endpoints to it.
    3. **IAM-authorized invocation**: a request SigV4-signed by a role granted with `GrantInvoke` returns 2xx.
+      Revision 4 additions:
+      - Record first-deployment behavior while the caller's identity policy propagates (the revision no longer depends
+        on the role's `DefaultPolicy`; transient 403s within an IAM propagation window are acceptable but must be
+        recorded).
+      - A same-account grant written only as a resource-policy statement returns 2xx, once for a role imported with
+        `Mutable = false` and once for a role imported with the default (mutable) setting. In both cases the
+        caller role has no identity policy allowing `lambda:InvokeWebFunctionEndpoint`, so the resource policy
+        alone authorizes the call. **Required** (rev 4 clarification): if this fails, the imported-role contract in
+        §10.2 rev-4 item 4 must be revisited before release.
+      - An identity-only same-account grant returns 2xx.
+      - The deployed `ResourceArn` (the function ARN) and the code-bucket `aws:SourceArn …/revision/*` plus
+        `aws:SourceAccount` conditions are accepted and effective.
    4. **Unauthorized invocation is denied**: unsigned → 403; signed by a role without the grant → 403; signed for a
       different endpoint of the same function → 403.
    5. **CloudFront OAC invocation**: requests through the distribution return 2xx; direct unsigned requests to the
@@ -1613,3 +1892,48 @@ CloudFormation `RuntimeConfig`/`CodeConfig` allowed-value pages.
    configurable fails under `Automatic` or requires the new explicit `WebFunctionInvokeGrantOptions { CallerPolicy =
    ExternallyManaged }` contract. That contract writes only the resource-policy statement. No synthesized identity
    policy can fail at deployment because its role lives in another account (§10.2, §14, §15).
+
+**Revision 4 (2026-10-23): independent implementation review of T1–T3b; status remains Approved.** Implemented by the
+corrective task T3c, which blocks T4.
+
+1. *Service principals.* `GrantInvoke` rejects all service principals. Revision 3's "service principal → complete" row
+   allowed an unconditioned, confused-deputy grant (for example any CloudFront distribution in any account). CloudFront
+   is directed to `GrantCloudFrontInvoke`. Other services use an explicit, condition-scoped `AddToResourcePolicy`
+   statement. A typed scoped-service grant is deferred (§10.2 rev-4 item 1).
+2. *Wildcards.* `GrantInvoke` rejects all wildcard principals. Unconditioned wildcard Allow statements and
+   `NotPrincipal` Allow statements are rejected everywhere. Explicit conditioned wildcard statements through
+   `AddToResourcePolicy` are supported, and the consumer owns the adequacy of their conditions; there is no condition
+   analyzer (§8.4, §10.2).
+3. *Account principals.* Same-account `AccountPrincipal`/`AccountRootPrincipal` no longer count as complete (§10.2).
+4. *Identity writes.* ~~Verified by two positive signals for owned and imported principals alike~~ Written only to an
+   owned, mutable CDK identity classified by type before any IAM mutation, because CDK's return values cannot
+   distinguish real from no-op writes (owned `Role` and `ImmutableRole` both return an empty `DependencyGroup`) and
+   probing with `AddToPrincipalPolicy` mutates IAM. Same-account imported roles, mutable or not, use the resource
+   policy on owned endpoints and throw on imported endpoints. `PrincipalWithConditions` is rejected. The checks rely
+   partly on CDK/jsii behavior observed in 2.274.0. Focused real-CDK regression tests gate every CDK upgrade, and the
+   library fails closed when authorization cannot be established (§10.2 rev-4 item 4).
+5. *Role dependency.* The revision depends on the `CfnRole` only, not the role's `DefaultPolicy`; this removes the
+   mutual-invocation, self-invocation, and BFF/API cycles. IAM propagation is moved to the sandbox gate (§8.3, §12.1,
+   §19.1). This intentionally changes golden templates whose role has a default policy (for example
+   `web-function-use-log-group.json`); the diff is reviewed and explained in T3c, not silently regenerated.
+6. *Imported endpoints.* Literal ARN, domain, and account validation; an optional `Account` attribute (which must
+   match a literal ARN); the endpoint's own environment; the strict `SAME`-account rule; and no `GrantInvoke` at all
+   when the endpoint account is not established. Such endpoints remain usable as CloudFront origins with
+   `ExternallyManaged` origin permissions (§8.4).
+7. *Resource policy integrity.* Frozen copies of validated statements; eager transactional `ValidateForResourcePolicy`
+   on a candidate document before the real policy is mutated (§10.3).
+8. *API surface.* Reserved `AddEndpoint` ids; a genuinely read-only `Endpoints`; `IWebFunctionEndpoint` moved to the
+   root namespace and documented as not for consumer implementation (§8, §8.3).
+9. *Diagnostics.* Meaningful grantee and endpoint names, no raw tokens, accurate annotations (§10.2 rev-4 item 6).
+10. *Clarified, not T3c.* Owned-bucket inspection treats token or unrecognized values conservatively (skipped, never
+    rejected); DSSE with a customer key is allowed (implementation follow-up). Versioning enabled only through an
+    escape hatch stays a documented limitation. Log-group switching and F3006/`validateAgainstDefaultRules` guidance go
+    to the documentation tasks.
+
+Maintainer clarifications (2026-10-23) were folded into revision 4 in place: items 2, 4, and 6 above, plus
+`WebFunctionEndpointAttributes.Account`. A second clarification (2026-10-23, after the T3c corrective review)
+withdrew the `AddToPrincipalPolicy` probe signal, moved same-account imported roles to the resource-policy side
+regardless of `Mutable`, rejected `PrincipalWithConditions`, and made resource-policy-only invocation a required
+sandbox check (§10.2 rev-4 item 4, §15, §19.1 3.3). A third clarification (2026-10-23, T3c acceptance) restated E1:
+same-stack ownership with an owned endpoint is sufficient even in an env-agnostic stack, and cross-stack grants need
+matching literal accounts (§10.2 E1).

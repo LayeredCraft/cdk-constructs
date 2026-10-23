@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Amazon.CDK;
+using Amazon.CDK.AWS.IAM;
 
 [assembly: InternalsVisibleTo("LayeredCraft.Cdk.Constructs.Tests")]
 
@@ -37,6 +38,24 @@ internal static class WebFunctionValidation
     private static readonly Regex CloudFrontDistributionArnPattern = new(
         "^arn:[a-z0-9-]+:cloudfront::[0-9]{12}:distribution/[A-Za-z0-9]+$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex WebFunctionEndpointArnPattern = new(
+        "^arn:[a-z0-9-]+:lambda:[a-z0-9-]+:[0-9]{12}:web-function/[^/]+/endpoint/[^/]+$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex AccountPattern = new(
+        "^[0-9]{12}$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly HashSet<string> ReservedEndpointChildIds = new(StringComparer.Ordinal)
+    {
+        "Function",
+        "Revision",
+        "DefaultEndpoint",
+        "ExecutionRole",
+        "LogGroup",
+        "ResourcePolicy",
+    };
 
     /// <summary>Validates a Web Function name: 1–64 characters matching the Lambda name rules.</summary>
     internal static void ValidateFunctionName(string? functionName, string parameterName = "FunctionName")
@@ -282,5 +301,162 @@ internal static class WebFunctionValidation
 
         if (entryPoint.Split('/').Any(segment => segment == ".."))
             throw new ArgumentException("EntryPoint must not contain '..'.", parameterName);
+    }
+
+    /// <summary>
+    /// Validates a Web Function endpoint ARN: literal values must match
+    /// <c>arn:{partition}:lambda:{region}:{account}:web-function/{function}/endpoint/{endpoint}</c>; tokens are skipped.
+    /// </summary>
+    internal static void ValidateEndpointArn(string? endpointArn, string parameterName = "EndpointArn")
+    {
+        if (endpointArn is null || Token.IsUnresolved(endpointArn))
+            return;
+
+        if (!WebFunctionEndpointArnPattern.IsMatch(endpointArn))
+        {
+            throw new ArgumentException(
+                $"'{endpointArn}' is not a Lambda Web Function endpoint ARN.",
+                parameterName);
+        }
+    }
+
+    /// <summary>Validates an imported endpoint domain name: null fails, empty fails, tokens are skipped.</summary>
+    internal static void ValidateEndpointDomainName(string? domainName, string parameterName = "DomainName")
+    {
+        if (domainName is null)
+            throw new ArgumentNullException(parameterName, "DomainName is required.");
+
+        if (Token.IsUnresolved(domainName))
+            return;
+
+        if (domainName.Length == 0)
+            throw new ArgumentException("DomainName must not be empty.", parameterName);
+    }
+
+    /// <summary>Validates an account id: a literal value must be 12 digits; tokens are skipped.</summary>
+    internal static void ValidateAccount(string? account, string parameterName = "Account")
+    {
+        if (account is null || Token.IsUnresolved(account))
+            return;
+
+        if (!AccountPattern.IsMatch(account))
+        {
+            throw new ArgumentException(
+                $"Account '{account}' is invalid. It must be a 12-digit account id.",
+                parameterName);
+        }
+    }
+
+    /// <summary>
+    /// Validates that a supplied account and a literal endpoint ARN agree when both are literal.
+    /// </summary>
+    internal static void ValidateImportedAccountConsistency(string? account, string? endpointArn)
+    {
+        if (account is null || Token.IsUnresolved(account))
+            return;
+
+        if (endpointArn is null || Token.IsUnresolved(endpointArn))
+            return;
+
+        var parts = endpointArn.Split(':');
+        if (parts.Length >= 6 && !string.Equals(parts[4], account, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                $"Account '{account}' does not match the account in endpoint ARN '{endpointArn}'.",
+                "Account");
+        }
+    }
+
+    /// <summary>
+    /// Validates that an added endpoint id does not collide with a reserved child id of the Web Function construct.
+    /// </summary>
+    internal static void ValidateEndpointChildId(string? id, string parameterName = "id")
+    {
+        if (id is null)
+            return;
+
+        if (ReservedEndpointChildIds.Contains(id))
+        {
+            throw new ArgumentException(
+                $"Endpoint id '{id}' is reserved by the Web Function construct. Choose a different id.",
+                parameterName);
+        }
+    }
+
+    /// <summary>
+    /// Validates a statement added to a Web Function resource policy. Deny statements are unrestricted. An Allow
+    /// statement that names a wildcard or service principal is only accepted when it carries conditions; the
+    /// consumer is responsible for ensuring those conditions meaningfully restrict access. Allow statements that
+    /// use <c>NotPrincipal</c> are rejected.
+    /// </summary>
+    internal static void ValidateResourcePolicyStatement(PolicyStatement statement, string parameterName = "statement")
+    {
+        ArgumentNullException.ThrowIfNull(statement);
+
+        if (statement.Effect == Effect.DENY)
+            return;
+
+        if (statement.NotPrincipals is { Length: > 0 })
+        {
+            throw new ArgumentException(
+                "A resource-policy Allow statement must not use NotPrincipal. Name the principals explicitly.",
+                parameterName);
+        }
+
+        if (statement.Conditions is IDictionary<string, object> conditions && conditions.Count > 0)
+            return;
+
+        foreach (var principal in statement.Principals ?? [])
+        {
+            if (IsServicePrincipal(principal) || IsWildcardPrincipal(principal))
+            {
+                throw new ArgumentException(
+                    "A resource-policy Allow statement that names a wildcard or service principal must include " +
+                    "conditions that restrict access. Add conditions (for CloudFront, use " +
+                    "GrantCloudFrontInvoke).",
+                    parameterName);
+            }
+        }
+    }
+
+    /// <summary>Whether the principal's rendered policy fragment is a service principal.</summary>
+    internal static bool IsServicePrincipal(IPrincipal? principal)
+    {
+        var json = principal?.PolicyFragment?.PrincipalJson;
+        if (json is null)
+            return false;
+
+        return json.Keys.Any(key => string.Equals(key, "Service", StringComparison.Ordinal));
+    }
+
+    /// <summary>Whether the principal's rendered policy fragment is a wildcard principal.</summary>
+    internal static bool IsWildcardPrincipal(IPrincipal? principal)
+    {
+        var json = principal?.PolicyFragment?.PrincipalJson;
+        if (json is null)
+            return false;
+
+        return json.Values.Any(IsWildcardValue);
+    }
+
+    private static bool IsWildcardValue(object? value)
+    {
+        switch (value)
+        {
+            case null:
+                return false;
+            case string text:
+                return text == "*";
+            case System.Collections.IEnumerable items:
+                foreach (var item in items)
+                {
+                    if (IsWildcardValue(item))
+                        return true;
+                }
+
+                return false;
+            default:
+                return false;
+        }
     }
 }

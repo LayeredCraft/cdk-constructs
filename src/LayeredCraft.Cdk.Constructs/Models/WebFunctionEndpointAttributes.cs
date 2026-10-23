@@ -16,4 +16,10 @@ public sealed record WebFunctionEndpointAttributes
 
     /// <summary>The regional scope. Defaults to <see cref="WebFunctionEndpointType.HomeRegion"/>.</summary>
     public WebFunctionEndpointType EndpointType { get; init; } = WebFunctionEndpointType.HomeRegion;
+
+    /// <summary>
+    /// The 12-digit account id that owns the endpoint. Required when <see cref="EndpointArn"/> is not a literal
+    /// ARN so the imported endpoint's account can be established; must match a literal ARN's account when both are set.
+    /// </summary>
+    public string? Account { get; init; }
 }

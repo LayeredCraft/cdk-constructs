@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using Amazon.CDK;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
@@ -20,6 +21,7 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
     private readonly List<WebFunctionEndpointConstruct> _endpoints = [];
     private readonly HashSet<string> _endpointNames = new(StringComparer.Ordinal);
     private PolicyDocument? _resourcePolicy;
+    private readonly List<PolicyStatement> _resourcePolicyStatements = [];
     private Amazon.CDK.AWS.Lambda.CfnResourcePolicy? _resourcePolicyResource;
 
     /// <summary>Creates a Web Function.</summary>
@@ -85,7 +87,8 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
         });
 
         _revision.AddResourceDependency(_function, "The revision belongs to the Web Function.");
-        _revision.Node.AddDependency(Role);
+        if (Role.Node.DefaultChild is CfnResource roleCfn)
+            _revision.Node.AddDependency(roleCfn);
         if (logGroupCreated && logGroup is not null)
             _revision.Node.AddDependency(logGroup);
         if (codeConfig.PolicyDependable is not null)
@@ -95,6 +98,8 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
 
         _endpointNames.Add(props.Endpoint.EndpointName);
         DefaultEndpoint = CreateEndpoint("DefaultEndpoint", props.Endpoint);
+
+        Endpoints = _endpoints.AsReadOnly();
     }
 
     /// <summary>The Web Function name.</summary>
@@ -122,7 +127,7 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
     public WebFunctionEndpointConstruct DefaultEndpoint { get; }
 
     /// <summary>All endpoints owned by this Web Function, starting with <see cref="DefaultEndpoint"/>.</summary>
-    public IReadOnlyList<WebFunctionEndpointConstruct> Endpoints => _endpoints;
+    public IReadOnlyList<WebFunctionEndpointConstruct> Endpoints { get; }
 
     /// <summary>
     /// Adds an endpoint. Every endpoint routes 100% of traffic to the current revision.
@@ -136,6 +141,8 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(options);
+
+        WebFunctionValidation.ValidateEndpointChildId(id);
 
         if (!_endpointNames.Add(options.EndpointName))
         {
@@ -157,8 +164,27 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
     /// <summary>Adds a statement to the function's single resource policy, creating it on first use.</summary>
     internal Amazon.CDK.AWS.Lambda.CfnResourcePolicy AddResourcePolicyStatement(PolicyStatement statement)
     {
+        WebFunctionValidation.ValidateResourcePolicyStatement(statement);
+
+        var stored = statement.Copy(null);
+        stored.Freeze();
+
+        var candidate = new PolicyDocument(new PolicyDocumentProps
+        {
+            Statements = [.. _resourcePolicyStatements, stored],
+        });
+
+        var errors = candidate.ValidateForResourcePolicy(null);
+        if (errors.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"The resource policy for Web Function '{Node.Path}' is invalid: {string.Join("; ", errors)}");
+        }
+
+        _resourcePolicyStatements.Add(stored);
+
         _resourcePolicy ??= new PolicyDocument();
-        _resourcePolicy.AddStatements(statement);
+        _resourcePolicy.AddStatements(stored);
 
         _resourcePolicyResource ??= new Amazon.CDK.AWS.Lambda.CfnResourcePolicy(
             this,

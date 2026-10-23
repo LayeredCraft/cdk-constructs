@@ -292,6 +292,7 @@ public class WebFunctionResourcePolicyTests
             Effect = Effect.ALLOW,
             Actions = ["lambda:InvokeWebFunctionEndpoint"],
             Resources = [endpoint.EndpointArn],
+            Principals = [new ArnPrincipal("arn:aws:iam::123456789012:role/caller")],
         });
 
         var act = () => endpoint.AddToResourcePolicy(statement);

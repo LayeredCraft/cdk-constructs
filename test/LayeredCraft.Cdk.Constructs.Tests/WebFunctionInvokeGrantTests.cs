@@ -165,14 +165,15 @@ public class WebFunctionInvokeGrantTests
         _ = CreateFunction(stack, out var endpoint);
         var role = OwnedRole(stack);
 
-        var act = () => endpoint.GrantInvoke(role);
+        endpoint.GrantInvoke(role);
 
-        act.Should().NotThrow();
-        ResourceOfType(TemplateJson(stack), "AWS::Lambda::ResourcePolicy").Should().BeNull();
+        var template = TemplateJson(stack);
+        ResourcesOfType(template, "AWS::IAM::Policy").Should().HaveCount(1);
+        ResourceOfType(template, "AWS::Lambda::ResourcePolicy").Should().BeNull();
     }
 
     [Fact]
-    public void GrantInvoke_ImportedMutableSameAccountRole_WritesAttachedIdentityPolicy()
+    public void GrantInvoke_ImportedMutableSameAccountRole_UsesResourcePolicyFallback()
     {
         var (_, stack) = CdkTestHelper.CreateTestStack();
         _ = CreateFunction(stack, out var endpoint);
@@ -181,11 +182,10 @@ public class WebFunctionInvokeGrantTests
         endpoint.GrantInvoke(imported);
 
         var template = TemplateJson(stack);
-        ResourceOfType(template, "AWS::Lambda::ResourcePolicy").Should().BeNull();
-        var policies = ResourcesOfType(template, "AWS::IAM::Policy");
-        policies.Should().HaveCount(1);
-        var document = JsonSerializer.Serialize(policies[0].GetProperty("Properties"));
-        document.Should().Contain("lambda:InvokeWebFunctionEndpoint");
+        ResourcesOfType(template, "AWS::IAM::Policy").Should().BeEmpty();
+        var statements = ResourcePolicyStatements(template);
+        statements.GetArrayLength().Should().Be(1);
+        statements[0].GetProperty("Action").GetString().Should().Be("lambda:InvokeWebFunctionEndpoint");
     }
 
     [Fact]
@@ -270,19 +270,15 @@ public class WebFunctionInvokeGrantTests
     }
 
     [Fact]
-    public void GrantInvoke_ServicePrincipalAutomatic_WritesResourceStatement()
+    public void GrantInvoke_ServicePrincipalAutomatic_Throws()
     {
         var (_, stack) = CdkTestHelper.CreateTestStack();
         _ = CreateFunction(stack, out var endpoint);
         var service = new ServicePrincipal("cloudtrail.amazonaws.com");
 
-        endpoint.GrantInvoke(service);
+        var act = () => endpoint.GrantInvoke(service);
 
-        var statements = ResourcePolicyStatements(TemplateJson(stack));
-        statements.GetArrayLength().Should().Be(1);
-        statements[0].GetProperty("Principal").GetProperty("Service").GetString()
-            .Should().Be("cloudtrail.amazonaws.com");
-        statements[0].GetProperty("Action").GetString().Should().Be("lambda:InvokeWebFunctionEndpoint");
+        act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
@@ -356,8 +352,10 @@ public class WebFunctionInvokeGrantTests
             AuthType = WebFunctionAuthType.IamAuth,
         });
 
-        defaultEndpoint.GrantInvoke(new ServicePrincipal("a.amazonaws.com"));
-        second.GrantInvoke(new ServicePrincipal("b.amazonaws.com"));
+        defaultEndpoint.GrantInvoke(
+            Role.FromRoleArn(stack, "FirstCaller", SameAccountRoleArn, new FromRoleArnOptions { Mutable = false }));
+        second.GrantInvoke(
+            Role.FromRoleArn(stack, "SecondCaller", SameAccountRoleArn, new FromRoleArnOptions { Mutable = false }));
 
         var template = TemplateJson(stack);
         var statements = ResourcePolicyStatements(template);
