@@ -1,0 +1,159 @@
+{
+  "Resources": {
+    "goldenuserpool21802237": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "AccountRecoverySetting": {
+          "RecoveryMechanisms": [
+            {
+              "Name": "verified_email",
+              "Priority": 1
+            }
+          ]
+        },
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": false
+        },
+        "AutoVerifiedAttributes": [
+          "email"
+        ],
+        "EmailVerificationMessage": "The verification code to your new account is {####}",
+        "EmailVerificationSubject": "Verify your new account",
+        "MfaConfiguration": "OFF",
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 12,
+            "RequireLowercase": false,
+            "RequireNumbers": false,
+            "RequireSymbols": false,
+            "RequireUppercase": false
+          }
+        },
+        "Schema": [
+          {
+            "Mutable": true,
+            "Name": "email",
+            "Required": true
+          },
+          {
+            "Mutable": true,
+            "Name": "name",
+            "Required": true
+          }
+        ],
+        "SmsVerificationMessage": "The verification code to your new account is {####}",
+        "UserPoolName": "golden-user-pool",
+        "UsernameAttributes": [
+          "email"
+        ],
+        "UsernameConfiguration": {
+          "CaseSensitive": false
+        },
+        "VerificationMessageTemplate": {
+          "DefaultEmailOption": "CONFIRM_WITH_CODE",
+          "EmailMessage": "The verification code to your new account is {####}",
+          "EmailSubject": "Verify your new account",
+          "SmsMessage": "The verification code to your new account is {####}"
+        }
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "goldenuserpoolGoldenApiresourceserver37AE93B5": {
+      "Type": "AWS::Cognito::UserPoolResourceServer",
+      "Properties": {
+        "Identifier": "https://api.golden.example.com",
+        "Name": "GoldenApi",
+        "Scopes": [
+          {
+            "ScopeDescription": "Read access",
+            "ScopeName": "read"
+          }
+        ],
+        "UserPoolId": {
+          "Ref": "goldenuserpool21802237"
+        }
+      }
+    },
+    "goldenuserpoolGoldenWebClientappclient76B7E33E": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "AllowedOAuthFlows": [
+          "code"
+        ],
+        "AllowedOAuthFlowsUserPoolClient": true,
+        "AllowedOAuthScopes": [
+          "openid",
+          "email"
+        ],
+        "CallbackURLs": [
+          "https://app.example.com/callback"
+        ],
+        "ClientName": "Golden Web Client",
+        "GenerateSecret": false,
+        "LogoutURLs": [
+          "https://app.example.com/logout"
+        ],
+        "SupportedIdentityProviders": [
+          "COGNITO"
+        ],
+        "UserPoolId": {
+          "Ref": "goldenuserpool21802237"
+        }
+      },
+      "DependsOn": [
+        "goldenuserpoolGoldenApiresourceserver37AE93B5"
+      ]
+    },
+    "goldenuserpoolgoldenuserpooldomain5E3718DF": {
+      "Type": "AWS::Cognito::UserPoolDomain",
+      "Properties": {
+        "Domain": "golden-pool",
+        "ManagedLoginVersion": 2,
+        "UserPoolId": {
+          "Ref": "goldenuserpool21802237"
+        }
+      }
+    },
+    "goldenuserpoolgroupadmin3D76AD4B": {
+      "Type": "AWS::Cognito::UserPoolGroup",
+      "Properties": {
+        "Description": "Administrators",
+        "GroupName": "Admin",
+        "Precedence": 1,
+        "UserPoolId": {
+          "Ref": "goldenuserpool21802237"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "goldenuserpoolgoldenuserpooluserpoolidoutputC1F70B78": {
+      "Value": {
+        "Ref": "goldenuserpool21802237"
+      },
+      "Export": {
+        "Name": "golden-cognito-golden-user-pool-user-pool-id"
+      }
+    },
+    "goldenuserpoolgoldenuserpooluserpoolarnoutputFEEBAFB8": {
+      "Value": {
+        "Fn::GetAtt": [
+          "goldenuserpool21802237",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": "golden-cognito-golden-user-pool-user-pool-arn"
+      }
+    },
+    "goldenuserpoolgoldenuserpoolclientgoldenwebclientidoutputB0010AAF": {
+      "Value": {
+        "Ref": "goldenuserpoolGoldenWebClientappclient76B7E33E"
+      },
+      "Export": {
+        "Name": "golden-cognito-golden-user-pool-client-golden-web-client-id"
+      }
+    }
+  }
+}

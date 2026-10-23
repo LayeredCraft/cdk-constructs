@@ -1,0 +1,62 @@
+{
+  "Resources": {
+    "goldentable04D0952E": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "TableName": "golden-table",
+        "TimeToLiveSpecification": {
+          "AttributeName": "expiresAt",
+          "Enabled": true
+        }
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    }
+  },
+  "Outputs": {
+    "goldentablegoldentablearn8C39C738": {
+      "Value": {
+        "Fn::GetAtt": [
+          "goldentable04D0952E",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": "golden-dynamodb-golden-table-arn"
+      }
+    },
+    "goldentablegoldentablename0E47484E": {
+      "Value": "golden-table",
+      "Export": {
+        "Name": "golden-dynamodb-golden-table-name"
+      }
+    },
+    "goldentablegoldentablestreamarn0386FCF4": {
+      "Value": {
+        "Fn::GetAtt": [
+          "goldentable04D0952E",
+          "StreamArn"
+        ]
+      },
+      "Export": {
+        "Name": "golden-dynamodb-golden-table-stream-arn"
+      }
+    }
+  }
+}

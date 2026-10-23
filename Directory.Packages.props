@@ -7,7 +7,7 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
   </ItemGroup>
   <ItemGroup Label="AWS">
-    <PackageVersion Include="Amazon.CDK.Lib" Version="2.273.0" />
+    <PackageVersion Include="Amazon.CDK.Lib" Version="2.274.0" />
   </ItemGroup>
   <ItemGroup Label="Testing">
     <PackageVersion Include="AutoFixture" Version="4.18.1" />

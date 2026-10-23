@@ -1,0 +1,535 @@
+{
+  "Resources": {
+    "goldenstaticsitegoldenstaticsitebucketDD6434A1": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": "www.example.com",
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 1
+              },
+              "Status": "Enabled"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": false,
+          "BlockPublicPolicy": false,
+          "IgnorePublicAcls": false,
+          "RestrictPublicBuckets": false
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true"
+          },
+          {
+            "Key": "aws-cdk:cr-owned:431b3921",
+            "Value": "true"
+          }
+        ],
+        "WebsiteConfiguration": {
+          "ErrorDocument": "index.html",
+          "IndexDocument": "index.html"
+        }
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "goldenstaticsitegoldenstaticsitebucketPolicy5C6BA823": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "goldenstaticsitegoldenstaticsitebucketDD6434A1"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:GetObject",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "goldenstaticsitegoldenstaticsitebucketDD6434A1",
+                        "Arn"
+                      ]
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn"
+                  ]
+                }
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "goldenstaticsitegoldenstaticsitebucketDD6434A1",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "goldenstaticsitegoldenstaticsitebucketDD6434A1",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      }
+    },
+    "goldenstaticsitegoldenstaticsitebucketAutoDeleteObjectsCustomResourceC571489B": {
+      "Type": "Custom::S3AutoDeleteObjects",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn"
+          ]
+        },
+        "BucketName": {
+          "Ref": "goldenstaticsitegoldenstaticsitebucketDD6434A1"
+        }
+      },
+      "DependsOn": [
+        "goldenstaticsitegoldenstaticsitebucketPolicy5C6BA823"
+      ],
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "goldenstaticsitegoldenstaticsitecertificateF284768C": {
+      "Type": "AWS::CertificateManager::Certificate",
+      "Properties": {
+        "DomainName": "www.example.com",
+        "DomainValidationOptions": [
+          {
+            "DomainName": "www.example.com",
+            "HostedZoneId": "DUMMY"
+          }
+        ],
+        "SubjectAlternativeNames": [],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "golden-static-site/golden-static-site/golden-static-site-certificate"
+          }
+        ],
+        "ValidationMethod": "DNS"
+      }
+    },
+    "goldenstaticsitegoldenstaticsitesparewriteBFBBCAEC": {
+      "Type": "AWS::CloudFront::Function",
+      "Properties": {
+        "AutoPublish": true,
+        "FunctionCode": "function handler(event) {\n    var uri = event.request.uri;\n    if (!uri.match(/\\.[a-zA-Z0-9]+$/)) {\n        event.request.uri = '/index.html';\n    }\n    return event.request;\n}",
+        "FunctionConfig": {
+          "Comment": "Rewrite SPA routes to /index.html for client-side routing",
+          "Runtime": "cloudfront-js-2.0"
+        },
+        "Name": "us-east-1golden-static-sisite-spa-rewriteC1BD70B9"
+      }
+    },
+    "goldenstaticsitegoldenstaticsitecdn618F0E92": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Aliases": [
+            "www.example.com"
+          ],
+          "CustomErrorResponses": [
+            {
+              "ErrorCode": 403,
+              "ResponseCode": 200,
+              "ResponsePagePath": "/index.html"
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "AllowedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+            "Compress": true,
+            "FunctionAssociations": [
+              {
+                "EventType": "viewer-request",
+                "FunctionARN": {
+                  "Fn::GetAtt": [
+                    "goldenstaticsitegoldenstaticsitesparewriteBFBBCAEC",
+                    "FunctionARN"
+                  ]
+                }
+              }
+            ],
+            "TargetOriginId": "goldenstaticsitegoldenstaticsitecdnOrigin172EFA276",
+            "ViewerProtocolPolicy": "allow-all"
+          },
+          "Enabled": true,
+          "HttpVersion": "http2",
+          "IPV6Enabled": true,
+          "Origins": [
+            {
+              "CustomOriginConfig": {
+                "OriginProtocolPolicy": "http-only",
+                "OriginSSLProtocols": [
+                  "TLSv1.2"
+                ]
+              },
+              "DomainName": {
+                "Fn::Select": [
+                  2,
+                  {
+                    "Fn::Split": [
+                      "/",
+                      {
+                        "Fn::GetAtt": [
+                          "goldenstaticsitegoldenstaticsitebucketDD6434A1",
+                          "WebsiteURL"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "Id": "goldenstaticsitegoldenstaticsitecdnOrigin172EFA276"
+            }
+          ],
+          "ViewerCertificate": {
+            "AcmCertificateArn": {
+              "Ref": "goldenstaticsitegoldenstaticsitecertificateF284768C"
+            },
+            "MinimumProtocolVersion": "TLSv1.2_2021",
+            "SslSupportMethod": "sni-only"
+          }
+        }
+      }
+    },
+    "goldenstaticsitegoldenstaticsitealiasrecord04BFF7D6": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "goldenstaticsitegoldenstaticsitecdn618F0E92",
+              "DomainName"
+            ]
+          },
+          "HostedZoneId": {
+            "Fn::FindInMap": [
+              "AWSCloudFrontPartitionHostedZoneIdMap",
+              {
+                "Ref": "AWS::Partition"
+              },
+              "zoneId"
+            ]
+          }
+        },
+        "HostedZoneId": "DUMMY",
+        "Name": "www.example.com.",
+        "Type": "A"
+      }
+    },
+    "goldenstaticsitegoldenstaticsitedeploymentAwsCliLayer5EF49879": {
+      "Type": "AWS::Lambda::LayerVersion",
+      "Properties": {
+        "Content": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
+          "S3Key": "<ASSET-HASH>.zip"
+        },
+        "Description": "/opt/awscli/aws"
+      }
+    },
+    "goldenstaticsitegoldenstaticsitedeploymentCustomResource1024MiBD5488693": {
+      "Type": "Custom::CDKBucketDeployment",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBB049752D",
+            "Arn"
+          ]
+        },
+        "SourceBucketNames": [
+          "cdk-hnb659fds-assets-123456789012-us-east-1"
+        ],
+        "SourceObjectKeys": [
+          "<ASSET-HASH>.zip"
+        ],
+        "DestinationBucketName": {
+          "Ref": "goldenstaticsitegoldenstaticsitebucketDD6434A1"
+        },
+        "WaitForDistributionInvalidation": true,
+        "Prune": true,
+        "DistributionId": {
+          "Ref": "goldenstaticsitegoldenstaticsitecdn618F0E92"
+        },
+        "DistributionPaths": [
+          "/*"
+        ],
+        "OutputObjectKeys": true
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+          }
+        ]
+      }
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
+          "S3Key": "<ASSET-HASH>.zip"
+        },
+        "Timeout": 900,
+        "MemorySize": 128,
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs24.x",
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Lambda function for auto-deleting objects in ",
+              {
+                "Ref": "goldenstaticsitegoldenstaticsitebucketDD6434A1"
+              },
+              " S3 bucket."
+            ]
+          ]
+        }
+      },
+      "DependsOn": [
+        "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+      ]
+    },
+    "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBServiceRole739949D8": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBServiceRoleDefaultPolicy0801355D": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":s3:::cdk-hnb659fds-assets-123456789012-us-east-1"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":s3:::cdk-hnb659fds-assets-123456789012-us-east-1/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "goldenstaticsitegoldenstaticsitebucketDD6434A1",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "goldenstaticsitegoldenstaticsitebucketDD6434A1",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": [
+                "cloudfront:GetInvalidation",
+                "cloudfront:CreateInvalidation"
+              ],
+              "Effect": "Allow",
+              "Resource": "*"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBServiceRoleDefaultPolicy0801355D",
+        "Roles": [
+          {
+            "Ref": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBServiceRole739949D8"
+          }
+        ]
+      }
+    },
+    "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBB049752D": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Architectures": [
+          "arm64"
+        ],
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
+          "S3Key": "<ASSET-HASH>.zip"
+        },
+        "Environment": {
+          "Variables": {
+            "AWS_CA_BUNDLE": "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+          }
+        },
+        "Handler": "index.handler",
+        "Layers": [
+          {
+            "Ref": "goldenstaticsitegoldenstaticsitedeploymentAwsCliLayer5EF49879"
+          }
+        ],
+        "MemorySize": 1024,
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBServiceRole739949D8",
+            "Arn"
+          ]
+        },
+        "Runtime": "python3.13",
+        "Timeout": 900
+      },
+      "DependsOn": [
+        "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBServiceRoleDefaultPolicy0801355D",
+        "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C1024MiBServiceRole739949D8"
+      ]
+    }
+  },
+  "Mappings": {
+    "AWSCloudFrontPartitionHostedZoneIdMap": {
+      "aws": {
+        "zoneId": "Z2FDTNDATAQYW2"
+      },
+      "aws-cn": {
+        "zoneId": "Z3RFFRIM2A3IF5"
+      }
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "Resources": {
+    "goldentable04D0952E": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "email",
+            "AttributeType": "S"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "gsi-email",
+            "KeySchema": [
+              {
+                "AttributeName": "email",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          }
+        ],
+        "TableName": "golden-table"
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    }
+  },
+  "Outputs": {
+    "goldentablegoldentablegsi0823DB82C": {
+      "Value": "gsi-email",
+      "Export": {
+        "Name": "golden-dynamodb-golden-table-gsi-0"
+      }
+    },
+    "goldentablegoldentablearn8C39C738": {
+      "Value": {
+        "Fn::GetAtt": [
+          "goldentable04D0952E",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": "golden-dynamodb-golden-table-arn"
+      }
+    },
+    "goldentablegoldentablename0E47484E": {
+      "Value": "golden-table",
+      "Export": {
+        "Name": "golden-dynamodb-golden-table-name"
+      }
+    }
+  }
+}

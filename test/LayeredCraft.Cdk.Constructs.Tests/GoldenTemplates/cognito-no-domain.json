@@ -1,0 +1,96 @@
+{
+  "Resources": {
+    "goldenuserpool21802237": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "AccountRecoverySetting": {
+          "RecoveryMechanisms": [
+            {
+              "Name": "verified_email",
+              "Priority": 1
+            }
+          ]
+        },
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": true
+        },
+        "AutoVerifiedAttributes": [
+          "email"
+        ],
+        "EmailVerificationMessage": "The verification code to your new account is {####}",
+        "EmailVerificationSubject": "Verify your new account",
+        "EnabledMfas": [
+          "SOFTWARE_TOKEN_MFA"
+        ],
+        "MfaConfiguration": "OPTIONAL",
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 14,
+            "RequireLowercase": false,
+            "RequireNumbers": false,
+            "RequireSymbols": false,
+            "RequireUppercase": false
+          }
+        },
+        "Schema": [
+          {
+            "Mutable": true,
+            "Name": "email",
+            "Required": true
+          },
+          {
+            "Mutable": true,
+            "Name": "name",
+            "Required": true
+          }
+        ],
+        "SmsVerificationMessage": "The verification code to your new account is {####}",
+        "UserPoolName": "golden-user-pool",
+        "UsernameAttributes": [
+          "email"
+        ],
+        "UsernameConfiguration": {
+          "CaseSensitive": false
+        },
+        "VerificationMessageTemplate": {
+          "DefaultEmailOption": "CONFIRM_WITH_CODE",
+          "EmailMessage": "The verification code to your new account is {####}",
+          "EmailSubject": "Verify your new account",
+          "SmsMessage": "The verification code to your new account is {####}"
+        }
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "goldenuserpoolgroupreaders07128C12": {
+      "Type": "AWS::Cognito::UserPoolGroup",
+      "Properties": {
+        "GroupName": "Readers",
+        "UserPoolId": {
+          "Ref": "goldenuserpool21802237"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "goldenuserpoolgoldenuserpooluserpoolidoutputC1F70B78": {
+      "Value": {
+        "Ref": "goldenuserpool21802237"
+      },
+      "Export": {
+        "Name": "golden-cognito-golden-user-pool-user-pool-id"
+      }
+    },
+    "goldenuserpoolgoldenuserpooluserpoolarnoutputFEEBAFB8": {
+      "Value": {
+        "Fn::GetAtt": [
+          "goldenuserpool21802237",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": "golden-cognito-golden-user-pool-user-pool-arn"
+      }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "Resources": {
+    "goldentable04D0952E": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "sk",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "sk",
+            "KeyType": "RANGE"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        },
+        "TableName": "golden-table"
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    }
+  },
+  "Outputs": {
+    "goldentablegoldentablearn8C39C738": {
+      "Value": {
+        "Fn::GetAtt": [
+          "goldentable04D0952E",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": "golden-dynamodb-golden-table-arn"
+      }
+    },
+    "goldentablegoldentablename0E47484E": {
+      "Value": "golden-table",
+      "Export": {
+        "Name": "golden-dynamodb-golden-table-name"
+      }
+    }
+  }
+}
