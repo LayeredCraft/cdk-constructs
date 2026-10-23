@@ -13,7 +13,7 @@ namespace LayeredCraft.Cdk.Constructs;
 /// A Web Function endpoint. Owns a single <c>AWS::Lambda::WebFunctionEndpoint</c> whose logical child id is
 /// <c>Resource</c>. Instances are created by <see cref="WebFunctionConstruct"/>.
 /// </summary>
-public sealed class WebFunctionEndpointConstruct : Resource, IResourceWithPolicyV2
+public sealed class WebFunctionEndpointConstruct : Resource, IWebFunctionEndpoint, IResourceWithPolicyV2
 {
     private readonly CfnWebFunctionEndpoint _resource;
 
@@ -162,4 +162,37 @@ public sealed class WebFunctionEndpointConstruct : Resource, IResourceWithPolicy
     }
 
     internal CfnWebFunctionEndpoint CfnEndpoint => _resource;
+
+    /// <inheritdoc />
+    public Grant GrantInvoke(IGrantable grantee) => GrantInvoke(grantee, new WebFunctionInvokeGrantOptions());
+
+    /// <inheritdoc />
+    public Grant GrantInvoke(IGrantable grantee, WebFunctionInvokeGrantOptions options)
+        => WebFunctionGrants.GrantInvoke(
+            AuthType,
+            grantee,
+            EndpointName,
+            EndpointArn,
+            Stack.Of(this).Account,
+            options,
+            this,
+            this);
+
+    /// <summary>Imports an existing Web Function endpoint that this app does not own.</summary>
+    /// <param name="scope">The construct scope.</param>
+    /// <param name="id">The construct id.</param>
+    /// <param name="attributes">The endpoint attributes.</param>
+    /// <returns>An endpoint that owns no resources and only supports identity-side invocation grants.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when any argument is null.</exception>
+    public static IWebFunctionEndpoint FromEndpointAttributes(
+        Construct scope,
+        string id,
+        WebFunctionEndpointAttributes attributes)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(attributes);
+
+        return new WebFunctionImportedEndpoint(scope, id, attributes);
+    }
 }
