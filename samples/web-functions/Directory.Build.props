@@ -1,0 +1,21 @@
+<Project>
+
+  <!--
+    Sample-only MSBuild defaults.
+
+    This file intentionally shadows the repository root Directory.Build.props so the
+    consumer-style samples under samples/web-functions/ are never packed, versioned,
+    or source-linked as if they were part of the published library. Because MSBuild
+    stops at the nearest Directory.Build.props, nothing here can change the library
+    build in src/ or test/.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

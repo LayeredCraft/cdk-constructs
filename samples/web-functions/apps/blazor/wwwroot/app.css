@@ -1,0 +1,17 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  margin: 2rem;
+  line-height: 1.5;
+}
+
+h1 {
+  color: #512bd4;
+}
+
+#rendered-at {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
