@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Offline CDK CLI stub for the Web Function sandbox lifecycle/smoke tests.
+
+Records invocations and simulates the state a real `cdk deploy`/`cdk destroy`
+would create: stack metadata (with ownership tags and outputs), CloudFormation
+owned buckets, and app log groups. No AWS calls are made.
+"""
+
+import json
+import os
+import sys
+
+STATE = os.environ["STUB_STATE"]
+SANDBOX_ID = os.environ.get("SANDBOX_ID", "")
+ACCOUNT = os.environ.get("SANDBOX_ACCOUNT", "")
+REGION = os.environ.get("SANDBOX_REGION", "")
+
+OWNER = "LayeredCraft.Cdk.Constructs"
+OWNERSHIP_TAG = "lc-webfunction-sandbox-id"
+OWNER_TAG = "lc-webfunction-sandbox-owner"
+
+STACKS = os.path.join(STATE, "stacks")
+BUCKETS = os.path.join(STATE, "buckets")
+LOGS = os.path.join(STATE, "logs")
+for directory in (STACKS, BUCKETS, LOGS):
+    os.makedirs(directory, exist_ok=True)
+
+with open(os.path.join(STATE, "calls.log"), "a") as handle:
+    handle.write(
+        "cdk %s | COMPONENTS=%s SECOND=%s PLACEHOLDER=%s\n"
+        % (
+            " ".join(sys.argv[1:]),
+            os.environ.get("SANDBOX_COMPONENTS", ""),
+            os.environ.get("SANDBOX_SECOND_DISTRIBUTION", ""),
+            os.environ.get("SANDBOX_ALLOW_PLACEHOLDER_VERSIONS", ""),
+        )
+    )
+
+
+def tags():
+    return [
+        {"Key": OWNERSHIP_TAG, "Value": SANDBOX_ID},
+        {"Key": OWNER_TAG, "Value": OWNER},
+    ]
+
+
+def kind_of(name):
+    for kind in ("artifacts", "external", "app"):
+        if name.endswith("-" + kind):
+            return kind
+    return "unknown"
+
+
+def bucket_name(kind):
+    return "%s-%s-%s-%s" % (SANDBOX_ID, kind, ACCOUNT, REGION)
+
+
+def output(key, value):
+    return {"OutputKey": key, "OutputValue": value}
+
+
+def write_stack(name, outputs):
+    with open(os.path.join(STACKS, name + ".json"), "w") as handle:
+        json.dump({"Tags": tags(), "Outputs": outputs, "Kind": kind_of(name)}, handle)
+
+
+def endpoint_arn(workload):
+    return "arn:aws:lambda:%s:%s:web-function/%s-%s/endpoint/default" % (
+        REGION,
+        ACCOUNT,
+        SANDBOX_ID,
+        workload,
+    )
+
+
+def role_arn(name):
+    return "arn:aws:iam::%s:role/%s" % (ACCOUNT, name)
+
+
+def app_outputs():
+    outputs = [
+        output("SandboxId", SANDBOX_ID),
+        output("SandboxAccount", ACCOUNT),
+        output("SandboxRegion", REGION),
+        output("NextJsFunctionName", "%s-nextjs" % SANDBOX_ID),
+        output("NextJsDistributionDomain", "127.0.0.1:8443"),
+        output("NextJsDistributionId", "EDFDISTNEXTJS"),
+        output("NextJsEndpointDomain", "127.0.0.1:8446"),
+        output("NextJsEndpointArn", endpoint_arn("nextjs")),
+    ]
+    if os.environ.get("SANDBOX_SECOND_DISTRIBUTION") == "1":
+        outputs.append(output("NextJsSecondDistributionDomain", "127.0.0.1:8445"))
+        outputs.append(output("NextJsSecondDistributionId", "EDFDISTNEXTJS2"))
+    outputs += [
+        output("AspNetCoreFunctionName", "%s-aspnetcore" % SANDBOX_ID),
+        output("AspNetCoreEndpointUrl", "https://127.0.0.1:8447"),
+        output("AspNetCoreAltEndpointUrl", "https://127.0.0.1:8448"),
+        output("AspNetCoreEndpointArn", endpoint_arn("aspnetcore")),
+        output("BlazorFunctionName", "%s-blazor" % SANDBOX_ID),
+        output("BlazorDistributionDomain", "127.0.0.1:8444"),
+        output("BlazorDistributionId", "EDFDISTBLAZOR"),
+        output("BlazorEndpointArn", endpoint_arn("blazor")),
+        output("CallerRoleArn", role_arn("%s-caller" % SANDBOX_ID)),
+        output("DeniedRoleArn", role_arn("%s-denied" % SANDBOX_ID)),
+        output("ImportedCallerImmutableRoleArn", role_arn("%s-imported-caller-immutable" % SANDBOX_ID)),
+        output("ImportedCallerMutableRoleArn", role_arn("%s-imported-caller-mutable" % SANDBOX_ID)),
+    ]
+    return outputs
+
+
+def deploy(names):
+    for name in names:
+        kind = kind_of(name)
+        if kind in ("artifacts", "external"):
+            path = os.path.join(BUCKETS, bucket_name(kind) + ".json")
+            if not os.path.exists(path):
+                with open(path, "w") as handle:
+                    json.dump({"owner": ACCOUNT, "versions": []}, handle)
+            write_stack(name, [output("SandboxId", SANDBOX_ID), output("BucketName", bucket_name(kind))])
+        elif kind == "app":
+            for workload in ("nextjs", "aspnetcore", "blazor"):
+                path = os.path.join(LOGS, "aws", "lambda", "web", "%s-%s" % (SANDBOX_ID, workload))
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                open(path, "a").close()
+            write_stack(name, app_outputs())
+        else:
+            write_stack(name, [])
+    print("stub cdk: deployed %s" % " ".join(names))
+
+
+def destroy(names):
+    for name in names:
+        kind = kind_of(name)
+        if kind in ("artifacts", "external"):
+            path = os.path.join(BUCKETS, bucket_name(kind) + ".json")
+            if os.path.exists(path):
+                with open(path) as handle:
+                    bucket = json.load(handle)
+                if bucket.get("versions"):
+                    sys.stderr.write("stub cdk: bucket %s is not empty\n" % bucket_name(kind))
+                    sys.exit(1)
+                os.remove(path)
+        elif kind == "app":
+            # CloudFormation deletes the log groups it owns together with the stack.
+            for workload in ("nextjs", "aspnetcore", "blazor"):
+                log_group = os.path.join(LOGS, "aws", "lambda", "web", "%s-%s" % (SANDBOX_ID, workload))
+                if os.path.exists(log_group):
+                    os.remove(log_group)
+        stack = os.path.join(STACKS, name + ".json")
+        if os.path.exists(stack):
+            os.remove(stack)
+    print("stub cdk: destroyed %s" % " ".join(names))
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        sys.exit(2)
+    command = args[0]
+    rest = [a for a in args[1:] if not a.startswith("-") and a != "never"]
+
+    if command == "synth":
+        sys.exit(0)
+    if command == "deploy":
+        deploy(rest)
+        sys.exit(0)
+    if command == "destroy":
+        destroy(rest)
+        sys.exit(0)
+    sys.stderr.write("stub cdk: unsupported command %s\n" % command)
+    sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

@@ -30,6 +30,32 @@ await app.StartAsync();
 await LambdaRuntime.NotifyReadyAsync(app.Logger);
 await app.WaitForShutdownAsync();
 
+internal static class BuildId
+{
+    // The artifact build writes build-id.txt next to the apphost and the smoke test reads the value
+    // back off the rendered page, so the deployed revision is observable from the outside.
+    public static string Resolve()
+    {
+        var fromEnvironment = Environment.GetEnvironmentVariable("BUILD_ID");
+        if (!string.IsNullOrWhiteSpace(fromEnvironment))
+        {
+            return fromEnvironment;
+        }
+
+        var fromFile = Path.Combine(AppContext.BaseDirectory, "build-id.txt");
+        if (File.Exists(fromFile))
+        {
+            var value = File.ReadAllText(fromFile).Trim();
+            if (value.Length > 0)
+            {
+                return value;
+            }
+        }
+
+        return "dev";
+    }
+}
+
 internal static class LambdaRuntime
 {
     // The execve shim replaces the Node runtime, which also replaces the Lambda runtime

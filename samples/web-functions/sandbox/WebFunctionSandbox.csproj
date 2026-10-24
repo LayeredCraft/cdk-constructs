@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Minimal AWS CDK application that consumes the real LayeredCraft.Cdk.Constructs project and
+    exercises the public Web Function API in a disposable, non-production sandbox account.
+
+    This project is deliberately NOT part of LayeredCraft.Cdk.Constructs.slnx and is never built
+    or packed by CI. It inherits samples/web-functions/Directory.Build.props (IsPackable=false).
+
+    Central package management is disabled in samples/web-functions/, so the Amazon.CDK.Lib
+    version is pinned explicitly here and must match the version the library is built against.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>WebFunctionSandbox</AssemblyName>
+    <RootNamespace>WebFunctionSandbox</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Amazon.CDK.Lib" Version="2.274.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The sandbox builds with the .NET 10 SDK pinned by samples/web-functions/global.json, but the library also
+      multi-targets the net11.0 preview. Scope the project reference to the net10.0 target so the sandbox can
+      consume the real library project without requiring the preview SDK.
+    -->
+    <ProjectReference Include="../../../src/LayeredCraft.Cdk.Constructs/LayeredCraft.Cdk.Constructs.csproj"
+                      AdditionalProperties="TargetFrameworks=net10.0" />
+  </ItemGroup>
+
+</Project>

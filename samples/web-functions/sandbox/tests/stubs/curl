@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Offline curl stub for the T7b smoke regression tests.
+
+Emulates just enough of curl's surface for smoke.sh: --output/-o, --write-out/-w,
+and -K <config> (used for SigV4 signing). It never talks to the network. The
+response for a request is decided by the port in the URL and whether the request
+was signed (via the -K config) by a role that is allowed to invoke the endpoint.
+
+Every request is appended to $STUB_STATE/curl.log as "<port> signed=<0|1> ak=<AK>".
+"""
+import json
+import os
+import sys
+
+STATE = os.environ["STUB_STATE"]
+ACCOUNT = os.environ.get("SANDBOX_ACCOUNT", "123456789012")
+REGION = os.environ.get("SANDBOX_REGION", "us-east-1")
+
+BUILD_ID_FILE = os.path.join(STATE, "build-id")
+AK_MAP_FILE = os.path.join(STATE, "ak-map.json")
+
+
+def build_id():
+    try:
+        with open(BUILD_ID_FILE) as handle:
+            value = handle.read().strip()
+            if value:
+                return value
+    except OSError:
+        pass
+    return "stub-build-v1"
+
+
+def role_for_ak(ak):
+    try:
+        with open(AK_MAP_FILE) as handle:
+            return json.load(handle).get(ak, "")
+    except (OSError, ValueError):
+        return ""
+
+
+def parse_args(argv):
+    output = None
+    write_out = "%{http_code}"
+    config = None
+    url = None
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("--output", "-o"):
+            i += 1
+            output = argv[i]
+        elif arg in ("--write-out", "-w"):
+            i += 1
+            write_out = argv[i]
+        elif arg == "-K":
+            i += 1
+            config = argv[i]
+        elif arg.startswith("http"):
+            url = arg
+        i += 1
+    return output, write_out, config, url
+
+
+def read_signing(config):
+    """Return (signed, access_key) parsed from a curl -K config file."""
+    if not config:
+        return False, ""
+    try:
+        with open(config) as handle:
+            text = handle.read()
+    except OSError:
+        return False, ""
+    signed = "aws-sigv4" in text
+    access_key = ""
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("user"):
+            _, _, value = line.partition("=")
+            value = value.strip().strip('"')
+            access_key = value.split(":")[0]
+    return signed, access_key
+
+
+def nextjs_html():
+    bid = build_id()
+    return (
+        "<!doctype html><html><head><title>Next.js Web Function Sample</title></head>"
+        "<body><h1>Next.js Web Function Sample</h1>"
+        '<p id="build-id" data-build-id="%s">Build id: %s</p>'
+        '<p id="rendered-at">Rendered at 2026-01-01T00:00:00.0000000Z</p>'
+        '<p id="request-id">Request id: stub</p>'
+        '<a href="/sample.txt">sample.txt</a>'
+        '<script src="/_next/static/chunks/x.js"></script>'
+        "</body></html>" % (bid, bid)
+    )
+
+
+def blazor_html():
+    bid = build_id()
+    return (
+        "<!doctype html><html><head><title>Blazor Static SSR Web Function Sample</title>"
+        '<link rel="stylesheet" href="app.css" /></head>'
+        "<body><h1>Blazor Static SSR Web Function Sample</h1>"
+        '<p id="build-id" data-build-id="%s">Build id: %s</p>'
+        '<p id="rendered-at">Rendered at 2026-01-01T00:00:00.0000000+00:00</p>'
+        '<script src="_framework/blazor.web.js"></script></body></html>' % (bid, bid)
+    )
+
+
+def aspnetcore_json():
+    return '{"status":"Ok","backend":"aspnetcore","buildId":"%s"}' % build_id()
+
+
+def respond(port, path, signed, access_key):
+    """Return (status, content_type, body)."""
+    if port in ("8443", "8445"):
+        if path.startswith("/_next/static/"):
+            return 200, "application/javascript", "/* next chunk */"
+        if path == "/sample.txt":
+            return 200, "text/plain", "Next.js static asset for CloudFront cache verification."
+        return 200, "text/html", nextjs_html()
+    if port == "8444":
+        if path == "/app.css":
+            return 200, "text/css", ":root { --accent: #512bd4; }"
+        if path.startswith("/_framework/"):
+            return 200, "application/javascript", "/* blazor framework */"
+        return 200, "text/html", blazor_html()
+    if port == "8446":
+        # Direct (unsigned) endpoint for an IamAuth function: always denied.
+        return 403, "text/plain", "Forbidden"
+    if port == "8447":
+        role = os.path.basename(role_for_ak(access_key)) if access_key else ""
+        if signed and role and role != "wfsbx-denied":
+            return 200, "application/json", aspnetcore_json()
+        return 403, "text/plain", "Forbidden"
+    if port == "8448":
+        # Alt endpoint: nobody is granted here.
+        return 403, "text/plain", "Forbidden"
+    return 404, "text/plain", "Not Found"
+
+
+def main():
+    argv = sys.argv[1:]
+    output, write_out, config, url = parse_args(argv)
+    if not url:
+        sys.stderr.write("curl stub: no URL in %r\n" % (argv,))
+        return 2
+
+    without_scheme = url.split("://", 1)[-1]
+    host_port = without_scheme.split("/", 1)[0]
+    port = host_port.split(":")[1] if ":" in host_port else "443"
+    path = "/" + without_scheme.split("/", 1)[1] if "/" in without_scheme else "/"
+
+    signed, access_key = read_signing(config)
+    status, content_type, body = respond(port, path, signed, access_key)
+
+    with open(os.path.join(STATE, "curl.log"), "a") as handle:
+        handle.write("%s signed=%d ak=%s\n" % (port, 1 if signed else 0, access_key or "-"))
+
+    if output:
+        with open(output, "w") as handle:
+            handle.write(body)
+
+    if "time_total" in write_out:
+        sys.stdout.write("%d 0.010000" % status)
+    else:
+        sys.stdout.write("%d" % status)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

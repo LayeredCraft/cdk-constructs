@@ -13,7 +13,9 @@ export default async function Home() {
   return (
     <main>
       <h1>Next.js Web Function Sample</h1>
-      <p id="build-id">Build id: {buildId}</p>
+      <p id="build-id" data-build-id={buildId}>
+        Build id: {buildId}
+      </p>
       <p id="rendered-at">Rendered at {renderedAt}</p>
       <p id="request-id">Request id: {requestId}</p>
       <p>
