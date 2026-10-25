@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Customer-managed revision encryption** (`KmsKeyArn`) is **deferred**. S3 artifact encryption (SSE-S3 / SSE-KMS on the code bucket) is supported.
 - **Principal-behavior regression rule**: identity-policy write detection and principal classification rely partly on CDK/jsii behavior observed in `Amazon.CDK.Lib` 2.274.0. Every `Amazon.CDK.Lib` upgrade (including Dependabot bumps) must pass the focused real-CDK Web Function security tests — especially the `CdkUpgradeGuard_*` suite — and a failure blocks the upgrade until the signals are re-verified. The library fails closed when authorization cannot be established.
 - **Compatibility**: Lambda Web Functions require a Region where the feature is available; CDK 2.274.0 emits `F3006` default-rule validation warnings for the new `AWS::Lambda::WebFunction*` resource types (warnings by default).
+- **Service-created default log groups**: with `WebFunctionLogs.ServiceDefault()` the construct creates no `AWS::Logs::LogGroup`; the Lambda service creates `/aws/lambda/web/{name}` on first invocation. That group has no expiry and is **not** removed by CloudFormation on teardown, so it keeps your invocation history. CDK-managed `Create()` groups are stack-owned and follow their `RemovalPolicy`.
+
+### 🐛 Fixed
+
+- **KMS diagnostic wording**: the owned-artifact-bucket SSE-KMS and DSSE error messages now name the **Lambda service principal** (`lambda.amazonaws.com`) as the principal whose key policy must allow `kms:Decrypt`, instead of the function execution role. Authorization behavior is unchanged; only the message text and its tests changed.
 
 ## [2.0.0] - 2025-08-06
 

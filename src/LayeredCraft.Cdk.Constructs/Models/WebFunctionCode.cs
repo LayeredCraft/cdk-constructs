@@ -226,11 +226,13 @@ internal sealed class WebFunctionCodeFromBucket : WebFunctionCode
 
     private const string KmsManagedMessage =
         "An owned artifact bucket cannot use the AWS-managed KMS key (aws/s3) for SSE-KMS. Use S3-managed " +
-        "encryption or a customer-managed key the function role can read.";
+        "encryption or a customer-managed key whose key policy allows the Lambda service principal " +
+        "(lambda.amazonaws.com) to decrypt.";
 
     private const string DsseManagedMessage =
         "An owned artifact bucket cannot use DSSE without a customer-managed KMS key. Use SSE-KMS with a " +
-        "customer-managed key the function role can read, or S3-managed encryption.";
+        "customer-managed key whose key policy allows the Lambda service principal (lambda.amazonaws.com) to " +
+        "decrypt, or S3-managed encryption.";
 
     private static bool TryGetValue(IDictionary<string, object> map, string key, out object? value)
     {

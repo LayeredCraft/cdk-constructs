@@ -535,7 +535,7 @@ public class WebFunctionConstructTests
 
         var act = () => new WebFunctionConstruct(stack, "web-function", props);
 
-        act.Should().Throw<InvalidOperationException>();
+        act.Should().Throw<InvalidOperationException>().WithMessage("*aws/s3*lambda.amazonaws.com*");
     }
 
     [Fact]
@@ -647,7 +647,7 @@ public class WebFunctionConstructTests
             "web-function",
             DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*aws/s3*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*aws/s3*lambda.amazonaws.com*");
     }
 
     [Fact]
@@ -713,7 +713,7 @@ public class WebFunctionConstructTests
             "web-function",
             DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*DSSE*customer-managed*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*DSSE*customer-managed*lambda.amazonaws.com*");
     }
 
     [Fact]
@@ -728,7 +728,7 @@ public class WebFunctionConstructTests
             "web-function",
             DefaultProps(artifacts, WebFunctionCodeBucketPolicy.ExternallyManaged));
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*customer-managed*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*customer-managed*lambda.amazonaws.com*");
     }
 
     [Fact]
