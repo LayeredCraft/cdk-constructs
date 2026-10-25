@@ -237,6 +237,27 @@ check "16.1 nonzero exit" '[ "$RC" -ne 0 ]'
 check "16.2 failure count > 0" '[ "$(summary_field fail)" -gt 0 ]'
 check "16.3 results non-empty" 'python3 -c "import json,sys; sys.exit(0 if json.load(open(\"$SUMMARY\"))[\"results\"] else 1)"'
 
+# --- 17-18: missing/malformed revision API is BLOCKED, never PASS --------------------------------
+scenario "17: revision API unavailable is BLOCKED"
+fresh_state
+export STUB_FAIL=webfunction
+deploy_app
+run_smoke
+unset STUB_FAIL
+check "17.1 nonzero exit" '[ "$RC" -ne 0 ]'
+check "17.2 revision identity BLOCKED" 'summary_result BLOCKED "revision identity"'
+check "17.3 no revision identity PASS" '! summary_result PASS "revision identity"'
+
+scenario "18: malformed revision API response is BLOCKED"
+fresh_state
+export STUB_FAIL=webfunction-shape
+deploy_app
+run_smoke
+unset STUB_FAIL
+check "18.1 nonzero exit" '[ "$RC" -ne 0 ]'
+check "18.2 revision identity BLOCKED" 'summary_result BLOCKED "revision identity"'
+check "18.3 no revision identity PASS" '! summary_result PASS "revision identity"'
+
 printf '\nSmoke regression scenarios: %d passed, %d failed\n' "${PASS}" "${FAIL}"
 if [ "${FAIL}" -gt 0 ]; then
     printf 'Failures:\n' >&2

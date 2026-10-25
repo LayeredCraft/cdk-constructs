@@ -3,10 +3,14 @@
 
 Controlled by environment:
   STUB_STATE          required; directory holding all stub state
-  STUB_FAIL           inject an error mode: sts|describe|s3list|s3head|put|iam|policy
+  STUB_FAIL           inject an error mode: sts|describe|s3list|s3head|put|iam|policy|webfunction|webfunction-shape
   STUB_POLICY_MODE    resource-policy content: (default ok)|malformed|exception|missing|duplicate|extra|second-removed
   STUB_ROLE_MODE      imported-role policies: (default none)|broad
-  STUB_REVISION       revision suffix returned by lambda-web get-web-function (default "1")
+  STUB_REVISION       revision suffix returned by the lambda-web Web Function APIs (default "1")
+
+The lambda-web handlers mirror the AWS CLI 2.38.x response shapes: get-web-function exposes only function
+state, get-web-function-endpoint carries the revision routing weights, list-web-function-revisions carries
+the revision identities, and get-resource-policy returns the policy as a JSON string.
 """
 import hashlib
 import json
@@ -80,8 +84,12 @@ def ak_for(arn):
     return "AKIA" + hashlib.sha1(arn.encode()).hexdigest()[:16].upper()
 
 
+def function_arn(fn):
+    return "arn:aws:lambda:%s:%s:web-function/%s" % (REGION, ACCOUNT, fn)
+
+
 def endpoint_arn(fn):
-    return "arn:aws:lambda:%s:%s:web-function/%s/endpoint/default" % (REGION, ACCOUNT, fn)
+    return "%s/endpoint/default" % function_arn(fn)
 
 
 def nextjs_dist_arn():
@@ -390,7 +398,8 @@ if service == "iam" and sub == "get-policy-version":
     sys.exit(0)
 
 if service == "lambda-web" and sub == "get-resource-policy":
-    fn = opt("--function-name") or ""
+    arn = opt("--resource-arn") or opt("--function-name") or ""
+    fn = arn.split("web-function/", 1)[1].split("/", 1)[0] if "web-function/" in arn else ""
     if FAIL == "policy":
         api_error("AccessDenied: User is not authorized to perform: lambda:GetResourcePolicy")
     if fn.endswith("-nextjs"):
@@ -408,8 +417,58 @@ if service == "lambda-web" and sub == "get-resource-policy":
     sys.exit(0)
 
 if service == "lambda-web" and sub == "get-web-function":
+    # Per the 2.38.x API, get-web-function returns function state only - no revision identity.
     fn = opt("--function-name") or ""
-    sys.stdout.write(json.dumps({"FunctionName": fn, "RevisionId": "rev-%s-%s" % (fn, REVISION)}) + "\n")
+    sys.stdout.write(json.dumps({
+        "FunctionName": fn,
+        "FunctionArn": function_arn(fn),
+        "State": "Active",
+    }) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "get-web-function-endpoint":
+    if FAIL == "webfunction":
+        api_error("AccessDenied: User is not authorized to perform: lambda:GetWebFunctionEndpoint")
+    fn = opt("--function-name") or ""
+    ep = opt("--endpoint-name") or "default"
+    if FAIL == "webfunction-shape":
+        sys.stdout.write("not-json\n")
+        sys.exit(0)
+    sys.stdout.write(json.dumps({
+        "FunctionArn": function_arn(fn),
+        "EndpointName": ep,
+        "EndpointArn": "%s/endpoint/%s" % (function_arn(fn), ep),
+        "EndpointType": "HomeRegion",
+        "AuthType": "IamAuth",
+        "State": "Active",
+        "RevisionWeights": [{"RevisionId": "rev-%s-%s" % (fn, REVISION), "Weight": 100}],
+    }) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "list-web-function-revisions":
+    if FAIL == "webfunction":
+        api_error("AccessDenied: User is not authorized to perform: lambda:ListWebFunctionRevisions")
+    fn = opt("--function-name") or ""
+    if FAIL == "webfunction-shape":
+        sys.stdout.write("not-json\n")
+        sys.exit(0)
+    sys.stdout.write(json.dumps({
+        "Revisions": [{
+            "FunctionArn": function_arn(fn),
+            "RevisionId": "rev-%s-%s" % (fn, REVISION),
+            "State": "Active",
+        }],
+    }) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "get-web-function-revision":
+    fn = opt("--function-name") or ""
+    rid = opt("--revision-id") or ("rev-%s-%s" % (fn, REVISION))
+    sys.stdout.write(json.dumps({
+        "FunctionArn": function_arn(fn),
+        "RevisionId": rid,
+        "State": "Active",
+    }) + "\n")
     sys.exit(0)
 
 if service == "lambda-web" and sub == "get-web-account-settings":

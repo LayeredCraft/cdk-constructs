@@ -344,9 +344,15 @@ PY
 
 # --- Live resource policy ------------------------------------------------------------------------
 
+# The resource policy is attached to the Web Function ARN (not the endpoint), so get-resource-policy
+# needs the function ARN: the endpoint ARN without its trailing /endpoint/<name> segment.
+web_function_arn_from_endpoint() {
+    printf '%s' "${1%/endpoint/*}"
+}
+
 live_policy_for() {
-    local fn="$1"
-    aws_cmd lambda-web get-resource-policy --function-name "${fn}" \
+    local arn="$1"
+    aws_cmd lambda-web get-resource-policy --resource-arn "${arn}" \
         --query 'Policy' --output text 2>/dev/null || true
 }
 
@@ -464,30 +470,66 @@ PY
 
 # --- Revision tracking ---------------------------------------------------------------------------
 
-# Prints a revision identity, or exits non-zero: 1 = API unavailable, 3 = field not exposed.
+# Prints the revision the default endpoint routes to, or exits non-zero:
+#   1 = API/command unavailable, 3 = revision identity missing or not Active.
+# The CLI 2.38.x get-web-function response carries no revision, so the routing identity comes from the
+# default endpoint's revision weights and is corroborated by list-web-function-revisions (Active).
 web_function_revision() {
-    local fn="$1" json
-    json="$(aws_cmd lambda-web get-web-function --function-name "${fn}" --output json 2>/dev/null)" || return 1
-    printf '%s' "${json}" | python3 -c 'import json,sys
+    local fn="$1" ep_json list_json
+    ep_json="$(aws_cmd lambda-web get-web-function-endpoint --function-name "${fn}" \
+        --endpoint-name default --output json 2>/dev/null)" || return 1
+    printf '%s' "${ep_json}" > "${SMOKE_TMP}/revision-endpoint.json"
+    list_json="$(aws_cmd lambda-web list-web-function-revisions --function-name "${fn}" \
+        --output json 2>/dev/null)" || return 1
+    printf '%s' "${list_json}" > "${SMOKE_TMP}/revision-list.json"
+    python3 - "${SMOKE_TMP}/revision-endpoint.json" "${SMOKE_TMP}/revision-list.json" <<'PY'
+import json, sys
+
+def field(doc, *keys):
+    for key in keys:
+        if isinstance(doc, dict) and doc.get(key):
+            return doc[key]
+    return None
+
 try:
-    d = json.load(sys.stdin)
+    endpoint = json.load(open(sys.argv[1]))
+    listing = json.load(open(sys.argv[2]))
 except Exception:
     sys.exit(3)
-for k in ("RevisionId", "CurrentRevisionId", "Revision", "RevisionArn"):
-    v = d.get(k)
-    if v:
-        print(v); sys.exit(0)
-sys.exit(3)'
+
+state = field(endpoint, "State", "state")
+weights = field(endpoint, "RevisionWeights", "revisionWeights") or []
+revision = None
+for weight in weights:
+    if isinstance(weight, dict):
+        revision = field(weight, "RevisionId", "revisionId")
+        if revision:
+            break
+if not revision or (state and state != "Active"):
+    sys.exit(3)
+
+for item in field(listing, "Revisions", "revisions") or []:
+    if isinstance(item, dict) and field(item, "RevisionId", "revisionId") == revision:
+        if field(item, "State", "state") == "Active":
+            print(revision)
+            sys.exit(0)
+        sys.exit(3)
+sys.exit(3)
+PY
 }
 
 capture_revision() {
     local label="$1" fn="$2" out rc
-    out="$(web_function_revision "${fn}")"
-    rc=$?
+    # The assignment is guarded so errexit does not abort on the expected non-zero revision returns.
+    if out="$(web_function_revision "${fn}")"; then
+        rc=0
+    else
+        rc=$?
+    fi
     case "${rc}" in
         0) printf '%s' "${out}" ;;
-        1) printf 'BLOCKED:lambda-web get-web-function API unavailable' ;;
-        *) printf 'BLOCKED:revision identity not exposed by the API response' ;;
+        1) printf 'BLOCKED:lambda-web get-web-function-endpoint API unavailable' ;;
+        *) printf 'BLOCKED:revision identity not exposed by the endpoint response' ;;
     esac
 }
 
@@ -795,11 +837,14 @@ else
 fi
 
 # 3.6 - live resource policy verification (fail-closed)
+nextjs_function_arn="$(web_function_arn_from_endpoint "${nextjs_endpoint_arn}")"
+aspnetcore_function_arn="$(web_function_arn_from_endpoint "${aspnetcore_endpoint_arn}")"
+blazor_function_arn="$(web_function_arn_from_endpoint "${blazor_endpoint_arn}")"
 policy_keys=""
 {
-    nextjs_policy="$(live_policy_for "${nextjs_function}")"
-    aspnetcore_policy="$(live_policy_for "${aspnetcore_function}")"
-    blazor_policy="$(live_policy_for "${blazor_function}")"
+    nextjs_policy="$(live_policy_for "${nextjs_function_arn}")"
+    aspnetcore_policy="$(live_policy_for "${aspnetcore_function_arn}")"
+    blazor_policy="$(live_policy_for "${blazor_function_arn}")"
 } 2>/dev/null
 
 nextjs_dist_arns_json="\"${nextjs_dist_arn}\""
