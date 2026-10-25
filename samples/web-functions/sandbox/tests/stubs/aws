@@ -410,10 +410,10 @@ if service == "lambda-web" and sub == "get-resource-policy":
         policy = aspnetcore_policy()
     else:
         policy = json.dumps({"Statement": []})
-    if opt("--query") == "Policy":
+    if opt("--query") in ("policy", "Policy"):
         sys.stdout.write(policy + "\n")
     else:
-        sys.stdout.write(json.dumps({"Policy": policy}) + "\n")
+        sys.stdout.write(json.dumps({"policy": policy, "revisionId": "00000000-0000-0000-0000-000000000000"}) + "\n")
     sys.exit(0)
 
 if service == "lambda-web" and sub == "get-web-function":

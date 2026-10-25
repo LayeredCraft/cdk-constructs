@@ -353,7 +353,7 @@ web_function_arn_from_endpoint() {
 live_policy_for() {
     local arn="$1"
     aws_cmd lambda-web get-resource-policy --resource-arn "${arn}" \
-        --query 'Policy' --output text 2>/dev/null || true
+        --query 'policy' --output text 2>/dev/null || true
 }
 
 # Validates live resource policies. Emits exactly one result line per expected check, in the form
