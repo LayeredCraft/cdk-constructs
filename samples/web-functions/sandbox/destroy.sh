@@ -3,14 +3,14 @@
 # destroy.sh - tear down the sandbox and every resource it owns. Destructive.
 #
 # Usage:
-#   SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 SANDBOX_CONFIRM_DESTROY=wfsbx \
+#   SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 SANDBOX_CONFIRM_DESTROY=wfsbx \
 #   SANDBOX_ID=wfsbx SANDBOX_ACCOUNT=123456789012 SANDBOX_REGION=us-east-1 \
 #       ./destroy.sh --yes
 #
 # Gates (all required) so this cannot fire accidentally or against the wrong target:
 #   1. --yes on the command line
 #   2. SANDBOX_CONFIRM_DESTROY equal to SANDBOX_ID
-#   3. SANDBOX_ALLOW_AWS=1 and SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1
+#   3. SANDBOX_ALLOW_AWS=1 and SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1
 # The live AWS account and Region are verified before anything is deleted, and each stack is proven to
 # be sandbox-owned (ownership tag + SandboxId output) before it is touched. The sandbox-owned buckets
 # are emptied (all versions and delete markers) and then deleted by CloudFormation, never directly. Log
@@ -35,7 +35,7 @@ done
 
 validate_sandbox_env
 require_aws_allowed
-require_non_production_ack
+require_shared_account_ack
 
 # Destructive-intent gates run before any AWS call, so an unconfirmed invocation never even reaches STS.
 [ "${confirmed}" = "1" ] || die "Refusing to destroy without --yes."

@@ -3,7 +3,7 @@
 # run-workflow.sh - convenience sequencer for a full sandbox validation cycle.
 #
 # Usage:
-#   SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 \
+#   SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 \
 #   SANDBOX_ID=wfsbx SANDBOX_ACCOUNT=123456789012 SANDBOX_REGION=us-east-1 \
 #       ./run-workflow.sh [--revision N] [--second-distribution] [--skip-smoke]
 #

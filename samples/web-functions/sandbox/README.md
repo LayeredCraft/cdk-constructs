@@ -1,11 +1,13 @@
 # Web Function sandbox
 
-A disposable AWS sandbox that exercises the LayeredCraft Web Function constructs end to end. It exists to
+A temporary AWS sandbox that exercises the LayeredCraft Web Function constructs end to end. It exists to
 run the approved design's AWS acceptance matrix (sections 3.1-3.8) for `LayeredCraft.Cdk.Constructs`
-against a **non-production** account, and to be torn down afterwards.
+against a **selected existing account**, using its own fixed namespace and ownership tags, and to be torn
+down afterwards.
 
-> **This sandbox is for validation only.** It creates real, billable AWS resources. Run it only in a
-> dedicated throwaway account. Nothing here is intended for production use.
+> **This sandbox is for validation only.** It creates real, billable AWS resources in a shared account. It
+> only ever creates, updates, and deletes resources inside its own `lccdk-wf-sandbox-*` namespace and never
+> touches unrelated resources. Nothing here is intended for production use.
 
 The sandbox app is a small C# CDK application that consumes the real library project (`WebFunctionConstruct`,
 `WebFunctionEndpointConstruct`, `WebFunctionOrigin`, ...) - it does **not** re-implement any construct
@@ -74,7 +76,9 @@ The operator identity needs, scoped to the sandbox account and Region:
 - **Explicit target only.** `SANDBOX_ACCOUNT`, `SANDBOX_REGION`, and `SANDBOX_ID` are required. Nothing is
   inferred from your ambient profile or default Region.
 - **Opt-in to AWS.** Every script that touches AWS requires `SANDBOX_ALLOW_AWS=1`, and every mutating script
-  additionally requires `SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1`; without them they exit before making a call.
+  additionally requires `SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1` (you accept creating temporary sandbox
+  resources in the selected existing account while leaving unrelated resources untouched); without them they
+  exit before making a call.
 - **Live identity verification.** Before any mutation the scripts call STS `get-caller-identity` and refuse
   to continue unless the live account and Region match the declared sandbox exactly. Every AWS call is pinned
   with `--region`, and a disagreeing ambient `AWS_REGION`/`AWS_DEFAULT_REGION` aborts, so an inherited profile
@@ -86,7 +90,7 @@ The operator identity needs, scoped to the sandbox account and Region:
 - **Ambiguity is fatal.** A stack describe that fails for any reason other than "does not exist" (throttling,
   expired credentials, `AccessDenied`) aborts the run rather than assuming the stack is gone.
 - **Destructive double-gate.** `destroy.sh` requires `--yes`, `SANDBOX_CONFIRM_DESTROY=<SANDBOX_ID>`, the
-  non-production acknowledgement, and a verified sandbox-owned target, checked before any AWS call. It only
+  shared-account acknowledgement, and a verified sandbox-owned target, checked before any AWS call. It only
   ever empties versioned objects from stack-owned buckets and lets CloudFormation delete the buckets, and it
   removes the local artifact manifest only after every stack is confirmed gone.
 - **No script deploys or destroys as a side effect.** Nothing runs on build or import; every action is an
@@ -100,7 +104,7 @@ The operator identity needs, scoped to the sandbox account and Region:
 | `SANDBOX_REGION` | yes | sandbox Region, e.g. `us-east-1` |
 | `SANDBOX_ID` | yes | 3-16 char lowercase namespace used for all names |
 | `SANDBOX_ALLOW_AWS` | for AWS ops | set to `1` to opt in to AWS calls |
-| `SANDBOX_ACKNOWLEDGE_NON_PRODUCTION` | for AWS mutations | set to `1` to confirm the target account is disposable/non-production |
+| `SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT` | for AWS mutations | set to `1` to confirm you accept creating temporary sandbox resources in the selected existing account without modifying unrelated resources |
 | `SANDBOX_CONFIRM_DESTROY` | for destroy | must equal `SANDBOX_ID` |
 | `SANDBOX_COMPONENTS` | no | `all` (default), or a comma list of `artifacts`, `external`, `app` |
 | `SANDBOX_SECOND_DISTRIBUTION` | no | `1`/`true` adds a second Next.js distribution (resource-policy lifecycle) |
@@ -127,17 +131,17 @@ export SANDBOX_ID=wfsbx
 ./synth.sh --version v1
 
 # 4. Deploy v1 end to end (support stacks, upload, app stack).
-SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 ./deploy.sh
+SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 ./deploy.sh
 
 # 5. Run the acceptance smoke tests (record the machine-readable summary as evidence).
 SANDBOX_ALLOW_AWS=1 ./smoke.sh
 
 # 6. Update v1 -> v2 and re-check.
-SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 ./update-to-v2.sh
+SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 ./update-to-v2.sh
 SANDBOX_ALLOW_AWS=1 ./smoke.sh
 
 # 7. Tear everything down.
-SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 SANDBOX_CONFIRM_DESTROY=wfsbx ./destroy.sh --yes
+SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 SANDBOX_CONFIRM_DESTROY=wfsbx ./destroy.sh --yes
 ```
 
 ### Scripts

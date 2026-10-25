@@ -4,7 +4,7 @@
 # the immutable object version ids in the local manifest.
 #
 # Usage:
-#   SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 \
+#   SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 \
 #   SANDBOX_ID=wfsbx SANDBOX_ACCOUNT=123456789012 SANDBOX_REGION=us-east-1 \
 #       ./upload-artifacts.sh --revision 1
 #   ... ./upload-artifacts.sh --revision 2      # uploads the -v2.zip build outputs
@@ -35,7 +35,7 @@ label="v${revision}"
 
 validate_sandbox_env
 require_aws_allowed
-require_non_production_ack
+require_shared_account_ack
 verify_aws_identity
 require_cmd aws
 

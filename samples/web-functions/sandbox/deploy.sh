@@ -3,7 +3,7 @@
 # deploy.sh - deploy the sandbox: support stacks, artifact upload, then the app stack.
 #
 # Usage:
-#   SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 \
+#   SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 \
 #   SANDBOX_ID=wfsbx SANDBOX_ACCOUNT=123456789012 SANDBOX_REGION=us-east-1 \
 #       ./deploy.sh                      # deploy v1 end to end
 #   ... ./deploy.sh --revision 2         # deploy the v2 artifact revision (the v1 -> v2 update)
@@ -55,7 +55,7 @@ done
 
 validate_sandbox_env
 require_aws_allowed
-require_non_production_ack
+require_shared_account_ack
 verify_aws_identity
 require_cmd aws
 require_cmd dotnet

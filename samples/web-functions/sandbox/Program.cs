@@ -32,7 +32,7 @@ var stackProps = new StackProps
         Account = configuration.Account,
         Region = configuration.Region,
     },
-    Description = "Disposable LayeredCraft Web Function sandbox (non-production).",
+    Description = "Temporary LayeredCraft Web Function sandbox resources (T7c validation).",
 };
 
 ArtifactsStack? artifacts = null;

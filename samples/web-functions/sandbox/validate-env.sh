@@ -7,7 +7,7 @@
 #   SANDBOX_ALLOW_AWS=1 ./validate-env.sh --check-aws
 #
 # Never calls AWS unless --check-aws (or SANDBOX_ALLOW_AWS=1) is supplied. This script never mutates AWS.
-# Mutating scripts additionally require SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1; this script only reports
+# Mutating scripts additionally require SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1; this script only reports
 # whether that acknowledgement is currently set.
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
@@ -58,10 +58,10 @@ else
     log "Skipping AWS identity check (pass --check-aws or set SANDBOX_ALLOW_AWS=1 to enable)."
 fi
 
-if [ "${SANDBOX_ACKNOWLEDGE_NON_PRODUCTION:-}" = "1" ]; then
-    log "Non-production acknowledgement: set (mutating scripts are permitted for this account)."
+if [ "${SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT:-}" = "1" ]; then
+    log "Shared-account acknowledgement: set (mutating scripts are permitted for this account)."
 else
-    log "Non-production acknowledgement: not set (set SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 before deploy/destroy)."
+    log "Shared-account acknowledgement: not set (set SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 before deploy/destroy)."
 fi
 
 log "Environment validation OK."

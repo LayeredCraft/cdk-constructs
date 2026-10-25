@@ -14,7 +14,7 @@ CDK_STUB="${STUB_BIN}/cdk"
 SANDBOX_DIR="$(cd "${TESTS_DIR}/.." && pwd)"
 
 export SANDBOX_ALLOW_AWS=1
-export SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1
+export SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1
 export SANDBOX_ID=wfsbx
 export SANDBOX_CONFIRM_DESTROY=wfsbx
 export SANDBOX_ACCOUNT=123456789012
@@ -198,6 +198,95 @@ check "16.3 object key uses prefix" 'grep -q -- "--key altpre/nextjs.zip" "$STUB
 run "${SANDBOX_DIR}/deploy.sh" --revision 1 --skip-upload
 check "16.4 redeploy with prefix exit 0" '[ "$RC" -eq 0 ]'
 unset SANDBOX_ARTIFACTS_PREFIX
+cleanup_manifest
+
+# --------------------------------------------------------------------------------------------------
+# Authorization-gate regression coverage (shared-account acknowledgement semantics).
+# --------------------------------------------------------------------------------------------------
+scenario "17: mutations require the shared-account acknowledgement"
+fresh_state
+cleanup_manifest
+OUT="$(env -u SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT "${SANDBOX_DIR}/deploy.sh" --stacks-only 2>&1)"; RC=$?
+check "17.1 exit non-zero" '[ "$RC" -ne 0 ]'
+check "17.2 names the shared-account flag" 'printf "%s" "$OUT" | grep -q "SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1"'
+check "17.3 no stacks created" '[ -z "$(ls -A "$STUB_STATE/stacks" 2>/dev/null)" ]'
+
+scenario "18: mutations require the AWS opt-in even with the shared-account acknowledgement"
+fresh_state
+cleanup_manifest
+OUT="$(env -u SANDBOX_ALLOW_AWS "${SANDBOX_DIR}/deploy.sh" --stacks-only 2>&1)"; RC=$?
+check "18.1 exit non-zero" '[ "$RC" -ne 0 ]'
+check "18.2 names the opt-in flag" 'printf "%s" "$OUT" | grep -q "SANDBOX_ALLOW_AWS=1"'
+check "18.3 no stacks created" '[ -z "$(ls -A "$STUB_STATE/stacks" 2>/dev/null)" ]'
+
+scenario "19: wrong account and wrong Region both fail closed"
+fresh_state
+cleanup_manifest
+OUT="$(SANDBOX_ACCOUNT=999999999999 "${SANDBOX_DIR}/deploy.sh" --stacks-only 2>&1)"; RC=$?
+check "19.1 wrong account exit non-zero" '[ "$RC" -ne 0 ]'
+check "19.2 reports account mismatch" 'printf "%s" "$OUT" | grep -q "does not match SANDBOX_ACCOUNT"'
+check "19.3 no stacks created" '[ -z "$(ls -A "$STUB_STATE/stacks" 2>/dev/null)" ]'
+OUT="$(AWS_REGION=eu-west-1 "${SANDBOX_DIR}/deploy.sh" --stacks-only 2>&1)"; RC=$?
+check "19.4 wrong Region exit non-zero" '[ "$RC" -ne 0 ]'
+check "19.5 reports Region mismatch" 'printf "%s" "$OUT" | grep -q "does not match SANDBOX_REGION"'
+check "19.6 no stacks created" '[ -z "$(ls -A "$STUB_STATE/stacks" 2>/dev/null)" ]'
+
+scenario "20: a foreign pre-existing stack cannot be modified"
+fresh_state
+cleanup_manifest
+mkdir -p "$STUB_STATE/stacks"
+printf '%s' '{"Tags":[{"Key":"lc-webfunction-sandbox-id","Value":"wfsbx"},{"Key":"lc-webfunction-sandbox-owner","Value":"SomeOtherProject"}],"Outputs":[],"Kind":"artifacts"}' >"$STUB_STATE/stacks/${A_STACK}.json"
+foreign_before="$(cat "$STUB_STATE/stacks/${A_STACK}.json")"
+OUT="$("${SANDBOX_DIR}/deploy.sh" --stacks-only 2>&1)"; RC=$?
+check "20.1 exit non-zero" '[ "$RC" -ne 0 ]'
+check "20.2 reports not owned" 'printf "%s" "$OUT" | grep -q "not owned"'
+check "20.3 foreign stack left untouched" '[ "$(cat "$STUB_STATE/stacks/${A_STACK}.json")" = "$foreign_before" ]'
+check "20.4 no deploy was attempted" '! grep -q "deploy" "$STUB_STATE/calls.log" 2>/dev/null'
+
+scenario "21: a foreign stack cannot be destroyed"
+fresh_state
+cleanup_manifest
+mkdir -p "$STUB_STATE/stacks"
+printf '%s' '{"Tags":[{"Key":"lc-webfunction-sandbox-id","Value":"wfsbx"},{"Key":"lc-webfunction-sandbox-owner","Value":"SomeOtherProject"}],"Outputs":[],"Kind":"artifacts"}' >"$STUB_STATE/stacks/${A_STACK}.json"
+OUT="$("${SANDBOX_DIR}/destroy.sh" --yes 2>&1)"; RC=$?
+check "21.1 exit non-zero" '[ "$RC" -ne 0 ]'
+check "21.2 reports not owned" 'printf "%s" "$OUT" | grep -qi "not owned"'
+check "21.3 foreign stack preserved" '[ -f "$STUB_STATE/stacks/'"$A_STACK"'.json" ]'
+
+scenario "22: the obsolete non-production acknowledgement authorizes nothing"
+fresh_state
+cleanup_manifest
+OUT="$(env -u SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 "${SANDBOX_DIR}/deploy.sh" --stacks-only 2>&1)"; RC=$?
+check "22.1 exit non-zero" '[ "$RC" -ne 0 ]'
+check "22.2 still requires the shared-account flag" 'printf "%s" "$OUT" | grep -q "SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1"'
+check "22.3 no stacks created" '[ -z "$(ls -A "$STUB_STATE/stacks" 2>/dev/null)" ]'
+
+scenario "23: the shared-account acknowledgement is scoped to the verified account"
+fresh_state
+cleanup_manifest
+run "${SANDBOX_DIR}/deploy.sh" --stacks-only
+check "23.1 verified target with acknowledgement succeeds" '[ "$RC" -eq 0 ]'
+fresh_state
+cleanup_manifest
+OUT="$(SANDBOX_ACCOUNT=999999999999 "${SANDBOX_DIR}/deploy.sh" --stacks-only 2>&1)"; RC=$?
+check "23.2 acknowledgement does not authorize a different account" '[ "$RC" -ne 0 ]'
+check "23.3 reports account mismatch" 'printf "%s" "$OUT" | grep -q "does not match SANDBOX_ACCOUNT"'
+check "23.4 no stacks created" '[ -z "$(ls -A "$STUB_STATE/stacks" 2>/dev/null)" ]'
+
+scenario "24: destroy still requires its own separate confirmation"
+fresh_state
+cleanup_manifest
+run "${SANDBOX_DIR}/deploy.sh" --stacks-only
+check "24.1 preconditions ok" '[ "$RC" -eq 0 ] && [ -f "$STUB_STATE/stacks/'"$A_STACK"'.json" ]'
+OUT="$(env -u SANDBOX_CONFIRM_DESTROY "${SANDBOX_DIR}/destroy.sh" --yes 2>&1)"; RC=$?
+check "24.2 destroy without confirmation fails" '[ "$RC" -ne 0 ]'
+check "24.3 stack preserved" '[ -f "$STUB_STATE/stacks/'"$A_STACK"'.json" ]'
+OUT="$(SANDBOX_CONFIRM_DESTROY=wrong "${SANDBOX_DIR}/destroy.sh" --yes 2>&1)"; RC=$?
+check "24.4 destroy with wrong confirmation fails" '[ "$RC" -ne 0 ]'
+check "24.5 stack still preserved" '[ -f "$STUB_STATE/stacks/'"$A_STACK"'.json" ]'
+run "${SANDBOX_DIR}/destroy.sh" --yes
+check "24.6 destroy with confirmation succeeds" '[ "$RC" -eq 0 ]'
+check "24.7 stacks gone" '[ -z "$(ls -A "$STUB_STATE/stacks" 2>/dev/null)" ]'
 cleanup_manifest
 
 # --------------------------------------------------------------------------------------------------

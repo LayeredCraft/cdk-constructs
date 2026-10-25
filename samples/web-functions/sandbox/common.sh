@@ -9,9 +9,10 @@
 #   * The sandbox target (account, Region, id) is always supplied explicitly - nothing is inferred, and
 #     an inherited AWS profile or AWS_* environment variable can never silently retarget a command
 #     (every AWS call is pinned with --region, and a disagreeing ambient region aborts).
-#   * Every AWS-mutating script must be opted in with SANDBOX_ALLOW_AWS=1 *and* acknowledge a
-#     non-production account with SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1, then verifies the live AWS
-#     identity (STS account and Region) against the declared sandbox target before doing anything.
+#   * Every AWS-mutating script must be opted in with SANDBOX_ALLOW_AWS=1 *and* acknowledge that it is
+#     creating temporary sandbox resources inside the selected existing account, preserving unrelated
+#     resources, with SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1. It then verifies the live AWS identity (STS
+#     account and Region) against the declared sandbox target before doing anything.
 #   * Every stack name carries a fixed sandbox namespace and every stack carries an ownership tag, so a
 #     pre-existing stack is proven to belong to this sandbox before it is updated or deleted.
 
@@ -54,7 +55,7 @@ require_cmd() {
 # Validates the explicit sandbox target. Fails early and lists the offending value.
 validate_sandbox_env() {
     [ -n "${SANDBOX_ID:-}" ] || die "SANDBOX_ID is required (a short lowercase namespace for this sandbox)."
-    [ -n "${SANDBOX_ACCOUNT:-}" ] || die "SANDBOX_ACCOUNT is required (the 12-digit disposable sandbox account id)."
+    [ -n "${SANDBOX_ACCOUNT:-}" ] || die "SANDBOX_ACCOUNT is required (the 12-digit sandbox account id)."
     [ -n "${SANDBOX_REGION:-}" ] || die "SANDBOX_REGION is required (for example us-east-1)."
 
     [[ "${SANDBOX_ACCOUNT}" =~ ^[0-9]{12}$ ]] || die "SANDBOX_ACCOUNT must be a 12-digit AWS account id."
@@ -73,13 +74,15 @@ validate_sandbox_env() {
 # Opt-in gate for anything that talks to the AWS control/data plane.
 require_aws_allowed() {
     [ "${SANDBOX_ALLOW_AWS:-}" = "1" ] ||
-        die "Refusing to call AWS. Set SANDBOX_ALLOW_AWS=1 to acknowledge you are acting on the disposable sandbox account ${SANDBOX_ACCOUNT:-<unset>}."
+        die "Refusing to call AWS. Set SANDBOX_ALLOW_AWS=1 to acknowledge you are acting on the sandbox account ${SANDBOX_ACCOUNT:-<unset>}."
 }
 
-# Explicit acknowledgement that the target account is disposable and non-production.
-require_non_production_ack() {
-    [ "${SANDBOX_ACKNOWLEDGE_NON_PRODUCTION:-}" = "1" ] ||
-        die "Refusing to mutate AWS. Set SANDBOX_ACKNOWLEDGE_NON_PRODUCTION=1 to confirm SANDBOX_ACCOUNT ${SANDBOX_ACCOUNT:-<unset>} is a disposable non-production account."
+# Explicit acknowledgement that the operator accepts creating temporary sandbox resources inside the
+# selected existing account while preserving unrelated resources. It does NOT assert that the whole
+# account is disposable or non-production, only that the sandbox is scoped to its own namespace/tags.
+require_shared_account_ack() {
+    [ "${SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT:-}" = "1" ] ||
+        die "Refusing to mutate AWS. Set SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 to confirm you accept creating temporary LayeredCraft sandbox resources in the existing account ${SANDBOX_ACCOUNT:-<unset>} without modifying unrelated resources."
 }
 
 # Every AWS call goes through this wrapper so an inherited profile/region cannot retarget it.
