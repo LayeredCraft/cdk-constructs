@@ -343,9 +343,8 @@ public static class WebFunctionConstructAssertions
         switch (statements)
         {
             case IEnumerable<object> list:
-                foreach (var item in list)
-                    if (item is IDictionary<string, object> statement)
-                        yield return statement;
+                foreach (var statement in list.OfType<IDictionary<string, object>>())
+                    yield return statement;
                 break;
             case IDictionary<string, object> single:
                 yield return single;

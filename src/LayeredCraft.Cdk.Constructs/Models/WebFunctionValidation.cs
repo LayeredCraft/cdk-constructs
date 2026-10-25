@@ -110,7 +110,7 @@ internal static class WebFunctionValidation
             return;
 
         var milliseconds = timeout.ToMilliseconds();
-        if (milliseconds % 1000 != 0)
+        if ((decimal)milliseconds % 1000 != 0)
             throw new ArgumentOutOfRangeException(parameterName, timeout, "Timeout must be a whole number of seconds.");
 
         var seconds = milliseconds / 1000;
@@ -295,7 +295,7 @@ internal static class WebFunctionValidation
                 parameterName);
         }
 
-        if (!hasEntryPoint || entryPoint is null || Token.IsUnresolved(entryPoint))
+        if (string.IsNullOrEmpty(entryPoint) || Token.IsUnresolved(entryPoint))
             return;
 
         if (entryPoint.StartsWith('/'))

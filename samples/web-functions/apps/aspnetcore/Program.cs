@@ -51,7 +51,7 @@ internal static class BuildId
         }
 
         // The artifact build writes build-id.txt next to the apphost.
-        var fromFile = Path.Combine(AppContext.BaseDirectory, "build-id.txt");
+        var fromFile = Path.Join(AppContext.BaseDirectory, "build-id.txt");
         if (File.Exists(fromFile))
         {
             var value = File.ReadAllText(fromFile).Trim();

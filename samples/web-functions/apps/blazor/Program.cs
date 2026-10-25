@@ -42,7 +42,7 @@ internal static class BuildId
             return fromEnvironment;
         }
 
-        var fromFile = Path.Combine(AppContext.BaseDirectory, "build-id.txt");
+        var fromFile = Path.Join(AppContext.BaseDirectory, "build-id.txt");
         if (File.Exists(fromFile))
         {
             var value = File.ReadAllText(fromFile).Trim();

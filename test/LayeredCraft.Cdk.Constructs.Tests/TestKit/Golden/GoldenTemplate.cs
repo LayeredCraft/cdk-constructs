@@ -74,7 +74,7 @@ public static class GoldenTemplate
         if (IsUpdateRequested())
         {
             Directory.CreateDirectory(SourceGoldenDirectory);
-            File.WriteAllText(Path.Combine(SourceGoldenDirectory, goldenFileName), actual);
+            File.WriteAllText(Path.Join(SourceGoldenDirectory, goldenFileName), actual);
             throw new InvalidOperationException(
                 $"Golden template '{goldenFileName}' was regenerated because {UpdateEnvironmentVariable} is set. " +
                 "Unset the environment variable and re-run to verify.");
@@ -92,14 +92,14 @@ public static class GoldenTemplate
 
     private static string ResolveReadPath(string goldenFileName)
     {
-        var sourcePath = Path.Combine(SourceGoldenDirectory, goldenFileName);
+        var sourcePath = Path.Join(SourceGoldenDirectory, goldenFileName);
 
         if (File.Exists(sourcePath))
         {
             return sourcePath;
         }
 
-        var outputPath = Path.Combine(OutputGoldenDirectory, goldenFileName);
+        var outputPath = Path.Join(OutputGoldenDirectory, goldenFileName);
 
         if (File.Exists(outputPath))
         {
@@ -118,7 +118,7 @@ public static class GoldenTemplate
         {
             if (directory.EnumerateFiles("*.csproj").Any())
             {
-                return Path.Combine(directory.FullName, "GoldenTemplates");
+                return Path.Join(directory.FullName, "GoldenTemplates");
             }
 
             directory = directory.Parent;
