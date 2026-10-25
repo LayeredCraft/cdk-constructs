@@ -22,7 +22,7 @@ public class WebFunctionConstructPropsBuilder
     private string _functionName = "test-web-function";
     private WebFunctionCode? _code;
     private IWebFunctionEndpointOptions? _endpoint;
-    private WebFunctionRuntime _runtime = WebFunctionRuntime.NodeJs24X;
+    private readonly WebFunctionRuntime _runtime = WebFunctionRuntime.NodeJs24X;
     private string? _entryPoint;
     private readonly Dictionary<string, string> _environmentVariables = new();
     private Duration _timeout = Duration.Seconds(30);

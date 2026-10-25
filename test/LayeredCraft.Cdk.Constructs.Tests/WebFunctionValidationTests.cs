@@ -368,6 +368,32 @@ public class WebFunctionValidationTests
         act.Should().NotThrow();
     }
 
+    [Fact]
+    public void ValidateRegions_MultiRegion_DefersHomeRegionCheckWhenAllRegionsAreTokens()
+    {
+        var token = Fn.Ref("region-token");
+
+        Action act = () => WebFunctionValidation.ValidateRegions(
+            WebFunctionEndpointType.MultiRegion,
+            [token],
+            "us-east-1");
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ValidateRegions_MultiRegion_DefersHomeRegionCheckWhenTokenMayResolveToNonHomeRegion()
+    {
+        var token = Fn.Ref("region-token");
+
+        Action act = () => WebFunctionValidation.ValidateRegions(
+            WebFunctionEndpointType.MultiRegion,
+            [token, "us-east-1"],
+            "us-east-1");
+
+        act.Should().NotThrow();
+    }
+
     // -------------------------------------------------------------------------
     // Environment variables
     // -------------------------------------------------------------------------

@@ -176,7 +176,8 @@ internal static class WebFunctionValidation
 
     /// <summary>
     /// Validates the Regions for an endpoint type: at most 50, no duplicates, none for <see cref="WebFunctionEndpointType.HomeRegion"/>
-    /// beyond the home Region, and at least one non-home Region for multi- and per-Region endpoints.
+    /// beyond the home Region, and at least one non-home Region for multi- and per-Region endpoints. When any Region is an
+    /// unresolved token the home-Region-only check is deferred to deployment, because the token may resolve to a non-home Region.
     /// </summary>
     internal static void ValidateRegions(
         WebFunctionEndpointType endpointType,
@@ -209,6 +210,7 @@ internal static class WebFunctionValidation
         {
             if (homeRegion is not null
                 && !Token.IsUnresolved(homeRegion)
+                && resolved.Count == regions.Count
                 && resolved.All(region => string.Equals(region, homeRegion, StringComparison.Ordinal)))
             {
                 throw new ArgumentException(
