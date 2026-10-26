@@ -281,7 +281,7 @@ public static class WebFunctionConstructAssertions
     /// Asserts the template contains a log group with the given literal name and retention. Token names cannot be
     /// asserted this way because they are not literal in the synthesized template.
     /// </summary>
-    public static void ShouldHaveLogGroup(this Template template, string logGroupName, int retentionDays)
+    public static void ShouldHaveWebFunctionLogGroup(this Template template, string logGroupName, int retentionDays)
     {
         ArgumentNullException.ThrowIfNull(template);
 

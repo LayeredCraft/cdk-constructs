@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using Amazon.CDK;
 using Amazon.CDK.AWS.IAM;
@@ -191,14 +192,51 @@ public class WebFunctionCompanionLogGroupTests
         var centralized = LogGroup.FromLogGroupName(stack, "Centralized", "/custom/logs");
         var companion = LogGroup.FromLogGroupName(stack, "Companion", "/custom/logs.local");
 
-        Action act = () => CreateWebFunction(stack, WebFunctionLogs.Use(centralized, companion));
-        act.Should().NotThrow();
+        var construct = CreateWebFunction(stack, WebFunctionLogs.Use(centralized, companion));
 
         var template = TemplateJson(stack);
+
+        // Imported groups add no resources and therefore no dependencies.
+        ResourcesOfType(template, LogGroupType).Should().BeEmpty();
+
+        var functionId = ResourcesOfType(template, "AWS::Lambda::WebFunction").Single().Key;
+        var roleId = ResourcesOfType(template, "AWS::IAM::Role").Single().Key;
         var dependsOn = DependsOnIds(RevisionOf(template, "test-web-function"));
 
+        dependsOn.Should().BeEquivalentTo([functionId, roleId]);
+        construct.LocalLogGroup.Should().BeSameAs(companion);
+    }
+
+    [Fact]
+    public void T8b_Use_WithCrossStackOwnedGroup_ShouldNotAddExplicitDependency()
+    {
+        var app = new App();
+        var producerStack = new Stack(app, "producer", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" },
+        });
+        var centralized = new LogGroup(producerStack, "Centralized", new LogGroupProps { LogGroupName = "/custom/logs" });
+
+        var consumerStack = new Stack(app, "consumer", new StackProps
+        {
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" },
+        });
+        var construct = CreateWebFunction(consumerStack, WebFunctionLogs.Use(centralized));
+
+        var template = TemplateJson(consumerStack);
+        ResourcesOfType(template, LogGroupType).Should().BeEmpty();
+
+        var dependsOn = DependsOnIds(RevisionOf(template, "test-web-function"));
         dependsOn.Should().NotContain(id => id.Contains("Centralized", StringComparison.Ordinal));
-        dependsOn.Should().NotContain(id => id.Contains("Companion", StringComparison.Ordinal));
+
+        // The legitimate cross-stack reference (and its implicit dependency) is preserved.
+        template.GetProperty("Resources").EnumerateObject()
+            .SelectMany(property => property.Value.GetRawText().Split("\n"))
+            .Any(line => line.Contains("Fn::ImportValue", StringComparison.Ordinal))
+            .Should()
+            .BeTrue();
+
+        construct.LogGroup.Should().BeSameAs(centralized);
     }
 
     [Fact]
@@ -236,7 +274,7 @@ public class WebFunctionCompanionLogGroupTests
         ResourcesOfType(template, LogGroupType).Should().BeEmpty();
 
         var revision = RevisionOf(template, "test-web-function");
-        Properties(revision).TryGetProperty("TelemetryConfig", out _).Should().BeFalse();
+        Properties(revision).GetProperty("ServiceConfig").TryGetProperty("TelemetryConfig", out _).Should().BeFalse();
 
         construct.LogGroup.Should().BeNull();
         construct.LocalLogGroup.Should().BeNull();
@@ -270,19 +308,24 @@ public class WebFunctionCompanionLogGroupTests
 
         var template = TemplateJson(stack);
         var statements = AllPolicyStatements(template);
+
+        // GrantWrite (existing behavior) + companion write (G1) + companion create group (G2).
         statements.Should().HaveCount(3);
+        statements.Should().NotContain(s => Actions(s).Contains("logs:*"));
 
-        var createGroup = statements.Where(s => Actions(s).Contains("logs:CreateLogGroup")).ToList();
-        createGroup.Should().HaveCount(1);
-        ResourceText(createGroup[0]).Should().Contain(":log-group:/custom/logs.local");
-        ResourceText(createGroup[0]).Should().NotContain("log-stream");
+        var createGroup = statements.Single(s => Actions(s).Contains("logs:CreateLogGroup"));
+        Actions(createGroup).Should().BeEquivalentTo(new[] { "logs:CreateLogGroup" });
+        ResourceArns(createGroup).Should().BeEquivalentTo(new[]
+        {
+            "arn:${AWS::Partition}:logs:us-east-1:123456789012:log-group:/custom/logs.local",
+        });
 
-        var streamStatements = statements.Where(s => Actions(s).Contains("logs:CreateLogStream")).ToList();
-        streamStatements.Should().HaveCount(2);
-        var companionWrite = streamStatements.Where(s => ResourceText(s).Contains(".local:log-stream:*")).ToList();
-        companionWrite.Should().HaveCount(1);
-        ResourceText(companionWrite[0]).Should().Contain(":logs:us-east-1:");
-        Actions(companionWrite[0]).Should().Contain("logs:PutLogEvents");
+        var companionWrite = statements.Single(s => ResourceText(s).Contains(".local:log-stream:*"));
+        Actions(companionWrite).Should().BeEquivalentTo(new[] { "logs:CreateLogStream", "logs:PutLogEvents" });
+        ResourceArns(companionWrite).Should().BeEquivalentTo(new[]
+        {
+            "arn:${AWS::Partition}:logs:us-east-1:123456789012:log-group:/custom/logs.local:log-stream:*",
+        });
     }
 
     [Fact]
@@ -551,6 +594,93 @@ public class WebFunctionCompanionLogGroupTests
         ResourcesOfType(TemplateJson(stack), PolicyType).Should().BeEmpty();
     }
 
+    [Fact]
+    public void P4b_UseWithoutCompanionAndNonHomeEndpoint_ShouldGrantSingleWidenedCreateGroup()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var role = OwnedRole(stack);
+        var centralized = LogGroup.FromLogGroupName(stack, "Centralized", "/custom/logs");
+
+        var construct = CreateWebFunction(stack, WebFunctionLogs.Use(centralized), role);
+        construct.AddEndpoint("regional", new WebFunctionEndpointOptions
+        {
+            EndpointName = "regional",
+            AuthType = WebFunctionAuthType.IamAuth,
+            EndpointType = WebFunctionEndpointType.PerRegion,
+            Regions = ["us-west-2"],
+        });
+
+        var statements = AllPolicyStatements(TemplateJson(stack));
+        statements.Count(s => ResourceText(s).Contains(".local:log-stream:*")).Should().Be(1);
+
+        var createGroup = statements.Where(s => Actions(s).Contains("logs:CreateLogGroup")).ToList();
+        createGroup.Should().HaveCount(1);
+        ResourceArns(createGroup[0]).Should().BeEquivalentTo(new[]
+        {
+            "arn:${AWS::Partition}:logs:*:123456789012:log-group:/custom/logs.local",
+        });
+    }
+
+    [Fact]
+    public void P16_NonHomeDefaultEndpoint_ShouldWidenStatements()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var role = OwnedRole(stack);
+        var centralized = LogGroup.FromLogGroupName(stack, "Centralized", "/custom/logs");
+
+        CreateWebFunction(stack, WebFunctionLogs.Use(centralized), role, endpoint: RemoteEndpoint("default"));
+
+        var statements = AllPolicyStatements(TemplateJson(stack));
+        var companionWrite = statements.Where(s => ResourceText(s).Contains(".local:log-stream:*")).ToList();
+        companionWrite.Should().HaveCount(1);
+        ResourceArns(companionWrite[0]).Should().BeEquivalentTo(new[]
+        {
+            "arn:${AWS::Partition}:logs:*:123456789012:log-group:/custom/logs.local:log-stream:*",
+        });
+    }
+
+    [Theory]
+    [InlineData(WebFunctionEndpointType.PerRegion)]
+    [InlineData(WebFunctionEndpointType.MultiRegion)]
+    public void P11b_ResolvingPolicyBeforeAddEndpoint_ShouldStillWiden(WebFunctionEndpointType type)
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var role = OwnedRole(stack);
+        var centralized = LogGroup.FromLogGroupName(stack, "Centralized", "/custom/logs");
+        var companion = LogGroup.FromLogGroupName(stack, "Companion", "/custom/logs.local");
+
+        var construct = CreateWebFunction(stack, WebFunctionLogs.Use(centralized, companion), role);
+
+        // Force the companion Region token (embedded in the supplied role's policy) to resolve BEFORE the
+        // non-home endpoint exists. A cached lazy value would keep the stack Region here.
+        var policy = (Policy)role.Node.FindChild("DefaultPolicy")!;
+        stack.Resolve(policy.Document);
+
+        construct.AddEndpoint("regional", new WebFunctionEndpointOptions
+        {
+            EndpointName = "regional",
+            AuthType = WebFunctionAuthType.IamAuth,
+            EndpointType = type,
+            Regions = ["us-west-2"],
+        });
+
+        var statements = AllPolicyStatements(TemplateJson(stack));
+        var companionWrite = statements.Where(s => ResourceText(s).Contains(".local:log-stream:*")).ToList();
+        companionWrite.Should().HaveCount(1);
+        ResourceArns(companionWrite[0]).Should().BeEquivalentTo(new[]
+        {
+            "arn:${AWS::Partition}:logs:*:123456789012:log-group:/custom/logs.local:log-stream:*",
+        });
+
+        statements.Count(s => Actions(s).Contains("logs:CreateLogGroup")).Should().Be(1, "a remote endpoint may create the companion in other Regions");
+
+        var createGroup = statements.Single(s => Actions(s).Contains("logs:CreateLogGroup"));
+        ResourceArns(createGroup).Should().BeEquivalentTo(new[]
+        {
+            "arn:${AWS::Partition}:logs:*:123456789012:log-group:/custom/logs.local",
+        });
+    }
+
     // ------------------------------------------------------------------ Warnings
 
     [Fact]
@@ -700,6 +830,51 @@ public class WebFunctionCompanionLogGroupTests
             .ToList();
 
         allMessages.Should().NotContain(message => message.Contains("${Token[", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Wh_TokenizedEndpointName_ShouldUsePlaceholderWithoutTokenText()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+
+        var construct = CreateWebFunction(stack, WebFunctionLogs.Create(), endpoint: new WebFunctionEndpointOptions
+        {
+            EndpointName = Fn.ImportValue("endpoint-name"),
+            AuthType = WebFunctionAuthType.IamAuth,
+            EndpointType = WebFunctionEndpointType.PerRegion,
+            Regions = ["us-west-2"],
+        });
+
+        var messages = construct.DefaultEndpoint.Node.Metadata
+            .Select(entry => entry.Data?.ToString() ?? "")
+            .Where(data => data.Contains(RemoteCompanionWarningId, StringComparison.Ordinal))
+            .ToList();
+
+        messages.Should().HaveCount(1);
+        messages[0].Should().Contain("this endpoint");
+        messages[0].Should().NotContain("${Token[");
+    }
+
+    [Fact]
+    public void Wf_AcknowledgeWarning_OnEndpoint_ShouldRemoveRemoteWarning()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var construct = CreateWebFunction(stack, WebFunctionLogs.Create(), endpoint: RemoteEndpoint("default"));
+
+        RuntimeAnnotations.Of(construct.DefaultEndpoint).AcknowledgeWarning(RemoteCompanionWarningId, "Reviewed.");
+
+        Annotations.FromStack(stack).HasNoWarning("*", Match.StringLikeRegexp(RemoteCompanionWarningId));
+    }
+
+    [Fact]
+    public void Wf_AcknowledgeWarning_OnStackAfterConstruction_ShouldRemoveRemoteWarning()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        CreateWebFunction(stack, WebFunctionLogs.Create(), endpoint: RemoteEndpoint("default"));
+
+        RuntimeAnnotations.Of(stack).AcknowledgeWarning(RemoteCompanionWarningId, "Reviewed.");
+
+        Annotations.FromStack(stack).HasNoWarning("*", Match.StringLikeRegexp(RemoteCompanionWarningId));
     }
 
     // ------------------------------------------------------------------ Helpers
@@ -913,4 +1088,54 @@ public class WebFunctionCompanionLogGroupTests
 
     private static string ResourceText(JsonElement statement) =>
         statement.TryGetProperty("Resource", out var resource) ? resource.GetRawText() : string.Empty;
+
+    private static List<string> ResourceArns(JsonElement statement)
+    {
+        var result = new List<string>();
+        if (!statement.TryGetProperty("Resource", out var resource))
+            return result;
+
+        if (resource.ValueKind == JsonValueKind.String)
+        {
+            result.Add(resource.GetString()!);
+            return result;
+        }
+
+        if (resource.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var entry in resource.EnumerateArray())
+                result.Add(FlattenArn(entry));
+            return result;
+        }
+
+        result.Add(FlattenArn(resource));
+        return result;
+    }
+
+    private static string FlattenArn(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString()!,
+        JsonValueKind.Object => FlattenArnObject(value),
+        _ => value.GetRawText(),
+    };
+
+    private static string FlattenArnObject(JsonElement value)
+    {
+        if (value.TryGetProperty("Fn::Join", out var join))
+        {
+            var builder = new StringBuilder();
+            foreach (var part in join[1].EnumerateArray())
+                builder.Append(FlattenArn(part));
+
+            return builder.ToString();
+        }
+
+        if (value.TryGetProperty("Ref", out var reference))
+            return "${" + reference.GetString() + "}";
+
+        if (value.TryGetProperty("Fn::GetAtt", out var getAtt))
+            return "${" + string.Join(".", getAtt.EnumerateArray().Select(item => item.GetString())) + "}";
+
+        return value.GetRawText();
+    }
 }

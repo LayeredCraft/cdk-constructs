@@ -560,7 +560,7 @@ Resources created (stable child IDs, a public contract for `Node.FindChild` esca
 | *(consumer id)* | additional `WebFunctionEndpointConstruct` | `AddEndpoint` |
 | `ExecutionRole` | `AWS::IAM::Role` + `AWSLambdaBasicExecutionRole` | `Role == null` |
 | `LogGroup` | `AWS::Logs::LogGroup` named `/aws/lambda/web/{FunctionName}` | `Logs = WebFunctionLogs.Create(...)` (default) |
-| `LocalLogGroup` *(revision 5)* | `AWS::Logs::LogGroup` named `{LogGroup.LogGroupName}.local` | `Logs = WebFunctionLogs.Create(...)` (default) |
+| `LocalLogGroup` *(revision 5)* | `AWS::Logs::LogGroup` named `{centralizedName}.local` (Erratum B) | `Logs = WebFunctionLogs.Create(...)` (default) |
 | `ResourcePolicy` | `AWS::Lambda::ResourcePolicy` (`ResourceArn` = function ARN) | first statement only |
 
 **Reserved child IDs (revision 4).** `Function`, `Revision`, `DefaultEndpoint`, `ExecutionRole`, `LogGroup`, and
@@ -627,8 +627,17 @@ Notes:
 
 Rules:
 
-- **Name.** The companion name is `$"{centralized.LogGroupName}.local"`, taken from the created centralized
-  `LogGroup`, never recomputed from `FunctionName`. A token name renders as `Fn::Join`.
+- **Name.** The companion name is the centralized group's name plus `.local`. It is derived from the same centralized
+  log-group **name value that is used for CloudFormation creation** (the configured `LogGroupName`, e.g.
+  `/aws/lambda/web/{FunctionName}`), never recomputed independently and never re-derived from `FunctionName`. A literal
+  configured name yields a literal companion name; a token configured name renders as `Fn::Join`.
+  *Erratum B (revision 5, implementation review):* do **not** mandate reading the L2 `LogGroup.LogGroupName` property
+  to obtain this name. The CDK L2 property is always a CloudFormation token (`Ref`) even for an explicitly named group,
+  so using it would force every companion name — including a literal `FunctionName` with no tokens — to render as
+  `Fn::Join`, contradicting the literal-name expectations of tests T1/T4. The construct therefore derives the companion
+  name from the configured name string it passes to the centralized `LogGroup` (and, in `Use` mode, from the supplied
+  group's configured name), preserving the exact deployed name. Validation ([§14](#14-validation)) uses the underlying
+  `CfnLogGroup` when it can, as described under *Companion validation* below.
 - **Retention and removal.** `companionRetention` is independent of `retention`. The companion takes the same
   `RemovalPolicy`; there is no separate companion policy. The `THREE_DAYS` default reflects what the companion is
   for: it only stages events that are already centralized within minutes, and its main use is low-latency Live
@@ -637,10 +646,13 @@ Rules:
 - **Supplied groups.** The construct never creates a companion for a caller-supplied centralized group. A supplied or
   imported group may be shared by several functions, so creating `{name}.local` per construct would collide
   (`AlreadyExists`) and split ownership between the caller (the parent) and this stack (the companion).
-- **Companion validation.** When both `logGroup.LogGroupName` and `companion.LogGroupName` are literal and the
-  companion's name is not exactly `{name}.local`, `Use` throws `ArgumentException` (parameter `companion`). Lambda
-  derives the companion name itself, so a different group would never receive events. Tokens skip the check. The
-  supplied companion is not otherwise inspected (its retention is the caller's).
+- **Companion validation.** When both configured names are provably literal and the companion's name is not exactly
+  `{name}.local`, `Use` throws `ArgumentException` (parameter `companion`). Lambda derives the companion name itself,
+  so a different group would never receive events. Tokens skip the check and are never rejected. For a same-stack owned
+  L2 `LogGroup`, the configured name is read from the underlying `CfnLogGroup` reached through the construct's default
+  child (`Node.DefaultChild`), not from the L2 `LogGroupName` property (see Erratum B); for an imported group the L2
+  property is used. The supplied companion is not otherwise inspected (its retention is the caller's). No reflection or
+  private CDK internals are used.
 - **`LocalLogGroup`** is the created companion (`Create`), the supplied companion (`Use(g, c)`), or `null`.
 
 **Ordering.** For `Create`, the revision has an explicit `Node.AddDependency` on both `LogGroup` and
@@ -699,10 +711,17 @@ that rule holds:
 - **Never:** `CreateLogGroup` on the centralized group; `logs:*`; `log-group:*`; any other account.
 - **Mechanism.** Configuration order must not matter. For example, a construct created with a `HomeRegion` default
   endpoint and then given a `PerRegion` endpoint through `AddEndpoint` must synthesize the widened permissions.
-  - `{R}` is one `Lazy.String` with a private producer derived from jsii's `DeputyBase`; a jsii requirement. It reads
-    a private "has a non-home-Region endpoint" flag on the construct and returns `*` or `Stack.Of(this).Region`.
-    CDK resolves it when the template is rendered, after all construct code has run. No policy document is edited
-    after rendering, and no `PolicyStatement` is changed after it is added.
+  - `{R}` is one **uncached** lazy string: `Lazy.UncachedString` with a private producer derived from jsii's
+    `DeputyBase` implementing `IStringProducer` (a jsii requirement). It reads a private "has a non-home-Region
+    endpoint" flag on the construct and returns `*` or `Stack.Of(this).Region`.
+    *Erratum C (revision 5, implementation review):* the cached `Lazy.String` / `IStableStringProducer` form must
+    **not** be used. `Lazy.String` resolves its value once and caches it, so if a role policy is resolved (for example
+    by `Stack.Resolve` or an early render) before `AddEndpoint` adds a `PerRegion`/`MultiRegion` endpoint, the cached
+    value keeps the home Region and the permissions never widen. `Lazy.UncachedString` (`IStringProducer.Produce`
+    takes the `IResolveContext`) is re-evaluated on every render, so the G1/G2 ARNs reflect the **final** configured
+    endpoint set regardless of when the policy is first resolved. Endpoint configuration must be complete before the
+    template is rendered; no policy document is edited after rendering, and no `PolicyStatement` is changed after it is
+    added.
   - G1 is added once in the constructor.
   - G2 is added at most once, guarded by a private flag: either in the constructor (no companion supplied) or by the
     endpoint-creation path the first time a `PerRegion`/`MultiRegion` endpoint is created. Adding a statement to a
@@ -972,7 +991,12 @@ public static class WebFunctionConstructAssertions
     public static void ShouldHaveCodeBucketReadStatement(this Template t, string functionName);
     // Revision 5 (#104). Match by log-group NAME, exact RetentionInDays; DependsOn logical IDs are resolved through
     // the template, never asserted directly:
-    public static void ShouldHaveLogGroup(this Template t, string logGroupName, int retentionDays);
+    // Erratum A (revision 5, implementation review): the Web Function log-group assertion is named
+    // ShouldHaveWebFunctionLogGroup, not ShouldHaveLogGroup. ShouldHaveLogGroup is already published by
+    // LambdaFunctionConstructAssertions (Template, string, int retentionDays = 14) in the same namespace, so a second
+    // (Template, string, int) overload would be an ambiguous call (CS0121) for consumers. ShouldHaveLogGroup is left
+    // unchanged; no conflicting overloads are added.
+    public static void ShouldHaveWebFunctionLogGroup(this Template t, string logGroupName, int retentionDays);
     public static void ShouldHaveCompanionLogGroup(this Template t, string centralizedLogGroupName, int retentionDays);
     public static void ShouldHaveRevisionDependingOnLogGroups(this Template t, string functionName,
         params string[] logGroupNames);
@@ -2252,7 +2276,7 @@ bead `cdkc-18e.18`; consumer validation is sharedale/sharedale#162 on a publishe
 1. *D1 Retention.* The companion defaults to `THREE_DAYS`. The centralized default stays `TWO_WEEKS`.
 2. *D2 Create.* `Create(retention, removalPolicy, companionRetention)`. The companion takes the centralized group's
    removal policy.
-3. *D3 Naming.* `{centralized.LogGroupName}.local`, from the actual centralized group, token-safe. New child and
+3. *D3 Naming.* `{centralizedName}.local`, from the centralized group's configured name (Erratum B), token-safe. New child and
    reserved ID `LocalLogGroup` (§8.3, §14). New `WebFunctionConstruct.LocalLogGroup` property.
 4. *D4 Use.* `Use(logGroup, companion = null)`. A companion is never created for a supplied group. Literal name
    mismatches are rejected (§14).
@@ -2276,3 +2300,19 @@ check 3.9 (§19.1), and compatibility (§13: source compatible, binary incompati
 *Deviation from the reviewed proposal:* the single `…:{name}.local:*` resource for all three actions, copied from the
 AWS example, was replaced by per-resource-type statements, and `CreateLogGroup` was narrowed to the cases where
 Lambda creates the group (maintainer IAM refinement).
+
+*Errata (implementation review of `f411074`, 2026-10-26; revision 5 retained, no revision 6).* The maintainer accepted
+the implementation with targeted corrections. The following three corrections are applied in place to the revision-5
+text above and do not change the approved scope:
+
+- **Erratum A.** The new Web Function log-group assertion is `ShouldHaveWebFunctionLogGroup`, not
+  `ShouldHaveLogGroup` (already published by `LambdaFunctionConstructAssertions`; a second `(Template, string, int)`
+  overload would be ambiguous for consumers — CS0121). See §8.6.
+- **Erratum B.** The companion name is derived from the configured centralized log-group name used for CloudFormation
+  creation, not by reading the L2 `LogGroup.LogGroupName` property (which is always a `Ref` token and would force
+  `Fn::Join` even for a literal name). Deployed naming is unchanged. Companion-name validation reads the underlying
+  `CfnLogGroup` through the construct's default child for owned groups. See "Name" and "Companion validation" in §8.3.
+- **Erratum C.** `{R}` uses the **uncached** `Lazy.UncachedString` (`IStringProducer`), not the caching `Lazy.String`
+  (`IStableStringProducer`). A cached value resolved before `AddEndpoint` would keep the home Region and never widen;
+  the uncached form re-evaluates on every render so G1/G2 reflect the final endpoint set. See "Mechanism" in §8.3 and
+  the ordering tests P11–P15 (§15).

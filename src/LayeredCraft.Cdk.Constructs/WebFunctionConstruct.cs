@@ -61,7 +61,7 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
 
         Role = props.Role ?? CreateExecutionRole();
         Logs = props.Logs;
-        _companionRegion = Lazy.String(
+        _companionRegion = Lazy.UncachedString(
             new CompanionRegionProducer(this),
             new LazyStringValueOptions { DisplayHint = "companionLogGroupRegion" });
 
@@ -362,7 +362,7 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
             ? $"the companion log group '{_centralizedLogGroupName}.local'"
             : "a per-Region companion log group";
 
-    private sealed class CompanionRegionProducer : DeputyBase, IStableStringProducer
+    private sealed class CompanionRegionProducer : DeputyBase, IStringProducer
     {
         private readonly WebFunctionConstruct _construct;
 
@@ -370,7 +370,7 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
             : base(new DeputyProps(Array.Empty<object>()))
             => _construct = construct;
 
-        public string Produce()
+        public string Produce(IResolveContext context)
             => _construct._hasNonHomeRegionEndpoint ? "*" : Stack.Of(_construct).Region;
     }
 

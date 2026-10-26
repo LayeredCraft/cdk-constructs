@@ -87,9 +87,11 @@ public sealed class WebFunctionEndpointConstruct : Resource, IWebFunctionEndpoin
                 "All of this function's log groups, including the centralized group, are service-managed and never expire.",
         };
 
+        var endpointLabel = Token.IsUnresolved(EndpointName) ? "this endpoint" : $"'{EndpointName}'";
+
         Annotations.Of(this).AddWarningV2(
             RemoteCompanionWarningId,
-            $"Endpoint '{EndpointName}' ({EndpointType}) runs requests in Regions other than the stack Region. " +
+            $"Endpoint {endpointLabel} ({EndpointType}) runs requests in Regions other than the stack Region. " +
             $"Lambda creates {webFunction.DescribeCompanionLogGroup()} in each of those Regions on first request " +
             "with no expiry; this construct does not manage log groups outside the stack Region. " +
             $"Set their retention separately. {modeSentence}");

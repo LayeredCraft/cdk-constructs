@@ -1,6 +1,7 @@
 using System;
 using Amazon.CDK;
 using Amazon.CDK.AWS.Logs;
+using Constructs;
 
 namespace LayeredCraft.Cdk.Constructs.Models;
 
@@ -80,8 +81,11 @@ public abstract class WebFunctionLogs
         if (companion is null)
             return;
 
-        var name = logGroup.LogGroupName;
-        var companionName = companion.LogGroupName;
+        var name = ResolveConfiguredName(logGroup);
+        var companionName = ResolveConfiguredName(companion);
+
+        if (name is null || companionName is null)
+            return;
 
         if (Token.IsUnresolved(name) || Token.IsUnresolved(companionName))
             return;
@@ -93,6 +97,21 @@ public abstract class WebFunctionLogs
                 $"The companion log group must be named '{expected}' to match the centralized log group, but was named '{companionName}'.",
                 nameof(companion));
         }
+    }
+
+    /// <summary>
+    /// Returns the literal log-group name a group was configured with, when that can be proven at
+    /// construction time. A CDK-managed <see cref="LogGroup"/> exposes its configured name through the
+    /// underlying <see cref="CfnLogGroup"/>; <see cref="ILogGroup.LogGroupName"/> is a CloudFormation token for
+    /// those groups, so the resource is inspected instead. Imported groups have no resource and fall back to
+    /// <see cref="ILogGroup.LogGroupName"/>. Returns null when no name is configured.
+    /// </summary>
+    private static string? ResolveConfiguredName(ILogGroup logGroup)
+    {
+        if (logGroup is Construct construct && construct.Node.DefaultChild is CfnLogGroup cfnLogGroup)
+            return cfnLogGroup.LogGroupName;
+
+        return logGroup.LogGroupName;
     }
 }
 
