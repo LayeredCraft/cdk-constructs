@@ -1,0 +1,13 @@
+<Project>
+
+  <!--
+    Sample-only package management. Central package management is disabled here so the
+    samples never require edits to the repository-wide Directory.Packages.props. The
+    .NET samples deliberately use only the shared framework and add no PackageReference.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

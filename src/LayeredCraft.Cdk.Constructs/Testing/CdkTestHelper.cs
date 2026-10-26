@@ -242,4 +242,16 @@ public static class CdkTestHelper
             .WithUserPoolName(userPoolName)
             .WithCognitoDomain(userPoolName);
     }
+
+    /// <summary>
+    /// Creates a <see cref="WebFunctionConstructPropsBuilder"/> with sensible test defaults.
+    /// The builder defaults to a function name of <c>"test-web-function"</c> and does not choose an
+    /// authentication mode; callers select one with <c>WithIamAuthEndpoint</c>,
+    /// <c>WithApplicationManagedEndpoint</c>, or <c>WithEndpoint</c>.
+    /// </summary>
+    /// <returns>A configured builder for creating Web Function test props</returns>
+    public static WebFunctionConstructPropsBuilder CreateWebFunctionPropsBuilder()
+    {
+        return new WebFunctionConstructPropsBuilder();
+    }
 }

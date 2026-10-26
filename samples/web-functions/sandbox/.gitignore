@@ -1,0 +1,9 @@
+# CDK application build and synthesis outputs.
+bin/
+obj/
+cdk.out/
+.cdk.staging/
+
+# Artifact upload manifest and working files produced by the deployment scripts.
+build/
+*.artifacts.json

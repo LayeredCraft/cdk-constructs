@@ -1,0 +1,9 @@
+# Artifact build output (zips, staging trees) — never committed.
+build/
+
+# Next.js build output.
+apps/nextjs/.next/
+apps/nextjs/out/
+
+# Node dependency trees.
+apps/nextjs/node_modules/

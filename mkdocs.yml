@@ -110,8 +110,11 @@ nav:
     - Static Site: constructs/static-site.md
     - DynamoDB Table: constructs/dynamodb-table.md
     - Cognito User Pool: constructs/cognito-user-pool.md
+    - Web Function: constructs/web-function.md
   - Testing: testing/index.md
-  - Examples: examples/index.md
+  - Examples:
+    - Overview: examples/index.md
+    - Web Function Workloads: examples/web-functions.md
 
 # Social links
 extra:

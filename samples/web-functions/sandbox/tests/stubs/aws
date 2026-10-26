@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""Stateful offline stub for the AWS CLI, used to exercise the sandbox scripts without AWS.
+
+Controlled by environment:
+  STUB_STATE          required; directory holding all stub state
+  STUB_FAIL           inject an error mode: sts|describe|s3list|s3head|put|iam|policy|webfunction|webfunction-shape
+  STUB_POLICY_MODE    resource-policy content: (default ok)|malformed|exception|missing|duplicate|extra|second-removed
+  STUB_ROLE_MODE      imported-role policies: (default none)|broad
+  STUB_REVISION       revision suffix returned by the lambda-web Web Function APIs (default "1")
+
+The lambda-web handlers mirror the AWS CLI 2.38.x response shapes: get-web-function exposes only function
+state, get-web-function-endpoint carries the revision routing weights, list-web-function-revisions carries
+the revision identities, and get-resource-policy returns the policy as a JSON string.
+"""
+import hashlib
+import json
+import os
+import sys
+
+STATE = os.environ["STUB_STATE"]
+FAIL = os.environ.get("STUB_FAIL", "")
+POLICY_MODE = os.environ.get("STUB_POLICY_MODE", "ok")
+ROLE_MODE = os.environ.get("STUB_ROLE_MODE", "none")
+REVISION = os.environ.get("STUB_REVISION", "1")
+
+ACCOUNT = os.environ.get("SANDBOX_ACCOUNT", "")
+REGION = os.environ.get("SANDBOX_REGION", "")
+SANDBOX_ID = os.environ.get("SANDBOX_ID", "")
+
+STACKS = os.path.join(STATE, "stacks")
+BUCKETS = os.path.join(STATE, "buckets")
+LOGS = os.path.join(STATE, "logs")
+for _d in (STACKS, BUCKETS, LOGS):
+    os.makedirs(_d, exist_ok=True)
+
+with open(os.path.join(STATE, "calls.log"), "a") as _f:
+    _f.write("aws " + " ".join(sys.argv[1:]) + "\n")
+
+argv = sys.argv[1:]
+_clean = []
+_i = 0
+while _i < len(argv):
+    if argv[_i] == "--region":
+        _i += 2
+        continue
+    _clean.append(argv[_i])
+    _i += 1
+argv = _clean
+
+
+def api_error(msg, code=254):
+    sys.stderr.write("An error occurred (%s) when calling the operation\n" % msg)
+    sys.exit(code)
+
+
+def opt(name, default=None):
+    for i, a in enumerate(argv):
+        if a == name and i + 1 < len(argv):
+            return argv[i + 1]
+    return default
+
+
+def stack_path(name):
+    return os.path.join(STACKS, name + ".json")
+
+
+def bucket_path(name):
+    return os.path.join(BUCKETS, name + ".json")
+
+
+def load(path, default=None):
+    if not os.path.exists(path):
+        return default
+    with open(path) as f:
+        return json.load(f)
+
+
+def save(path, value):
+    with open(path, "w") as f:
+        json.dump(value, f)
+
+
+def ak_for(arn):
+    return "AKIA" + hashlib.sha1(arn.encode()).hexdigest()[:16].upper()
+
+
+def function_arn(fn):
+    return "arn:aws:lambda:%s:%s:web-function/%s" % (REGION, ACCOUNT, fn)
+
+
+def endpoint_arn(fn):
+    return "%s/endpoint/default" % function_arn(fn)
+
+
+def nextjs_dist_arn():
+    return "arn:aws:cloudfront::%s:distribution/EDFDISTNEXTJS" % ACCOUNT
+
+
+def nextjs_dist2_arn():
+    return "arn:aws:cloudfront::%s:distribution/EDFDISTNEXTJS2" % ACCOUNT
+
+
+def blazor_dist_arn():
+    return "arn:aws:cloudfront::%s:distribution/EDFDISTBLAZOR" % ACCOUNT
+
+
+def cf_statement(dist_arn, ep_arn):
+    return {
+        "Effect": "Allow",
+        "Principal": {"Service": "cloudfront.amazonaws.com"},
+        "Action": "lambda:InvokeWebFunctionEndpoint",
+        "Resource": ep_arn,
+        "Condition": {"StringEquals": {"aws:SourceArn": dist_arn}},
+    }
+
+
+def role_statement(role_arn, ep_arn):
+    return {
+        "Effect": "Allow",
+        "Principal": {"AWS": role_arn},
+        "Action": "lambda:InvokeWebFunctionEndpoint",
+        "Resource": ep_arn,
+    }
+
+
+def nextjs_policy():
+    ep = endpoint_arn(SANDBOX_ID + "-nextjs")
+    if POLICY_MODE == "malformed":
+        return "{not json"
+    if POLICY_MODE == "exception":
+        return json.dumps({"Statement": "not-a-list"})
+    if POLICY_MODE == "missing":
+        return ""
+    if POLICY_MODE == "duplicate":
+        # Two statements for the first distribution, none for the second.
+        return json.dumps({"Statement": [cf_statement(nextjs_dist_arn(), ep), cf_statement(nextjs_dist_arn(), ep)]})
+    if POLICY_MODE == "extra":
+        extra = "arn:aws:cloudfront::%s:distribution/EDFUNEXPECTED" % ACCOUNT
+        return json.dumps({"Statement": [cf_statement(nextjs_dist_arn(), ep), cf_statement(extra, ep)]})
+    if POLICY_MODE == "second-removed":
+        return json.dumps({"Statement": [cf_statement(nextjs_dist_arn(), ep)]})
+    statements = [cf_statement(nextjs_dist_arn(), ep)]
+    if os.environ.get("SANDBOX_SECOND_DISTRIBUTION") == "1":
+        statements.append(cf_statement(nextjs_dist2_arn(), ep))
+    return json.dumps({"Statement": statements})
+
+
+def blazor_policy():
+    ep = endpoint_arn(SANDBOX_ID + "-blazor")
+    if POLICY_MODE == "missing":
+        return ""
+    return json.dumps({"Statement": [cf_statement(blazor_dist_arn(), ep)]})
+
+
+def aspnetcore_policy():
+    ep = endpoint_arn(SANDBOX_ID + "-aspnetcore")
+    if POLICY_MODE == "missing":
+        return ""
+    stmts = [
+        role_statement("arn:aws:iam::%s:role/%s-imported-caller-immutable" % (ACCOUNT, SANDBOX_ID), ep),
+        role_statement("arn:aws:iam::%s:role/%s-imported-caller-mutable" % (ACCOUNT, SANDBOX_ID), ep),
+    ]
+    cross = os.environ.get("SANDBOX_CROSS_ACCOUNT_CALLER_ROLE_ARN")
+    if cross:
+        stmts.append(role_statement(cross, ep))
+    return json.dumps({"Statement": stmts})
+
+
+def role_policy_doc(role_name):
+    if role_name.endswith("-caller"):
+        return {"Statement": [{"Effect": "Allow", "Action": "lambda:InvokeWebFunctionEndpoint", "Resource": "*"}]}
+    return {"Statement": []}
+
+
+# --- dispatch ------------------------------------------------------------------------------------
+
+service = argv[0] if argv else ""
+sub = argv[1] if len(argv) > 1 else ""
+
+if service == "configure" and sub == "get":
+    sys.exit(1)
+
+if service == "sts" and sub == "get-caller-identity":
+    if FAIL == "sts":
+        api_error("ExpiredToken: The security token included in the request is expired")
+    # The live account comes from the state file so an overridden SANDBOX_ACCOUNT
+    # (which represents the declared target) can be detected as a mismatch.
+    live_account = ACCOUNT
+    account_file = os.path.join(STATE, "account")
+    if os.path.exists(account_file):
+        with open(account_file) as _af:
+            live_account = _af.read().strip() or ACCOUNT
+    if opt("--query") == "Account":
+        sys.stdout.write(live_account + "\n")
+    else:
+        sys.stdout.write(json.dumps({"Account": live_account, "Arn": "arn:aws:iam::%s:user/stub" % live_account}) + "\n")
+    sys.exit(0)
+
+if service == "sts" and sub == "assume-role":
+    arn = opt("--role-arn")
+    if FAIL == "sts":
+        api_error("ExpiredToken: The security token included in the request is expired")
+    ak = ak_for(arn)
+    amap = load(os.path.join(STATE, "ak-map.json"), {}) or {}
+    amap[ak] = arn
+    save(os.path.join(STATE, "ak-map.json"), amap)
+    creds = {"Credentials": {"AccessKeyId": ak, "SecretAccessKey": "stubsecret", "SessionToken": "stubtoken"}}
+    sys.stdout.write(json.dumps(creds) + "\n")
+    sys.exit(0)
+
+if service == "cloudformation" and sub == "describe-stacks":
+    if FAIL == "describe":
+        api_error("AccessDenied: User is not authorized to perform: cloudformation:DescribeStacks")
+    name = opt("--stack-name")
+    data = load(stack_path(name))
+    if data is None:
+        sys.stderr.write("An error occurred (ValidationError) when calling the DescribeStacks operation: Stack with id %s does not exist\n" % name)
+        sys.exit(254)
+    q = opt("--query") or ""
+    if "Tags" in q:
+        sys.stdout.write(json.dumps(data.get("Tags", [])) + "\n")
+    elif "Outputs" in q:
+        sys.stdout.write(json.dumps(data.get("Outputs", [])) + "\n")
+    else:
+        sys.stdout.write(json.dumps({"Stacks": [{"StackName": name, "Tags": data.get("Tags", []), "Outputs": data.get("Outputs", [])}]}) + "\n")
+    sys.exit(0)
+
+if service == "cloudformation" and sub == "describe-stack-resources":
+    name = opt("--stack-name")
+    if load(stack_path(name)) is None:
+        sys.stderr.write("An error occurred (ValidationError) when calling the DescribeStackResources operation: Stack with id %s does not exist\n" % name)
+        sys.exit(254)
+    q = opt("--query") or ""
+    if "WebFunctionRevision" in q:
+        ids = ["NextJsRevision", "AspNetCoreRevision", "BlazorRevision"]
+    elif "WebFunctionEndpoint" in q:
+        ids = ["NextJsDefaultEndpoint", "AspNetCoreDefaultEndpoint", "AspNetCoreAltEndpoint", "BlazorDefaultEndpoint"]
+    elif "WebFunction" in q:
+        ids = ["NextJsFunction", "AspNetCoreFunction", "BlazorFunction"]
+    else:
+        ids = []
+    if opt("--output", "json") == "text":
+        sys.stdout.write("\t".join(ids) + "\n")
+    else:
+        sys.stdout.write(json.dumps([{"LogicalResourceId": i} for i in ids]) + "\n")
+    sys.exit(0)
+
+if service == "s3api" and sub == "head-bucket":
+    if FAIL == "s3head":
+        api_error("AccessDenied: Access Denied")
+    name = opt("--bucket")
+    data = load(bucket_path(name))
+    owner = opt("--expected-bucket-owner")
+    if data is None or (owner and data.get("owner") != owner):
+        sys.stderr.write("An error occurred (404) when calling the HeadBucket operation: Not Found\n")
+        sys.exit(254)
+    sys.exit(0)
+
+if service == "s3api" and sub == "get-bucket-versioning":
+    name = opt("--bucket")
+    if load(bucket_path(name)) is None:
+        api_error("NoSuchBucket")
+    if opt("--query") == "Status":
+        sys.stdout.write("Enabled\n")
+    else:
+        sys.stdout.write(json.dumps({"Status": "Enabled"}) + "\n")
+    sys.exit(0)
+
+if service == "s3api" and sub == "get-bucket-policy":
+    name = opt("--bucket")
+    if load(bucket_path(name)) is None:
+        api_error("NoSuchBucket")
+    policy = json.dumps({"Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}}]})
+    if opt("--query") == "Policy":
+        sys.stdout.write(policy + "\n")
+    else:
+        sys.stdout.write(json.dumps({"Policy": policy}) + "\n")
+    sys.exit(0)
+
+if service == "s3api" and sub == "put-object":
+    if FAIL == "put":
+        api_error("AccessDenied: Access Denied")
+    name = opt("--bucket")
+    data = load(bucket_path(name))
+    if data is None:
+        api_error("NoSuchBucket")
+    key = opt("--key")
+    version = "v%d" % (len(data["versions"]) + 1)
+    data["versions"].append({"Key": key, "VersionId": version})
+    save(bucket_path(name), data)
+    if opt("--query") == "VersionId":
+        sys.stdout.write(version + "\n")
+    else:
+        sys.stdout.write(json.dumps({"VersionId": version}) + "\n")
+    sys.exit(0)
+
+if service == "s3api" and sub == "head-object":
+    name = opt("--bucket")
+    data = load(bucket_path(name))
+    key = opt("--key")
+    version = opt("--version-id")
+    if data is not None and any(v["Key"] == key and (version is None or v["VersionId"] == version) for v in data["versions"]):
+        sys.stdout.write(json.dumps({"ContentLength": 1}) + "\n")
+        sys.exit(0)
+    sys.stderr.write("An error occurred (404) when calling the HeadObject operation: Not Found\n")
+    sys.exit(254)
+
+if service == "s3api" and sub == "list-object-versions":
+    if FAIL == "s3list":
+        api_error("AccessDenied: Access Denied")
+    name = opt("--bucket")
+    data = load(bucket_path(name), {"versions": []})
+    sys.stdout.write(json.dumps({"Versions": data.get("versions", [])}) + "\n")
+    sys.exit(0)
+
+if service == "s3api" and sub == "delete-objects":
+    name = opt("--bucket")
+    data = load(bucket_path(name), {"versions": []})
+    spec = json.loads(opt("--delete"))
+    wanted = {(o["Key"], o["VersionId"]) for o in spec.get("Objects", [])}
+    data["versions"] = [v for v in data.get("versions", []) if (v["Key"], v["VersionId"]) not in wanted]
+    save(bucket_path(name), data)
+    sys.exit(0)
+
+if service == "s3api" and sub == "delete-bucket":
+    open(os.path.join(STATE, "delete_bucket_called"), "w").close()
+    sys.exit(0)
+
+if service == "logs" and sub == "describe-log-groups":
+    prefix = opt("--log-group-name-prefix") or ""
+    found = []
+    for root, _dirs, files in os.walk(LOGS):
+        for fn in files:
+            rel = os.path.relpath(os.path.join(root, fn), LOGS).replace(os.sep, "/")
+            group = "/" + rel
+            if group.startswith(prefix):
+                found.append(group)
+    found.sort()
+    if opt("--output", "json") == "text":
+        sys.stdout.write("\n".join(found) + ("\n" if found else ""))
+    else:
+        sys.stdout.write(json.dumps([{"logGroupName": g} for g in found]) + "\n")
+    sys.exit(0)
+
+if service == "logs" and sub == "delete-log-group":
+    group = opt("--log-group-name")
+    path = os.path.join(LOGS, group.lstrip("/"))
+    if os.path.exists(path):
+        os.remove(path)
+    sys.exit(0)
+
+if service == "iam" and sub == "list-role-policies":
+    if FAIL == "iam":
+        api_error("AccessDenied: User is not authorized to perform: iam:ListRolePolicies")
+    role = opt("--role-name")
+    names = ["caller-invoke"] if role.endswith("-caller") else []
+    if opt("--query") == "PolicyNames":
+        sys.stdout.write(json.dumps(names) + "\n")
+    else:
+        sys.stdout.write(json.dumps({"PolicyNames": names}) + "\n")
+    sys.exit(0)
+
+if service == "iam" and sub == "list-attached-role-policies":
+    if FAIL == "iam":
+        api_error("AccessDenied: User is not authorized to perform: iam:ListAttachedRolePolicies")
+    role = opt("--role-name")
+    arns = []
+    if ROLE_MODE == "broad" and role.endswith(("-immutable", "-mutable")):
+        arns = ["arn:aws:iam::aws:policy/AdministratorAccess"]
+    if opt("--query") == "AttachedPolicies[].PolicyArn":
+        sys.stdout.write(json.dumps(arns) + "\n")
+    else:
+        sys.stdout.write(json.dumps({"AttachedPolicies": [{"PolicyArn": a} for a in arns]}) + "\n")
+    sys.exit(0)
+
+if service == "iam" and sub == "get-role-policy":
+    if FAIL == "iam":
+        api_error("AccessDenied: User is not authorized to perform: iam:GetRolePolicy")
+    role = opt("--role-name")
+    sys.stdout.write(json.dumps({"PolicyDocument": role_policy_doc(role)}) + "\n")
+    sys.exit(0)
+
+if service == "iam" and sub == "get-policy":
+    if FAIL == "iam":
+        api_error("AccessDenied: User is not authorized to perform: iam:GetPolicy")
+    sys.stdout.write(json.dumps({"Policy": {"DefaultVersionId": "v1"}}) + "\n")
+    sys.exit(0)
+
+if service == "iam" and sub == "get-policy-version":
+    if FAIL == "iam":
+        api_error("AccessDenied: User is not authorized to perform: iam:GetPolicyVersion")
+    arn = opt("--policy-arn") or ""
+    if arn.endswith("AdministratorAccess"):
+        doc = {"Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}]}
+    else:
+        doc = {"Statement": []}
+    sys.stdout.write(json.dumps({"PolicyVersion": {"Document": doc}}) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "get-resource-policy":
+    arn = opt("--resource-arn") or opt("--function-name") or ""
+    fn = arn.split("web-function/", 1)[1].split("/", 1)[0] if "web-function/" in arn else ""
+    if FAIL == "policy":
+        api_error("AccessDenied: User is not authorized to perform: lambda:GetResourcePolicy")
+    if fn.endswith("-nextjs"):
+        policy = nextjs_policy()
+    elif fn.endswith("-blazor"):
+        policy = blazor_policy()
+    elif fn.endswith("-aspnetcore"):
+        policy = aspnetcore_policy()
+    else:
+        policy = json.dumps({"Statement": []})
+    if opt("--query") in ("policy", "Policy"):
+        sys.stdout.write(policy + "\n")
+    else:
+        sys.stdout.write(json.dumps({"policy": policy, "revisionId": "00000000-0000-0000-0000-000000000000"}) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "get-web-function":
+    # Per the 2.38.x API, get-web-function returns function state only - no revision identity.
+    fn = opt("--function-name") or ""
+    sys.stdout.write(json.dumps({
+        "FunctionName": fn,
+        "FunctionArn": function_arn(fn),
+        "State": "Active",
+    }) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "get-web-function-endpoint":
+    if FAIL == "webfunction":
+        api_error("AccessDenied: User is not authorized to perform: lambda:GetWebFunctionEndpoint")
+    fn = opt("--function-name") or ""
+    ep = opt("--endpoint-name") or "default"
+    if FAIL == "webfunction-shape":
+        sys.stdout.write("not-json\n")
+        sys.exit(0)
+    sys.stdout.write(json.dumps({
+        "FunctionArn": function_arn(fn),
+        "EndpointName": ep,
+        "EndpointArn": "%s/endpoint/%s" % (function_arn(fn), ep),
+        "EndpointType": "HomeRegion",
+        "AuthType": "IamAuth",
+        "State": "Active",
+        "RevisionWeights": [{"RevisionId": "rev-%s-%s" % (fn, REVISION), "Weight": 100}],
+    }) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "list-web-function-revisions":
+    if FAIL == "webfunction":
+        api_error("AccessDenied: User is not authorized to perform: lambda:ListWebFunctionRevisions")
+    fn = opt("--function-name") or ""
+    if FAIL == "webfunction-shape":
+        sys.stdout.write("not-json\n")
+        sys.exit(0)
+    sys.stdout.write(json.dumps({
+        "Revisions": [{
+            "FunctionArn": function_arn(fn),
+            "RevisionId": "rev-%s-%s" % (fn, REVISION),
+            "State": "Active",
+        }],
+    }) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "get-web-function-revision":
+    fn = opt("--function-name") or ""
+    rid = opt("--revision-id") or ("rev-%s-%s" % (fn, REVISION))
+    sys.stdout.write(json.dumps({
+        "FunctionArn": function_arn(fn),
+        "RevisionId": rid,
+        "State": "Active",
+    }) + "\n")
+    sys.exit(0)
+
+if service == "lambda-web" and sub == "get-web-account-settings":
+    sys.stdout.write(json.dumps({}) + "\n")
+    sys.exit(0)
+
+sys.stderr.write("stub aws: unhandled invocation: %s\n" % " ".join(sys.argv[1:]))
+sys.exit(2)

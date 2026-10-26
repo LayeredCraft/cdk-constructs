@@ -1,0 +1,130 @@
+{
+  "Resources": {
+    "ExistingLogGroup881EDE44": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/custom/web/logs",
+        "RetentionInDays": 731
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "SuppliedRole699D3B4C": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      }
+    },
+    "SuppliedRoleDefaultPolicy1B06B14F": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ExistingLogGroup881EDE44",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "SuppliedRoleDefaultPolicy1B06B14F",
+        "Roles": [
+          {
+            "Ref": "SuppliedRole699D3B4C"
+          }
+        ]
+      }
+    },
+    "webfunctionFunction46F1F768": {
+      "Type": "AWS::Lambda::WebFunction",
+      "Properties": {
+        "FunctionName": "golden-web-function"
+      }
+    },
+    "webfunctionRevisionB2BF6DC1": {
+      "Type": "AWS::Lambda::WebFunctionRevision",
+      "Properties": {
+        "BuildConfig": {
+          "CodeConfig": {
+            "S3Object": {
+              "Bucket": "golden-artifacts",
+              "Key": "app.zip"
+            }
+          },
+          "RuntimeConfig": {
+            "Runtime": "nodejs24.x"
+          }
+        },
+        "FunctionName": "golden-web-function",
+        "ServiceConfig": {
+          "EnvironmentVariables": {
+            "TABLE_NAME": "golden-table"
+          },
+          "ExecutionRoleArn": {
+            "Fn::GetAtt": [
+              "SuppliedRole699D3B4C",
+              "Arn"
+            ]
+          },
+          "TelemetryConfig": {
+            "LoggingConfig": {
+              "ApplicationLogLevel": "INFO",
+              "LogGroup": {
+                "Ref": "ExistingLogGroup881EDE44"
+              },
+              "SystemLogLevel": "WARN"
+            }
+          },
+          "TimeoutSeconds": 30
+        }
+      },
+      "DependsOn": [
+        "SuppliedRole699D3B4C",
+        "webfunctionFunction46F1F768"
+      ]
+    },
+    "webfunctionDefaultEndpoint8A7C111C": {
+      "Type": "AWS::Lambda::WebFunctionEndpoint",
+      "Properties": {
+        "AuthType": "IamAuth",
+        "EndpointName": "default",
+        "EndpointType": "HomeRegion",
+        "FunctionName": "golden-web-function",
+        "RevisionWeights": [
+          {
+            "RevisionId": {
+              "Fn::GetAtt": [
+                "webfunctionRevisionB2BF6DC1",
+                "RevisionId"
+              ]
+            },
+            "Weight": 100
+          }
+        ]
+      },
+      "DependsOn": [
+        "webfunctionRevisionB2BF6DC1"
+      ]
+    }
+  }
+}

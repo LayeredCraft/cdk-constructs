@@ -1,0 +1,1 @@
+Next.js static asset for CloudFront cache verification.

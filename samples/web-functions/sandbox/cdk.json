@@ -1,0 +1,6 @@
+{
+  "app": "dotnet run --project WebFunctionSandbox.csproj",
+  "context": {
+    "aws-cdk:enableDiffNoFail": true
+  }
+}

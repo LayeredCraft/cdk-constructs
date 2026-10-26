@@ -276,6 +276,85 @@ template.ShouldExportUserPoolArn("test-stack", "auth-pool");
 template.ShouldExportAppClientId("test-stack", "auth-pool", "web-app");
 ```
 
+## Web Function Testing
+
+The Web Function helpers follow the same convention as the other constructs: a fluent props builder and assertion extension methods on `Template`. Assertions match resources by **function and endpoint names**, not by logical ID, so they keep working as IDs change and can distinguish multiple endpoints on one function.
+
+The lowest-friction setup uses an imported, externally managed artifact bucket, so a test synthesizes without AWS credentials and without an `AWS::S3::Bucket` resource.
+
+### Props Builder
+
+```csharp
+var (_, stack) = CdkTestHelper.CreateTestStack("test-stack");
+
+var props = CdkTestHelper.CreateWebFunctionPropsBuilder()
+    .WithFunctionName("my-web")           // default: "test-web-function"
+    .WithTestArtifact(stack)              // imported bucket, no bucket resource; key defaults to "artifacts/app.zip"
+    .WithIamAuthEndpoint()                // or WithApplicationManagedEndpoint()
+    .WithEnvironmentVariable("NODE_ENV", "production")
+    .WithEntryPoint("server.js")
+    .WithTimeout(Duration.Seconds(60))
+    .Build();
+
+var web = new WebFunctionConstruct(stack, "web", props);
+```
+
+`Build()` throws an `InvalidOperationException` when code or an endpoint was never chosen: the builder never selects an authentication mode for you. Use `WithCode(WebFunctionCode.FromBucket(...))` for a real bucket and `WithEndpoint(...)` for a fully customized `WebFunctionEndpointOptions` record.
+
+### Assertion Methods
+
+```csharp
+var template = Template.FromStack(stack);
+
+// Function, revision and code
+template.ShouldHaveWebFunction("my-web");
+template.ShouldHaveRevision("my-web");                                   // runtime defaults to "nodejs24.x"
+template.ShouldHaveRevisionCode("my-artifacts", "artifacts/app.zip");    // optional versionId
+
+// Endpoints
+template.ShouldHaveEndpoint("my-web", "default", WebFunctionAuthType.IamAuth);
+template.ShouldHaveEndpointScaling("default", maxEnvironments: 5, rateLimit: 100); // null asserts the block is absent
+
+// IAM and resource policy
+template.ShouldHaveInvokeGrant("my-web", "default");                     // identity-policy statement
+template.ShouldHaveSingleResourcePolicy("my-web");
+template.ShouldAllowCloudFront("my-web", "default");
+template.ShouldAllowResourcePolicyPrincipal("my-web", "default", "arn:aws:iam::222233334444:role/partner");
+template.ShouldHaveNoResourcePolicy();
+
+// CloudFront OAC and the code-bucket statement
+template.ShouldHaveWebFunctionOac();                                     // signing protocol defaults to "sigv4"
+template.ShouldHaveCodeBucketReadStatement("my-web");
+```
+
+The assertions require `Effect = Allow`, the expected action (`lambda:InvokeWebFunctionEndpoint`), and the exact endpoint resource, so a `Deny` statement or an unrelated action never satisfies them. `ShouldHaveInvokeGrant` also matches a minimized policy whose `Resource` is an array of endpoint ARNs.
+
+### AutoData Support
+
+```csharp
+[Theory]
+[WebFunctionConstructAutoData]
+public void Should_Synthesize_Generated_Props(WebFunctionConstructProps props)
+{
+    var (_, stack) = CdkTestHelper.CreateTestStack();
+
+    _ = new WebFunctionConstruct(stack, "web", props);
+
+    Template.FromStack(stack).ShouldHaveWebFunction("test-web-function");
+}
+```
+
+`[WebFunctionConstructAutoData]` supplies deterministic props whose default code artifact is an imported, externally managed bucket, so the fixture synthesizes without credentials or a bucket resource.
+
+### Golden-Template Conventions
+
+Representative Web Function configurations are pinned as full synthesized templates under `test/LayeredCraft.Cdk.Constructs.Tests/GoldenTemplates/` (`web-function-default.json`, `web-function-cloudfront-oac.json`, and so on), alongside the golden templates for the four existing constructs. `GoldenTemplate.AssertMatches(stack, "web-function-default.json")` compares the complete, normalized template and fails with a readable diff. Regenerate intentionally with `UPDATE_GOLDEN_TEMPLATES=1`; the harness rewrites the checked-in file and then fails once so the change is reviewed. Existing-construct goldens must show **zero diff** on any dependency or CDK bump.
+
+### CDK/jsii Compatibility Considerations
+
+- **Origin exceptions.** Validation that runs inside CDK's `IOrigin.Bind` path (and inside `HttpOrigin` construction) surfaces in .NET as a `System.Exception` carrying CDK's message, while factory-time checks in `WebFunctionOrigin` throw `InvalidOperationException`. Assert with the matching exception type, and prefer validating origin props at factory time.
+- **Principal materialization.** Identity-policy writes and principal classification depend partly on how jsii materializes types in `Amazon.CDK.Lib`: exported classes such as `Role`, `User`, `Group`, `LazyRole` and `PrincipalWithConditions` arrive as concrete .NET types, while CDK's private classes (`ImmutableRole`, the imported role) arrive as interface proxies. The real-CDK `CdkUpgradeGuard_*` tests in `WebFunctionSecurityTests.cs` pin this behavior; they must pass before any `Amazon.CDK.Lib` upgrade is accepted.
+
 ## AutoFixture Integration
 
 ### Custom Attributes
@@ -302,6 +381,7 @@ public void Should_Create_Lambda_With_Custom_Settings(LambdaFunctionConstructPro
 - `StaticSiteConstructAutoDataAttribute`: Generates static site props
 - `DynamoDbTableConstructAutoDataAttribute`: Generates DynamoDB props
 - `CognitoUserPoolConstructAutoDataAttribute`: Generates Cognito user pool props (pass `includeBranding: true` to include Managed Login branding)
+- `WebFunctionConstructAutoDataAttribute`: Generates Web Function props (imported, externally managed artifact bucket; IAM-auth endpoint)
 
 ## Testing Patterns
 
@@ -421,3 +501,5 @@ For complete testing examples, see the test files in the repository:
 - `StaticSiteConstructTests.cs`
 - `DynamoDbTableConstructTests.cs`
 - `CognitoUserPoolConstructTests.cs`
+- `WebFunctionConstructTests.cs`, `WebFunctionSecurityTests.cs`, `WebFunctionInvokeGrantTests.cs`, `WebFunctionOriginTests.cs`
+- `WebFunctionConstructTestingHelpersTests.cs`, `WebFunctionConstructGoldenTemplateTests.cs`

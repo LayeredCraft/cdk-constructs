@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- The apphost is renamed to `server`, which is the fixed path the execve shim runs. -->
+    <AssemblyName>server</AssemblyName>
+    <RootNamespace>Acme.AspNetCore</RootNamespace>
+    <!-- The runtime has no libicu, so keep globalization invariant instead of shipping ICU. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Managed, untrimmed publish: the minimal API and JSON serialization use reflection. -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+</Project>

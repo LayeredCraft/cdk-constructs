@@ -12,6 +12,7 @@ A comprehensive library of reusable AWS CDK constructs for .NET projects, design
 ## Features
 
 - **🚀 Lambda Functions**: Comprehensive Lambda construct with configurable OpenTelemetry support, IAM management, and environment configuration
+- **🕸️ Web Functions**: AWS Lambda Web Functions served from an S3 artifact, with IAM or application-managed endpoints, endpoint-scoped grants, and CloudFront OAC origin integration
 - **🌐 Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, and Route53 DNS management
 - **📊 DynamoDB Tables**: Full-featured DynamoDB construct with streams, TTL, and global secondary indexes
 - **🔐 Cognito User Pools**: Complete Cognito user pool with custom domains, resource servers, OAuth clients, and Managed Login branding
@@ -87,21 +88,59 @@ var table = new DynamoDbTableConstruct(this, "UserTable", new DynamoDbTableConst
 });
 ```
 
+### Web Function
+
+An AWS Lambda Web Function runs an ordinary HTTP server (Next.js, ASP.NET Core, Blazor Static SSR, and so on) from a zip in a versioned S3 bucket. See the [Web Function Construct](https://layeredcraft.github.io/cdk-constructs/constructs/web-function) reference for the full configuration surface and the [Web Function Workloads](https://layeredcraft.github.io/cdk-constructs/examples/web-functions) page for per-framework recipes.
+
+```csharp
+using Amazon.CDK;
+using Amazon.CDK.AWS.S3;
+using Constructs;
+using LayeredCraft.Cdk.Constructs;
+using LayeredCraft.Cdk.Constructs.Models;
+
+public class MyStack : Stack
+{
+    public MyStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+    {
+        // The bucket must have versioning enabled and already contain the artifact.
+        var artifacts = Bucket.FromBucketName(this, "artifacts", "acme-artifacts");
+
+        var web = new WebFunctionConstruct(this, "Web", new WebFunctionConstructProps
+        {
+            FunctionName = "acme-web",
+            Code = WebFunctionCode.FromBucket(artifacts, "1.2.3/web.zip", new WebFunctionCodeFromBucketOptions
+            {
+                BucketPolicy = WebFunctionCodeBucketPolicy.ExternallyManaged,
+            }),
+            Endpoint = new WebFunctionEndpointOptions
+            {
+                AuthType = WebFunctionAuthType.IamAuth,
+            },
+        });
+    }
+}
+```
+
+> **Compatibility:** Lambda Web Functions require **`Amazon.CDK.Lib` 2.274.0 or later** and a Region where the feature is available. `IamAuth` endpoints are invoked by signed (SigV4) callers; `ApplicationManaged` endpoints are publicly reachable, including behind CloudFront.
+
 ## Documentation
 
 📖 **[Complete Documentation](https://layeredcraft.github.io/cdk-constructs/)**
 
 - **[Lambda Function Construct](https://layeredcraft.github.io/cdk-constructs/constructs/lambda-function)** - Full-featured Lambda functions with OpenTelemetry, IAM, and more
+- **[Web Function Construct](https://layeredcraft.github.io/cdk-constructs/constructs/web-function)** - Lambda Web Functions with S3 artifacts, IAM/application-managed endpoints, and CloudFront OAC
 - **[Static Site Construct](https://layeredcraft.github.io/cdk-constructs/constructs/static-site)** - Complete static website hosting with CloudFront and SSL
 - **[DynamoDB Table Construct](https://layeredcraft.github.io/cdk-constructs/constructs/dynamodb-table)** - Production-ready DynamoDB tables with streams and indexes
 - **[Cognito User Pool Construct](https://layeredcraft.github.io/cdk-constructs/constructs/cognito-user-pool)** - Full-featured Cognito user pool with custom domains, OAuth clients, and branding
 - **[Testing Guide](https://layeredcraft.github.io/cdk-constructs/testing)** - Comprehensive testing utilities and patterns
 - **[Examples](https://layeredcraft.github.io/cdk-constructs/examples)** - Real-world usage examples and patterns
+- **[Web Function Workloads](https://layeredcraft.github.io/cdk-constructs/examples/web-functions)** - Next.js, ASP.NET Core, and Blazor Static SSR recipes
 
 ## Requirements
 
 - **.NET 8.0** or **.NET 9.0**
-- **AWS CDK v2** (Amazon.CDK.Lib 2.203.1+)
+- **AWS CDK v2** (Amazon.CDK.Lib 2.274.0+)
 - **AWS CLI** configured with appropriate permissions
 - **Node.js** (for CDK deployment)
 

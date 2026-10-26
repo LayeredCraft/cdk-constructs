@@ -1,0 +1,240 @@
+{
+  "Resources": {
+    "goldenlambdagoldenlambdapolicy4C9B84B1": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:CreateLogGroup",
+                "logs:TagResource"
+              ],
+              "Effect": "Allow",
+              "Resource": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/golden-function-test*:*"
+            },
+            {
+              "Action": "logs:PutLogEvents",
+              "Effect": "Allow",
+              "Resource": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/golden-function-test*:*:*"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "golden-policy",
+        "Roles": [
+          {
+            "Ref": "goldenlambdagoldenlambdarole9BB93118"
+          }
+        ]
+      }
+    },
+    "goldenlambdagoldenlambdarole9BB93118": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "RoleName": "golden-role"
+      }
+    },
+    "goldenlambdagoldenlambdaroleDefaultPolicyE8F645D4": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "xray:PutTraceSegments",
+                "xray:PutTelemetryRecords"
+              ],
+              "Effect": "Allow",
+              "Resource": "*"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "goldenlambdagoldenlambdaroleDefaultPolicyE8F645D4",
+        "Roles": [
+          {
+            "Ref": "goldenlambdagoldenlambdarole9BB93118"
+          }
+        ]
+      }
+    },
+    "goldenlambdagoldenlambdaloggroup1F5BB451": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/golden-function-test",
+        "RetentionInDays": 14
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "goldenlambdagoldenlambdafunctionFCFBEB49": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Architectures": [
+          "x86_64"
+        ],
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
+          "S3Key": "<ASSET-HASH>.zip"
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": "golden-table"
+          }
+        },
+        "FunctionName": "golden-function-test",
+        "Handler": "bootstrap",
+        "Layers": [
+          "arn:aws:lambda:us-east-1:901920570463:layer:aws-otel-collector-amd64-ver-0-117-0:1"
+        ],
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "goldenlambdagoldenlambdaloggroup1F5BB451"
+          }
+        },
+        "MemorySize": 1024,
+        "Role": {
+          "Fn::GetAtt": [
+            "goldenlambdagoldenlambdarole9BB93118",
+            "Arn"
+          ]
+        },
+        "Runtime": "provided.al2023",
+        "Timeout": 6,
+        "TracingConfig": {
+          "Mode": "Active"
+        }
+      },
+      "DependsOn": [
+        "goldenlambdagoldenlambdaroleDefaultPolicyE8F645D4",
+        "goldenlambdagoldenlambdarole9BB93118"
+      ]
+    },
+    "goldenlambdagoldenlambdafunctionCurrentVersionCD044A9Be5d9ec424ac6ba1a553bc90e6cedba75": {
+      "Type": "AWS::Lambda::Version",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "goldenlambdagoldenlambdafunctionFCFBEB49"
+        }
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "goldenlambdagoldenlambdafunctionCurrentVersiongoldenlambdapermissionver05EF4D9BA": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "goldenlambdagoldenlambdafunctionCurrentVersionCD044A9Be5d9ec424ac6ba1a553bc90e6cedba75"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": "arn:aws:execute-api:us-east-1:123456789012:api-id/*/GET/golden"
+      }
+    },
+    "goldenlambdagoldenlambdafunctiongoldenlambdapermissionfn08E91234F": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "goldenlambdagoldenlambdafunctionFCFBEB49",
+            "Arn"
+          ]
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": "arn:aws:execute-api:us-east-1:123456789012:api-id/*/GET/golden"
+      }
+    },
+    "goldenlambdagoldenlambdaaliasB00D58F9": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "goldenlambdagoldenlambdafunctionFCFBEB49"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "goldenlambdagoldenlambdafunctionCurrentVersionCD044A9Be5d9ec424ac6ba1a553bc90e6cedba75",
+            "Version"
+          ]
+        },
+        "Name": "live"
+      }
+    },
+    "goldenlambdagoldenlambdaaliasgoldenlambdapermissionalias0A5CE46E8": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "goldenlambdagoldenlambdaaliasB00D58F9"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": "arn:aws:execute-api:us-east-1:123456789012:api-id/*/GET/golden"
+      }
+    },
+    "goldenlambdagoldenlambdaaliasFunctionUrl74FE7411": {
+      "Type": "AWS::Lambda::Url",
+      "Properties": {
+        "AuthType": "NONE",
+        "Qualifier": "live",
+        "TargetFunctionArn": {
+          "Fn::GetAtt": [
+            "goldenlambdagoldenlambdafunctionFCFBEB49",
+            "Arn"
+          ]
+        }
+      },
+      "DependsOn": [
+        "goldenlambdagoldenlambdaaliasB00D58F9"
+      ]
+    },
+    "goldenlambdagoldenlambdaaliasinvokefunctionurl0DE9B2D1": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunctionUrl",
+        "FunctionName": {
+          "Ref": "goldenlambdagoldenlambdaaliasB00D58F9"
+        },
+        "FunctionUrlAuthType": "NONE",
+        "Principal": "*"
+      }
+    },
+    "goldenlambdagoldenlambdaaliasinvokefunctionAEA6B244": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "goldenlambdagoldenlambdaaliasB00D58F9"
+        },
+        "InvokedViaFunctionUrl": true,
+        "Principal": "*"
+      }
+    }
+  },
+  "Outputs": {
+    "goldenlambdagoldenlambdaurloutputC45A7DB4": {
+      "Value": {
+        "Fn::GetAtt": [
+          "goldenlambdagoldenlambdaaliasFunctionUrl74FE7411",
+          "FunctionUrl"
+        ]
+      },
+      "Export": {
+        "Name": "golden-lambda-golden-lambda-url-output"
+      }
+    }
+  }
+}
