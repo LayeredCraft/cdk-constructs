@@ -63,6 +63,36 @@ public sealed class WebFunctionEndpointConstruct : Resource, IWebFunctionEndpoin
         });
 
         Node.DefaultChild = _resource;
+
+        EmitRemoteCompanionWarning(webFunction);
+    }
+
+    private const string RemoteCompanionWarningId =
+        "@layeredcraft/cdk-constructs:webFunctionRemoteCompanionLogGroups";
+
+    private void EmitRemoteCompanionWarning(WebFunctionConstruct webFunction)
+    {
+        if (EndpointType is not (WebFunctionEndpointType.PerRegion or WebFunctionEndpointType.MultiRegion))
+            return;
+
+        var modeSentence = webFunction.Logs switch
+        {
+            WebFunctionLogsCreate =>
+                "In the stack Region, the centralized group and its companion are managed by this stack.",
+            WebFunctionLogsUse { Companion: not null } =>
+                "In the stack Region, the caller-supplied companion is used.",
+            WebFunctionLogsUse =>
+                "In the stack Region, the companion is not managed either.",
+            _ =>
+                "All of this function's log groups, including the centralized group, are service-managed and never expire.",
+        };
+
+        Annotations.Of(this).AddWarningV2(
+            RemoteCompanionWarningId,
+            $"Endpoint '{EndpointName}' ({EndpointType}) runs requests in Regions other than the stack Region. " +
+            $"Lambda creates {webFunction.DescribeCompanionLogGroup()} in each of those Regions on first request " +
+            "with no expiry; this construct does not manage log groups outside the stack Region. " +
+            $"Set their retention separately. {modeSentence}");
     }
 
     /// <summary>The Web Function this endpoint belongs to.</summary>

@@ -297,6 +297,7 @@ public class WebFunctionSecurityTests
     [InlineData("DefaultEndpoint")]
     [InlineData("ExecutionRole")]
     [InlineData("LogGroup")]
+    [InlineData("LocalLogGroup")]
     [InlineData("ResourcePolicy")]
     public void AddEndpoint_ReservedId_Throws(string id)
     {

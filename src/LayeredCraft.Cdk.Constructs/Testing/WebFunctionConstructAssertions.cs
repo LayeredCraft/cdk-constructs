@@ -19,6 +19,7 @@ public static class WebFunctionConstructAssertions
     private const string ResourcePolicyType = "AWS::Lambda::ResourcePolicy";
     private const string OriginAccessControlType = "AWS::CloudFront::OriginAccessControl";
     private const string BucketPolicyType = "AWS::S3::BucketPolicy";
+    private const string LogGroupType = "AWS::Logs::LogGroup";
     private const string InvokeAction = "lambda:InvokeWebFunctionEndpoint";
 
     /// <summary>Asserts the template contains a Web Function with the given function name.</summary>
@@ -274,6 +275,81 @@ public static class WebFunctionConstructAssertions
 
         throw new InvalidOperationException(
             $"No code-bucket read statement scoped to the '{functionName}' function was found.");
+    }
+
+    /// <summary>
+    /// Asserts the template contains a log group with the given literal name and retention. Token names cannot be
+    /// asserted this way because they are not literal in the synthesized template.
+    /// </summary>
+    public static void ShouldHaveLogGroup(this Template template, string logGroupName, int retentionDays)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+
+        var matches = FindResourcesByProperty(template, LogGroupType, "LogGroupName", logGroupName);
+        if (matches.Count == 0)
+            throw new InvalidOperationException($"No log group named '{logGroupName}' was found.");
+
+        var properties = Properties(matches[0].Value);
+        if (!properties.TryGetValue("RetentionInDays", out var retention) || !ValueEquals(retention, retentionDays))
+            throw new InvalidOperationException($"The log group '{logGroupName}' was expected to declare RetentionInDays = {retentionDays}.");
+    }
+
+    /// <summary>
+    /// Asserts the template contains the companion log group for a centralized log group, named
+    /// <c>{centralizedLogGroupName}.local</c>, with the given retention. Token names cannot be asserted this way.
+    /// </summary>
+    public static void ShouldHaveCompanionLogGroup(this Template template, string centralizedLogGroupName, int retentionDays)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+
+        var companionName = $"{centralizedLogGroupName}.local";
+        var matches = FindResourcesByProperty(template, LogGroupType, "LogGroupName", companionName);
+        if (matches.Count == 0)
+            throw new InvalidOperationException($"No companion log group named '{companionName}' was found.");
+
+        var properties = Properties(matches[0].Value);
+        if (!properties.TryGetValue("RetentionInDays", out var retention) || !ValueEquals(retention, retentionDays))
+            throw new InvalidOperationException($"The companion log group '{companionName}' was expected to declare RetentionInDays = {retentionDays}.");
+    }
+
+    /// <summary>
+    /// Asserts the function's revision depends on each named log group. The dependency is verified through the
+    /// resolved logical IDs, so the assertion never hard-codes generated identifiers.
+    /// </summary>
+    public static void ShouldHaveRevisionDependingOnLogGroups(this Template template, string functionName, params string[] logGroupNames)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(logGroupNames);
+
+        var revisions = FindResourcesByProperty(template, RevisionType, "FunctionName", functionName);
+        if (revisions.Count == 0)
+            throw new InvalidOperationException($"No revision for Web Function '{functionName}' was found.");
+
+        var dependsOn = DependsOnIds(revisions[0].Value);
+
+        foreach (var logGroupName in logGroupNames)
+        {
+            var groups = FindResourcesByProperty(template, LogGroupType, "LogGroupName", logGroupName);
+            if (groups.Count == 0)
+                throw new InvalidOperationException($"No log group named '{logGroupName}' was found.");
+
+            if (!dependsOn.Contains(groups[0].Key, StringComparer.Ordinal))
+                throw new InvalidOperationException(
+                    $"The revision for '{functionName}' was expected to depend on the log group '{logGroupName}', but it does not.");
+        }
+    }
+
+    private static IReadOnlyList<string> DependsOnIds(IDictionary<string, object> resource)
+    {
+        if (!resource.TryGetValue("DependsOn", out var value))
+            return [];
+
+        return value switch
+        {
+            string single => [single],
+            IEnumerable<object> list => list.OfType<string>().ToList(),
+            _ => [],
+        };
     }
 
     private static string FunctionLogicalId(Template template, string functionName)

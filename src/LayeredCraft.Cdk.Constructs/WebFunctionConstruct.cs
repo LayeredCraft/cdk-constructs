@@ -5,6 +5,7 @@ using Amazon.CDK;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.Logs;
+using Amazon.JSII.Runtime.Deputy;
 using Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 
@@ -23,6 +24,14 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
     private PolicyDocument? _resourcePolicy;
     private readonly List<PolicyStatement> _resourcePolicyStatements = [];
     private Amazon.CDK.AWS.Lambda.CfnResourcePolicy? _resourcePolicyResource;
+    private readonly string _companionRegion;
+    private string? _centralizedLogGroupName;
+    private bool _grantsCompanionWrite;
+    private bool _hasNonHomeRegionEndpoint;
+    private bool _companionCreateGroupGranted;
+
+    private const string UnmanagedCompanionWarningId =
+        "@layeredcraft/cdk-constructs:webFunctionUnmanagedCompanionLogGroup";
 
     /// <summary>Creates a Web Function.</summary>
     /// <param name="scope">The construct scope.</param>
@@ -51,8 +60,14 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
         Node.DefaultChild = _function;
 
         Role = props.Role ?? CreateExecutionRole();
+        Logs = props.Logs;
+        _companionRegion = Lazy.String(
+            new CompanionRegionProducer(this),
+            new LazyStringValueOptions { DisplayHint = "companionLogGroupRegion" });
 
-        var (logGroup, logGroupName, logGroupCreated) = ResolveLogs(props);
+        var (logGroup, logGroupName, localLogGroup) = ResolveLogs(props);
+
+        EmitUnmanagedCompanionWarning(props);
 
         var codeConfig = props.Code.Bind(this);
 
@@ -89,12 +104,15 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
         _revision.AddResourceDependency(_function, "The revision belongs to the Web Function.");
         if (Role.Node.DefaultChild is CfnResource roleCfn)
             _revision.Node.AddDependency(roleCfn);
-        if (logGroupCreated && logGroup is not null)
+        if (logGroup is not null && ShouldDependOn(logGroup))
             _revision.Node.AddDependency(logGroup);
+        if (localLogGroup is not null && ShouldDependOn(localLogGroup))
+            _revision.Node.AddDependency(localLogGroup);
         if (codeConfig.PolicyDependable is not null)
             _revision.Node.AddDependency(codeConfig.PolicyDependable);
 
         LogGroup = logGroup;
+        LocalLogGroup = localLogGroup;
 
         _endpointNames.Add(props.Endpoint.EndpointName);
         DefaultEndpoint = CreateEndpoint("DefaultEndpoint", props.Endpoint);
@@ -122,6 +140,17 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
 
     /// <summary>The log group, or null when logs use the service default.</summary>
     public ILogGroup? LogGroup { get; }
+
+    /// <summary>
+    /// The companion log group named <c>{LogGroup}.local</c> that Lambda writes to in the stack Region, or
+    /// null when this construct does not manage it. It is created by <see cref="WebFunctionLogs.Create"/> and
+    /// supplied by <see cref="WebFunctionLogs.Use"/> when a companion is passed; it is null for
+    /// <see cref="WebFunctionLogs.Use"/> without a companion and for <see cref="WebFunctionLogs.ServiceDefault"/>.
+    /// </summary>
+    public ILogGroup? LocalLogGroup { get; }
+
+    /// <summary>The logging configuration chosen for this Web Function.</summary>
+    internal WebFunctionLogs Logs { get; }
 
     /// <summary>The default endpoint.</summary>
     public WebFunctionEndpointConstruct DefaultEndpoint { get; }
@@ -158,6 +187,15 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
         var endpoint = new WebFunctionEndpointConstruct(this, id, this, options);
         endpoint.CfnEndpoint.AddResourceDependency(_revision, "The endpoint serves the revision.");
         _endpoints.Add(endpoint);
+
+        if (options.EndpointType is WebFunctionEndpointType.PerRegion or WebFunctionEndpointType.MultiRegion)
+        {
+            _hasNonHomeRegionEndpoint = true;
+
+            if (_grantsCompanionWrite && _centralizedLogGroupName is not null)
+                GrantCompanionCreateGroup(_centralizedLogGroupName);
+        }
+
         return endpoint;
     }
 
@@ -208,29 +246,132 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
         return role;
     }
 
-    private (ILogGroup? LogGroup, string? LogGroupName, bool Created) ResolveLogs(IWebFunctionConstructProps props)
+    private (ILogGroup? LogGroup, string? LogGroupName, ILogGroup? LocalLogGroup) ResolveLogs(
+        IWebFunctionConstructProps props)
     {
         switch (props.Logs)
         {
             case WebFunctionLogsCreate create:
             {
+                var centralizedName = $"/aws/lambda/web/{props.FunctionName}";
+
                 var group = new LogGroup(this, "LogGroup", new LogGroupProps
                 {
-                    LogGroupName = $"/aws/lambda/web/{props.FunctionName}",
+                    LogGroupName = centralizedName,
                     Retention = create.Retention,
                     RemovalPolicy = create.RemovalPolicy,
                 });
-                return (group, group.LogGroupName, true);
+
+                var companion = new LogGroup(this, "LocalLogGroup", new LogGroupProps
+                {
+                    LogGroupName = $"{centralizedName}.local",
+                    Retention = create.CompanionRetention,
+                    RemovalPolicy = create.RemovalPolicy,
+                });
+
+                _centralizedLogGroupName = centralizedName;
+                return (group, group.LogGroupName, companion);
             }
             case WebFunctionLogsUse use:
             {
+                _centralizedLogGroupName = use.LogGroup.LogGroupName;
+
                 if (ShouldGrantWrite(use.LogGroup))
+                {
+                    _grantsCompanionWrite = true;
                     use.LogGroup.GrantWrite(Role);
-                return (use.LogGroup, use.LogGroup.LogGroupName, false);
+                    GrantCompanionWrite(use.LogGroup.LogGroupName);
+
+                    if (use.Companion is null)
+                        GrantCompanionCreateGroup(use.LogGroup.LogGroupName);
+                }
+
+                return (use.LogGroup, use.LogGroup.LogGroupName, use.Companion);
             }
             default:
-                return (null, null, false);
+                _centralizedLogGroupName = $"/aws/lambda/web/{props.FunctionName}";
+                return (null, null, null);
         }
+    }
+
+    private bool ShouldDependOn(ILogGroup logGroup)
+        => logGroup is Construct construct
+           && construct.Node.DefaultChild is CfnResource
+           && Stack.Of(construct) == Stack.Of(this);
+
+    private void GrantCompanionWrite(string centralizedLogGroupName)
+        => Grant.AddToPrincipal(new GrantOnPrincipalOptions
+        {
+            Grantee = Role,
+            Actions = ["logs:CreateLogStream", "logs:PutLogEvents"],
+            ResourceArns = [FormatCompanionArn(centralizedLogGroupName, ":log-stream:*")],
+        });
+
+    private void GrantCompanionCreateGroup(string centralizedLogGroupName)
+    {
+        if (_companionCreateGroupGranted)
+            return;
+
+        _companionCreateGroupGranted = true;
+
+        Grant.AddToPrincipal(new GrantOnPrincipalOptions
+        {
+            Grantee = Role,
+            Actions = ["logs:CreateLogGroup"],
+            ResourceArns = [FormatCompanionArn(centralizedLogGroupName, string.Empty)],
+        });
+    }
+
+    private string FormatCompanionArn(string centralizedLogGroupName, string suffix)
+        => Stack.Of(this).FormatArn(new ArnComponents
+        {
+            Service = "logs",
+            Region = _companionRegion,
+            Resource = "log-group",
+            ResourceName = $"{centralizedLogGroupName}.local{suffix}",
+            ArnFormat = ArnFormat.COLON_RESOURCE_NAME,
+        });
+
+    private void EmitUnmanagedCompanionWarning(IWebFunctionConstructProps props)
+    {
+        if (props.Logs is not WebFunctionLogsUse { Companion: null })
+            return;
+
+        Annotations.Of(this).AddWarningV2(UnmanagedCompanionWarningId, BuildUnmanagedCompanionMessage());
+    }
+
+    private string BuildUnmanagedCompanionMessage()
+    {
+        if (Token.IsUnresolved(FunctionName)
+            || _centralizedLogGroupName is null
+            || Token.IsUnresolved(_centralizedLogGroupName))
+        {
+            return "This Web Function writes to a log group whose companion log group is not managed by this " +
+                   "construct. Lambda creates it on first request with no expiry unless it already exists. Pass " +
+                   "the companion to WebFunctionLogs.Use(logGroup, companion) or set its retention separately.";
+        }
+
+        return $"Web Function '{FunctionName}' writes to '{_centralizedLogGroupName}', but its companion log " +
+               $"group '{_centralizedLogGroupName}.local' is not managed by this construct. Lambda creates it on " +
+               "first request with no expiry unless it already exists. Pass the companion to " +
+               "WebFunctionLogs.Use(logGroup, companion) or set its retention separately.";
+    }
+
+    internal string DescribeCompanionLogGroup()
+        => _centralizedLogGroupName is not null && !Token.IsUnresolved(_centralizedLogGroupName)
+            ? $"the companion log group '{_centralizedLogGroupName}.local'"
+            : "a per-Region companion log group";
+
+    private sealed class CompanionRegionProducer : DeputyBase, IStableStringProducer
+    {
+        private readonly WebFunctionConstruct _construct;
+
+        internal CompanionRegionProducer(WebFunctionConstruct construct)
+            : base(new DeputyProps(Array.Empty<object>()))
+            => _construct = construct;
+
+        public string Produce()
+            => _construct._hasNonHomeRegionEndpoint ? "*" : Stack.Of(_construct).Region;
     }
 
     private static bool ShouldGrantWrite(ILogGroup logGroup)

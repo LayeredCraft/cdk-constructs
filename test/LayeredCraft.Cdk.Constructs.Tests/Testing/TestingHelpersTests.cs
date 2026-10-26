@@ -55,7 +55,7 @@ public class TestingHelpersTests
         template.ShouldHaveOtelLayer();
         template.ShouldHaveCloudWatchLogsPermissions("helper-test-validation");
         template.ShouldHaveVersionAndAlias("live");
-        template.ShouldHaveLogGroup("helper-test-validation", 14);
+        LambdaFunctionConstructAssertions.ShouldHaveLogGroup(template, "helper-test-validation", 14);
     }
 
     [Fact]

@@ -64,6 +64,20 @@ public class WebFunctionConstructTests
             : [dependsOn.GetString()!];
     }
 
+    private static JsonElement LogGroupByName(JsonElement template, string name)
+    {
+        foreach (var property in Resources(template).EnumerateObject())
+        {
+            if (property.Value.GetProperty("Type").GetString() == "AWS::Logs::LogGroup"
+                && property.Value.GetProperty("Properties").GetProperty("LogGroupName").GetString() == name)
+            {
+                return property.Value;
+            }
+        }
+
+        throw new InvalidOperationException($"No log group named '{name}' was found.");
+    }
+
     private static CfnBucket CfnBucketOf(Bucket bucket) => (CfnBucket)bucket.Node.DefaultChild!;
 
     private static void SetOwnedBucketVersioningStatus(Bucket bucket, string status)
@@ -283,12 +297,17 @@ public class WebFunctionConstructTests
         var construct = new WebFunctionConstruct(stack, "web-function", DefaultProps(artifacts));
 
         construct.LogGroup.Should().NotBeNull();
+        construct.LocalLogGroup.Should().NotBeNull();
 
-        var logGroup = ResourceOfType(TemplateJson(stack), "AWS::Logs::LogGroup")!.Value;
-        var properties = logGroup.GetProperty("Properties");
-        properties.GetProperty("LogGroupName").GetString().Should().Be("/aws/lambda/web/test-web-function");
-        properties.GetProperty("RetentionInDays").GetInt32().Should().Be(14);
+        var template = TemplateJson(stack);
+
+        var logGroup = LogGroupByName(template, "/aws/lambda/web/test-web-function");
+        logGroup.GetProperty("Properties").GetProperty("RetentionInDays").GetInt32().Should().Be(14);
         logGroup.GetProperty("DeletionPolicy").GetString().Should().Be("Delete");
+
+        var companion = LogGroupByName(template, "/aws/lambda/web/test-web-function.local");
+        companion.GetProperty("Properties").GetProperty("RetentionInDays").GetInt32().Should().Be(3);
+        companion.GetProperty("DeletionPolicy").GetString().Should().Be("Delete");
     }
 
     [Fact]
@@ -297,12 +316,18 @@ public class WebFunctionConstructTests
         var (_, stack) = CdkTestHelper.CreateTestStack();
         var artifacts = Bucket.FromBucketName(stack, "Artifacts", "artifacts");
 
-        var props = DefaultProps(artifacts) with { Logs = WebFunctionLogs.Create(RetentionDays.ONE_MONTH) };
+        var props = DefaultProps(artifacts) with
+        {
+            Logs = WebFunctionLogs.Create(RetentionDays.ONE_MONTH, companionRetention: RetentionDays.ONE_DAY),
+        };
 
         _ = new WebFunctionConstruct(stack, "web-function", props);
 
-        var logGroup = ResourceOfType(TemplateJson(stack), "AWS::Logs::LogGroup")!.Value;
-        logGroup.GetProperty("Properties").GetProperty("RetentionInDays").GetInt32().Should().Be(30);
+        var template = TemplateJson(stack);
+        LogGroupByName(template, "/aws/lambda/web/test-web-function")
+            .GetProperty("Properties").GetProperty("RetentionInDays").GetInt32().Should().Be(30);
+        LogGroupByName(template, "/aws/lambda/web/test-web-function.local")
+            .GetProperty("Properties").GetProperty("RetentionInDays").GetInt32().Should().Be(1);
     }
 
     [Fact]
@@ -315,6 +340,7 @@ public class WebFunctionConstructTests
         var construct = new WebFunctionConstruct(stack, "web-function", props);
 
         construct.LogGroup.Should().BeNull();
+        construct.LocalLogGroup.Should().BeNull();
 
         var template = TemplateJson(stack);
         ResourceOfType(template, "AWS::Logs::LogGroup").Should().BeNull();
@@ -338,6 +364,7 @@ public class WebFunctionConstructTests
         var construct = new WebFunctionConstruct(stack, "web-function", props);
 
         construct.LogGroup.Should().BeSameAs(logGroup);
+        construct.LocalLogGroup.Should().BeNull();
 
         var template = TemplateJson(stack);
         var logGroupId = LogicalIdOfType(template, "AWS::Logs::LogGroup")!;

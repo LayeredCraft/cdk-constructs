@@ -46,6 +46,15 @@
       "UpdateReplacePolicy": "Delete",
       "DeletionPolicy": "Delete"
     },
+    "webfunctionLocalLogGroup42143EB1": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/web/golden-web-function.local",
+        "RetentionInDays": 3
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
     "webfunctionRevisionB2BF6DC1": {
       "Type": "AWS::Lambda::WebFunctionRevision",
       "Properties": {
@@ -81,6 +90,7 @@
       "DependsOn": [
         "webfunctionExecutionRole7793F0D5",
         "webfunctionFunction46F1F768",
+        "webfunctionLocalLogGroup42143EB1",
         "webfunctionLogGroup5C9D8E36"
       ]
     },

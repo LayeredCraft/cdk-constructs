@@ -43,6 +43,49 @@
                   "Arn"
                 ]
               }
+            },
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition"
+                    },
+                    ":logs:us-east-1:123456789012:log-group:",
+                    {
+                      "Ref": "ExistingLogGroup881EDE44"
+                    },
+                    ".local:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Action": "logs:CreateLogGroup",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition"
+                    },
+                    ":logs:us-east-1:123456789012:log-group:",
+                    {
+                      "Ref": "ExistingLogGroup881EDE44"
+                    },
+                    ".local"
+                  ]
+                ]
+              }
             }
           ],
           "Version": "2012-10-17"
@@ -99,6 +142,7 @@
         }
       },
       "DependsOn": [
+        "ExistingLogGroup881EDE44",
         "SuppliedRole699D3B4C",
         "webfunctionFunction46F1F768"
       ]

@@ -54,6 +54,7 @@ internal static class WebFunctionValidation
         "DefaultEndpoint",
         "ExecutionRole",
         "LogGroup",
+        "LocalLogGroup",
         "ResourcePolicy",
     };
 
