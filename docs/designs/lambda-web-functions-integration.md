@@ -627,17 +627,23 @@ Notes:
 
 Rules:
 
-- **Name.** The companion name is the centralized group's name plus `.local`. It is derived from the same centralized
-  log-group **name value that is used for CloudFormation creation** (the configured `LogGroupName`, e.g.
-  `/aws/lambda/web/{FunctionName}`), never recomputed independently and never re-derived from `FunctionName`. A literal
-  configured name yields a literal companion name; a token configured name renders as `Fn::Join`.
-  *Erratum B (revision 5, implementation review):* do **not** mandate reading the L2 `LogGroup.LogGroupName` property
-  to obtain this name. The CDK L2 property is always a CloudFormation token (`Ref`) even for an explicitly named group,
-  so using it would force every companion name — including a literal `FunctionName` with no tokens — to render as
-  `Fn::Join`, contradicting the literal-name expectations of tests T1/T4. The construct therefore derives the companion
-  name from the configured name string it passes to the centralized `LogGroup` (and, in `Use` mode, from the supplied
-  group's configured name), preserving the exact deployed name. Validation ([§14](#14-validation)) uses the underlying
-  `CfnLogGroup` when it can, as described under *Companion validation* below.
+- **Name.** The companion name is the centralized group's name plus `.local`, derived mode-specifically:
+  - *Create mode* derives it from the **configured centralized log-group name used to create the CloudFormation
+    resource** (the value passed as `LogGroupName`, e.g. `/aws/lambda/web/{FunctionName}`), never recomputed
+    independently and never re-derived from `FunctionName`. A literal configured name yields a literal companion name;
+    a token configured name renders as `Fn::Join`.
+  - *Use mode* derives the companion's expected name from the supplied centralized group's `LogGroupName` property.
+    For a same-stack owned group that property can be a CloudFormation `Ref` (the L2 property is a token even when the
+    group was given an explicit name), so the derived name may be a token rather than a literal.
+  *Erratum B (revision 5, implementation review):* do **not** mandate reading the L2 `LogGroup.LogGroupName` property in
+  Create mode. There the L2 property is always a CloudFormation token (`Ref`) even for an explicitly named group, so
+  using it would force every companion name — including a literal `FunctionName` with no tokens — to render as
+  `Fn::Join`, contradicting the literal-name expectations of tests T1/T4. Create mode therefore derives the companion
+  name from the configured name string it passes to the centralized `LogGroup`, preserving the exact deployed name. In
+  `Use` mode the supplied group's `LogGroupName` is the source of the expected name, as above. Companion-name
+  validation ([§14](#14-validation-and-error-handling)) may inspect the underlying `CfnLogGroup` to compare provably
+  literal names; unresolved expressions are accepted rather than rejected speculatively, as described under *Companion
+  validation*.
 - **Retention and removal.** `companionRetention` is independent of `retention`. The companion takes the same
   `RemovalPolicy`; there is no separate companion policy. The `THREE_DAYS` default reflects what the companion is
   for: it only stages events that are already centralized within minutes, and its main use is low-latency Live
@@ -2308,10 +2314,13 @@ text above and do not change the approved scope:
 - **Erratum A.** The new Web Function log-group assertion is `ShouldHaveWebFunctionLogGroup`, not
   `ShouldHaveLogGroup` (already published by `LambdaFunctionConstructAssertions`; a second `(Template, string, int)`
   overload would be ambiguous for consumers — CS0121). See §8.6.
-- **Erratum B.** The companion name is derived from the configured centralized log-group name used for CloudFormation
-  creation, not by reading the L2 `LogGroup.LogGroupName` property (which is always a `Ref` token and would force
-  `Fn::Join` even for a literal name). Deployed naming is unchanged. Companion-name validation reads the underlying
-  `CfnLogGroup` through the construct's default child for owned groups. See "Name" and "Companion validation" in §8.3.
+- **Erratum B.** The companion name is derived mode-specifically. In **Create mode** it comes from the configured
+  centralized log-group name used for CloudFormation creation, not by reading the L2 `LogGroup.LogGroupName` property
+  (which is always a `Ref` token and would force `Fn::Join` even for a literal name). In **Use mode** the expected name
+  comes from the supplied group's `LogGroupName` property, which for a same-stack owned group can itself be a `Ref`.
+  Deployed naming is unchanged. Companion-name validation compares only *provably literal* names and may read the
+  underlying `CfnLogGroup` through the construct's default child for owned groups; unresolved expressions are accepted
+  rather than rejected speculatively. See "Name" and "Companion validation" in §8.3.
 - **Erratum C.** `{R}` uses the **uncached** `Lazy.UncachedString` (`IStringProducer`), not the caching `Lazy.String`
   (`IStableStringProducer`). A cached value resolved before `AddEndpoint` would keep the home Region and never widen;
   the uncached form re-evaluates on every render so G1/G2 reflect the final endpoint set. See "Mechanism" in §8.3 and

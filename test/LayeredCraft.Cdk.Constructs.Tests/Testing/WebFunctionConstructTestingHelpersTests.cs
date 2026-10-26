@@ -873,7 +873,8 @@ public class WebFunctionConstructTestingHelpersTests
 
         var act = () => Template.FromStack(stack).ShouldHaveWebFunctionLogGroup("/aws/lambda/web/test-web-function", 30);
 
-        act.Should().Throw<Exception>();
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*log group '/aws/lambda/web/test-web-function'*RetentionInDays = 30*");
     }
 
     [Fact]
@@ -884,7 +885,8 @@ public class WebFunctionConstructTestingHelpersTests
 
         var act = () => Template.FromStack(stack).ShouldHaveWebFunctionLogGroup("/aws/lambda/web/other-function", 14);
 
-        act.Should().Throw<Exception>();
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*No log group named '/aws/lambda/web/other-function' was found*");
     }
 
     [Fact]
@@ -906,7 +908,8 @@ public class WebFunctionConstructTestingHelpersTests
 
         var act = () => Template.FromStack(stack).ShouldHaveCompanionLogGroup("/aws/lambda/web/test-web-function", 14);
 
-        act.Should().Throw<Exception>();
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*companion log group '/aws/lambda/web/test-web-function.local'*RetentionInDays = 14*");
     }
 
     [Fact]
@@ -918,7 +921,8 @@ public class WebFunctionConstructTestingHelpersTests
 
         var act = () => Template.FromStack(stack).ShouldHaveCompanionLogGroup("/custom/logs", 3);
 
-        act.Should().Throw<Exception>();
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*No companion log group named '/custom/logs.local' was found*");
     }
 
     [Fact]
@@ -948,6 +952,7 @@ public class WebFunctionConstructTestingHelpersTests
             "test-web-function",
             "/unrelated/logs");
 
-        act.Should().Throw<Exception>();
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*revision for 'test-web-function'*depend on the log group '/unrelated/logs'*");
     }
 }

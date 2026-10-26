@@ -226,8 +226,13 @@ public class WebFunctionCompanionLogGroupTests
         var template = TemplateJson(consumerStack);
         ResourcesOfType(template, LogGroupType).Should().BeEmpty();
 
+        var functionId = ResourcesOfType(template, "AWS::Lambda::WebFunction").Single().Key;
+        var roleId = ResourcesOfType(template, "AWS::IAM::Role").Single().Key;
         var dependsOn = DependsOnIds(RevisionOf(template, "test-web-function"));
-        dependsOn.Should().NotContain(id => id.Contains("Centralized", StringComparison.Ordinal));
+
+        // Only the consumer stack's own resources are depended on; the cross-stack group is never an explicit
+        // dependency (it is referenced through Fn::ImportValue instead).
+        dependsOn.Should().BeEquivalentTo([functionId, roleId]);
 
         // The legitimate cross-stack reference (and its implicit dependency) is preserved.
         template.GetProperty("Resources").EnumerateObject()
@@ -259,6 +264,66 @@ public class WebFunctionCompanionLogGroupTests
         var companion = LogGroup.FromLogGroupName(stack, "Companion", Fn.ImportValue("companion-name"));
 
         Action act = () => WebFunctionLogs.Use(centralized, companion);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void T9_Use_ShouldRejectOwnedLiteralCompanionNameMismatch()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var centralized = new LogGroup(stack, "Centralized", new LogGroupProps { LogGroupName = "/custom/a" });
+        var wrongCompanion = new LogGroup(stack, "Companion", new LogGroupProps { LogGroupName = "/custom/WRONG" });
+
+        Action act = () => WebFunctionLogs.Use(centralized, wrongCompanion);
+
+        act.Should().Throw<ArgumentException>().WithParameterName("companion");
+    }
+
+    [Fact]
+    public void T9_Use_ShouldAcceptOwnedLiteralCompanionMatch()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var centralized = new LogGroup(stack, "Centralized", new LogGroupProps { LogGroupName = "/custom/a" });
+        var companion = new LogGroup(stack, "Companion", new LogGroupProps { LogGroupName = "/custom/a.local" });
+
+        Action act = () => WebFunctionLogs.Use(centralized, companion);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void T9_Use_ShouldRejectOwnedCentralizedImportedCompanionMismatch()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var centralized = new LogGroup(stack, "Centralized", new LogGroupProps { LogGroupName = "/custom/a" });
+        var wrongCompanion = LogGroup.FromLogGroupName(stack, "Companion", "/custom/WRONG");
+
+        Action act = () => WebFunctionLogs.Use(centralized, wrongCompanion);
+
+        act.Should().Throw<ArgumentException>().WithParameterName("companion");
+    }
+
+    [Fact]
+    public void T9_Use_ShouldAcceptOwnedTokenizedNames()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var centralized = new LogGroup(stack, "Centralized", new LogGroupProps { LogGroupName = Fn.ImportValue("centralized-name") });
+        var companion = new LogGroup(stack, "Companion", new LogGroupProps { LogGroupName = Fn.ImportValue("companion-name") });
+
+        Action act = () => WebFunctionLogs.Use(centralized, companion);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void T9_Use_ShouldAcceptUnnamedOwnedCompanion()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var centralized = new LogGroup(stack, "Centralized", new LogGroupProps { LogGroupName = "/custom/a" });
+        var unnamedCompanion = new LogGroup(stack, "Companion");
+
+        Action act = () => WebFunctionLogs.Use(centralized, unnamedCompanion);
 
         act.Should().NotThrow();
     }
@@ -732,6 +797,8 @@ public class WebFunctionCompanionLogGroupTests
 
         endpointMessages.Should().HaveCount(2);
         endpointMessages.Should().OnlyContain(data => data.Contains(expected, StringComparison.Ordinal));
+        // Literal endpoint names read naturally: "Endpoint 'name' (...)".
+        endpointMessages.Should().OnlyContain(data => data.StartsWith("Endpoint '", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -851,8 +918,9 @@ public class WebFunctionCompanionLogGroupTests
             .ToList();
 
         messages.Should().HaveCount(1);
-        messages[0].Should().Contain("this endpoint");
+        messages[0].Should().StartWith("This endpoint (PerRegion) runs requests in Regions other than the stack Region.");
         messages[0].Should().NotContain("${Token[");
+        messages[0].Should().NotContain("Endpoint This endpoint");
     }
 
     [Fact]
