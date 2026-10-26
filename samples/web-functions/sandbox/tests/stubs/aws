@@ -328,6 +328,10 @@ if service == "s3api" and sub == "delete-bucket":
 
 if service == "logs" and sub == "describe-log-groups":
     prefix = opt("--log-group-name-prefix") or ""
+    meta = {}
+    if os.path.exists(os.path.join(STATE, "logmeta.json")):
+        with open(os.path.join(STATE, "logmeta.json")) as _mf:
+            meta = json.load(_mf)
     found = []
     for root, _dirs, files in os.walk(LOGS):
         for fn in files:
@@ -336,10 +340,17 @@ if service == "logs" and sub == "describe-log-groups":
             if group.startswith(prefix):
                 found.append(group)
     found.sort()
+    groups = []
+    for g in found:
+        entry = {"logGroupName": g, "storedBytes": int((meta.get(g) or {}).get("storedBytes") or 0)}
+        retention = (meta.get(g) or {}).get("retentionInDays")
+        if retention is not None:
+            entry["retentionInDays"] = int(retention)
+        groups.append(entry)
     if opt("--output", "json") == "text":
         sys.stdout.write("\n".join(found) + ("\n" if found else ""))
     else:
-        sys.stdout.write(json.dumps([{"logGroupName": g} for g in found]) + "\n")
+        sys.stdout.write(json.dumps({"logGroups": groups}) + "\n")
     sys.exit(0)
 
 if service == "logs" and sub == "delete-log-group":
@@ -347,6 +358,14 @@ if service == "logs" and sub == "delete-log-group":
     path = os.path.join(LOGS, group.lstrip("/"))
     if os.path.exists(path):
         os.remove(path)
+    meta_path = os.path.join(STATE, "logmeta.json")
+    if os.path.exists(meta_path):
+        with open(meta_path) as _mf:
+            meta = json.load(_mf)
+        if group in meta:
+            del meta[group]
+            with open(meta_path, "w") as _mf:
+                json.dump(meta, _mf)
     sys.exit(0)
 
 if service == "iam" and sub == "list-role-policies":

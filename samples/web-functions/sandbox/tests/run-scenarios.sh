@@ -101,6 +101,7 @@ check "7.2 SECOND=1 seen" 'grep -q "SECOND=1" "$STUB_STATE/calls.log"'
 run "${SANDBOX_DIR}/deploy.sh" --revision 2
 check "7.3 disable second distribution exit 0" '[ "$RC" -eq 0 ]'
 check "7.4 SECOND=0 seen" 'grep -q "SECOND=0" "$STUB_STATE/calls.log"'
+check "8.0 service-created companion present before destroy" '[ -f "$STUB_STATE/logs/lccdk-wf-sandbox/wfsbx-uselogs.local" ]'
 
 run "${SANDBOX_DIR}/destroy.sh" --yes
 check "8.1 destroy exit 0" '[ "$RC" -eq 0 ]'
@@ -109,6 +110,9 @@ check "8.3 no buckets remain" '[ -z "$(ls -A "$STUB_STATE/buckets" 2>/dev/null)"
 check "8.4 no log groups remain" '[ ! -e "$STUB_STATE/logs/aws/lambda/web/wfsbx-nextjs" ]'
 check "8.5 manifest removed" '[ ! -f "$MANIFEST" ]'
 check "8.6 never called s3api delete-bucket (M2)" '[ ! -f "$STUB_STATE/delete_bucket_called" ]'
+check "8.7 service-created companion removed by exact name" '[ ! -e "$STUB_STATE/logs/lccdk-wf-sandbox/wfsbx-uselogs.local" ]'
+check "8.8 no custom-namespace groups remain" '[ -z "$(ls -A "$STUB_STATE/logs/lccdk-wf-sandbox" 2>/dev/null)" ]'
+check "8.9 deleted the companion by exact name, never by wildcard" 'grep -q -- "logs delete-log-group --log-group-name /lccdk-wf-sandbox/wfsbx-uselogs.local" "$STUB_STATE/calls.log" && [ "$(grep -c "logs delete-log-group" "$STUB_STATE/calls.log")" -eq 1 ]'
 
 # --------------------------------------------------------------------------------------------------
 scenario "9-10: destroy after partial deploy + repeated destroy"
@@ -287,6 +291,40 @@ check "24.5 stack still preserved" '[ -f "$STUB_STATE/stacks/'"$A_STACK"'.json" 
 run "${SANDBOX_DIR}/destroy.sh" --yes
 check "24.6 destroy with confirmation succeeds" '[ "$RC" -eq 0 ]'
 check "24.7 stacks gone" '[ -z "$(ls -A "$STUB_STATE/stacks" 2>/dev/null)" ]'
+cleanup_manifest
+
+# --------------------------------------------------------------------------------------------------
+scenario "25: verify-log-groups.sh (companion log-group acceptance, read-only)"
+fresh_state
+cleanup_manifest
+LOG_SUMMARY="${SANDBOX_DIR}/build/log-group-summary.json"
+summary_field() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$1" "$2"; }
+run "${SANDBOX_DIR}/deploy.sh"
+check "25.1 deploy exit 0" '[ "$RC" -eq 0 ]'
+run "${SANDBOX_DIR}/verify-log-groups.sh"
+check "25.2 pre-traffic verify exit 0" '[ "$RC" -eq 0 ]'
+check "25.3 pre-traffic summary pass>0 and fail==0" '[ "$(summary_field "$LOG_SUMMARY" pass)" -gt 0 ] && [ "$(summary_field "$LOG_SUMMARY" fail)" -eq 0 ]'
+check "25.4 pre-traffic phase recorded" 'grep -q "\"phase\": \"pre-traffic\"" "$LOG_SUMMARY"'
+run "${SANDBOX_DIR}/verify-log-groups.sh" --expect-delivery
+check "25.5 delivery verify exit 0" '[ "$RC" -eq 0 ]'
+check "25.6 delivery phase recorded" 'grep -q "\"phase\": \"delivery\"" "$LOG_SUMMARY"'
+check "25.7 never mutated AWS (no delete calls)" '! grep -q "verify-log-groups" "$STUB_STATE/calls.log" && [ -z "$(grep "logs delete-log-group" "$STUB_STATE/calls.log")" ]'
+
+# A missing managed group must fail the check (no false green).
+rm -f "$STUB_STATE/logs/aws/lambda/web/wfsbx-blazor"
+run "${SANDBOX_DIR}/verify-log-groups.sh"
+check "25.8 missing group fails (exit non-zero)" '[ "$RC" -ne 0 ]'
+check "25.9 missing group recorded as FAIL" '[ "$(summary_field "$LOG_SUMMARY" fail)" -ge 1 ]'
+
+# An unexpected sandbox log group must fail the check.
+mkdir -p "$STUB_STATE/logs/lccdk-wf-sandbox"
+: >"$STUB_STATE/logs/lccdk-wf-sandbox/wfsbx-unexpected"
+run "${SANDBOX_DIR}/verify-log-groups.sh"
+check "25.10 unexpected group fails (exit non-zero)" '[ "$RC" -ne 0 ]'
+check "25.11 unexpected group named in summary" 'grep -q "wfsbx-unexpected" "$SANDBOX_DIR/build/log-group-summary.json"'
+rm -f "$STUB_STATE/logs/lccdk-wf-sandbox/wfsbx-unexpected"
+run "${SANDBOX_DIR}/destroy.sh" --yes
+check "25.12 teardown exit 0" '[ "$RC" -eq 0 ]'
 cleanup_manifest
 
 # --------------------------------------------------------------------------------------------------

@@ -27,7 +27,7 @@ MANIFEST_FILE="${SANDBOX_DIR}/build/artifacts.json"
 PROJECT_FILE="${SANDBOX_DIR}/WebFunctionSandbox.csproj"
 
 # Fixed, distinctive namespace and ownership markers. These MUST match SandboxNaming.cs.
-SANDBOX_NAMESPACE="lccdk-wf-sandbox"
+export SANDBOX_NAMESPACE="lccdk-wf-sandbox"
 SANDBOX_OWNER="LayeredCraft.Cdk.Constructs"
 SANDBOX_OWNERSHIP_TAG="lc-webfunction-sandbox-id"
 SANDBOX_OWNER_TAG="lc-webfunction-sandbox-owner"
@@ -125,6 +125,15 @@ object_prefix() { printf '%s' "${SANDBOX_ARTIFACTS_PREFIX:-${SANDBOX_ID}}"; }
 nextjs_function() { printf '%s-nextjs' "${SANDBOX_ID}"; }
 aspnetcore_function() { printf '%s-aspnetcore' "${SANDBOX_ID}"; }
 blazor_function() { printf '%s-blazor' "${SANDBOX_ID}"; }
+uselogs_function() { printf '%s-uselogs' "${SANDBOX_ID}"; }
+usecompanion_function() { printf '%s-usecompanion' "${SANDBOX_ID}"; }
+
+# Log group names (must match SandboxNaming.cs / AppStack.cs). Create-mode functions use the default
+# "/aws/lambda/web/{FunctionName}" centralized name; Use-mode functions use a custom, non-AWS namespace.
+uselogs_centralized_group() { printf '/%s/%s-uselogs' "${SANDBOX_NAMESPACE}" "${SANDBOX_ID}"; }
+uselogs_companion_group() { printf '%s.local' "$(uselogs_centralized_group)"; }
+usecompanion_centralized_group() { printf '/%s/%s-usecompanion' "${SANDBOX_NAMESPACE}" "${SANDBOX_ID}"; }
+usecompanion_companion_group() { printf '%s.local' "$(usecompanion_centralized_group)"; }
 
 # --- Stack ownership ------------------------------------------------------------------------------
 #

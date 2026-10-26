@@ -1,8 +1,12 @@
 using System.Collections.Generic;
+using System.Text.Json;
 using Amazon.CDK;
 using Amazon.CDK.AWS.CloudFront;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.S3;
+using LogGroup = Amazon.CDK.AWS.Logs.LogGroup;
+using LogGroupProps = Amazon.CDK.AWS.Logs.LogGroupProps;
+using RetentionDays = Amazon.CDK.AWS.Logs.RetentionDays;
 using Constructs;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
@@ -96,6 +100,8 @@ internal sealed class AppStack : Stack
         });
 
         // --- Blazor Static SSR: externally managed bucket behind an OAC distribution. ---
+        // Non-default retention on *both* managed groups (30-day centralized, 1-day companion) proves the
+        // independent retention wiring in Create mode is not accidentally pinned to the 14/3 defaults.
         var blazor = new WebFunctionConstruct(this, "Blazor", new WebFunctionConstructProps
         {
             FunctionName = naming.BlazorFunctionName,
@@ -105,7 +111,8 @@ internal sealed class AppStack : Stack
                 ObjectVersion = configuration.Blazor.ObjectVersion,
             }),
             Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
-            Description = "Sandbox Blazor Static SSR Web Function",
+            Logs = WebFunctionLogs.Create(RetentionDays.ONE_MONTH, RemovalPolicy.DESTROY, RetentionDays.ONE_DAY),
+            Description = "Sandbox Blazor Static SSR Web Function (non-default 30d/1d log retention)",
         });
 
         var blazorDistribution = CreateDistribution(
@@ -116,14 +123,81 @@ internal sealed class AppStack : Stack
             "/_framework/*",
             "/_content/*");
 
+        // --- Use-mode logging workloads (§19.1 3.9). ---
+        // UseLogs: a caller-owned centralized group whose name lives outside /aws/lambda/* plus a supplied
+        // mutable execution role. No companion is supplied, so Lambda creates the .local companion on first
+        // request - exercising G1 and the previously-unverified G2 (logs:CreateLogGroup on the companion's
+        // exact ARN, without the log-stream suffix).
+        var useLogsCentralGroup = new LogGroup(this, "UseLogsCentralGroup", new LogGroupProps
+        {
+            LogGroupName = naming.UseLogsCentralizedGroupName,
+            Retention = RetentionDays.ONE_WEEK,
+            RemovalPolicy = RemovalPolicy.DESTROY,
+        });
+        var useLogsRole = new Role(this, "UseLogsRole", new RoleProps
+        {
+            AssumedBy = new ServicePrincipal("lambda.amazonaws.com"),
+            Description = "Supplied execution role for the Use-mode logs workload (identity-policy grants).",
+        });
+        useLogsRole.AddManagedPolicy(ManagedPolicy.FromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+        var useLogs = new WebFunctionConstruct(this, "UseLogs", new WebFunctionConstructProps
+        {
+            FunctionName = naming.UseLogsFunctionName,
+            Code = WebFunctionCode.FromBucket(artifactsBucket, configuration.NextJs.ObjectKey, new WebFunctionCodeFromBucketOptions
+            {
+                ObjectVersion = configuration.NextJs.ObjectVersion,
+            }),
+            Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+            Role = useLogsRole,
+            Logs = WebFunctionLogs.Use(useLogsCentralGroup),
+            Description = "Use-mode Web Function without a supplied companion (Lambda creates it)",
+        });
+
+        // UseCompanion: both the centralized group and the .local companion are caller-owned with custom
+        // retention; proves the construct does not create a duplicate and continues to log.
+        var useCompanionCentralGroup = new LogGroup(this, "UseCompanionCentralGroup", new LogGroupProps
+        {
+            LogGroupName = naming.UseCompanionCentralizedGroupName,
+            Retention = RetentionDays.TWO_WEEKS,
+            RemovalPolicy = RemovalPolicy.DESTROY,
+        });
+        var useCompanionGroup = new LogGroup(this, "UseCompanionGroup", new LogGroupProps
+        {
+            LogGroupName = naming.UseCompanionCompanionGroupName,
+            Retention = RetentionDays.THREE_DAYS,
+            RemovalPolicy = RemovalPolicy.DESTROY,
+        });
+        var useCompanionRole = new Role(this, "UseCompanionRole", new RoleProps
+        {
+            AssumedBy = new ServicePrincipal("lambda.amazonaws.com"),
+            Description = "Supplied execution role for the Use-mode companion workload (identity-policy grants).",
+        });
+        useCompanionRole.AddManagedPolicy(ManagedPolicy.FromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"));
+        var useCompanion = new WebFunctionConstruct(this, "UseCompanion", new WebFunctionConstructProps
+        {
+            FunctionName = naming.UseCompanionFunctionName,
+            Code = WebFunctionCode.FromBucket(artifactsBucket, configuration.NextJs.ObjectKey, new WebFunctionCodeFromBucketOptions
+            {
+                ObjectVersion = configuration.NextJs.ObjectVersion,
+            }),
+            Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+            Role = useCompanionRole,
+            Logs = WebFunctionLogs.Use(useCompanionCentralGroup, useCompanionGroup),
+            Description = "Use-mode Web Function with a caller-supplied companion group",
+        });
+
         // --- Operator roles. ---
-        // Granted caller: an owned mutable identity in the same stack, so the library writes an identity policy.
         var callerRole = new Role(this, "CallerRole", new RoleProps
         {
             AssumedBy = new AccountPrincipal(configuration.Account),
             Description = "Operator role granted invoke on the ASP.NET Core default endpoint (identity policy).",
         });
         aspNetCore.DefaultEndpoint.GrantInvoke(callerRole);
+
+        // Use-mode members: reachable by the same granted caller, so smoke.sh can drive real traffic that
+        // forces Lambda to create the companion group for the UseLogs workload.
+        useLogs.DefaultEndpoint.GrantInvoke(callerRole);
+        useCompanion.DefaultEndpoint.GrantInvoke(callerRole);
 
         // Denied caller: an owned role with no invoke grant - a signed request from it must be denied.
         var deniedRole = new Role(this, "DeniedRole", new RoleProps
@@ -200,7 +274,43 @@ internal sealed class AppStack : Stack
         Output(this, "DeniedRoleArn", deniedRole.RoleArn);
         Output(this, "ImportedCallerImmutableRoleArn", naming.ImportedCallerImmutableRoleArn);
         Output(this, "ImportedCallerMutableRoleArn", naming.ImportedCallerMutableRoleArn);
+
+        Output(this, "UseLogsFunctionName", useLogs.FunctionName);
+        Output(this, "UseLogsEndpointArn", useLogs.DefaultEndpoint.EndpointArn);
+        Output(this, "UseCompanionFunctionName", useCompanion.FunctionName);
+        Output(this, "UseCompanionEndpointArn", useCompanion.DefaultEndpoint.EndpointArn);
+
+        // Single source of truth for the log-group verification tooling (verify-log-groups.sh): the exact
+        // centralized/companion names and expected retention for every sandbox function, plus whether the
+        // companion is CloudFormation-owned (false for the Use-mode group Lambda creates on first request).
+        Output(this, "LogGroupExpectations", BuildLogGroupExpectations(naming));
     }
+
+    /// <summary>Describes the expected log groups for every sandbox function, as a JSON array.</summary>
+    private static string BuildLogGroupExpectations(SandboxNaming naming)
+    {
+        var expectations = new List<LogGroupExpectation>
+        {
+            Managed(naming.NextJsFunctionName, $"/aws/lambda/web/{naming.NextJsFunctionName}", 14, 3),
+            Managed(naming.AspNetCoreFunctionName, $"/aws/lambda/web/{naming.AspNetCoreFunctionName}", 14, 3),
+            Managed(naming.BlazorFunctionName, $"/aws/lambda/web/{naming.BlazorFunctionName}", 30, 1),
+            new(naming.UseLogsFunctionName, naming.UseLogsCentralizedGroupName, 7, naming.UseLogsCompanionGroupName, null, false),
+            Managed(naming.UseCompanionFunctionName, naming.UseCompanionCentralizedGroupName, 14, 3),
+        };
+
+        return JsonSerializer.Serialize(expectations);
+    }
+
+    private static LogGroupExpectation Managed(string function, string centralized, int centralizedDays, int companionDays)
+        => new(function, centralized, centralizedDays, $"{centralized}.local", companionDays, true);
+
+    private sealed record LogGroupExpectation(
+        string Function,
+        string Centralized,
+        int? CentralizedRetentionDays,
+        string Companion,
+        int? CompanionRetentionDays,
+        bool CompanionManaged);
 
     /// <summary>
     /// Builds a CloudFront distribution fronting one IAM-authenticated endpoint via origin access control. The
