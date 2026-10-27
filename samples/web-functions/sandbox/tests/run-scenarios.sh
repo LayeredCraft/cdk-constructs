@@ -13,6 +13,12 @@ STUB_BIN="${TESTS_DIR}/stubs"
 CDK_STUB="${STUB_BIN}/cdk"
 SANDBOX_DIR="$(cd "${TESTS_DIR}/.." && pwd)"
 
+# Keep every byte of sandbox state (artifact manifest, summaries, scratch dirs) inside a private temp
+# directory. This isolates the suite from a real deployment's build/ state and from the smoke suite, so
+# the two suites pass in any order (or concurrently) and do not depend on a pre-existing manifest.
+export SANDBOX_STATE_DIR="$(mktemp -d)"
+trap 'rm -rf "${SANDBOX_STATE_DIR}"' EXIT
+
 export SANDBOX_ALLOW_AWS=1
 export SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1
 export SANDBOX_ID=wfsbx
@@ -48,7 +54,7 @@ E_STACK="lccdk-wf-sandbox-wfsbx-external"
 APP_STACK="lccdk-wf-sandbox-wfsbx-app"
 A_BUCKET="wfsbx-artifacts-123456789012-us-east-1"
 E_BUCKET="wfsbx-external-123456789012-us-east-1"
-MANIFEST="${SANDBOX_DIR}/build/artifacts.json"
+MANIFEST="${SANDBOX_STATE_DIR}/artifacts.json"
 
 cleanup_manifest() { rm -f "${MANIFEST}"; }
 
@@ -297,7 +303,7 @@ cleanup_manifest
 scenario "25: verify-log-groups.sh (companion log-group acceptance, read-only)"
 fresh_state
 cleanup_manifest
-LOG_SUMMARY="${SANDBOX_DIR}/build/log-group-summary.json"
+LOG_SUMMARY="${SANDBOX_STATE_DIR}/log-group-summary.json"
 summary_field() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$1" "$2"; }
 run "${SANDBOX_DIR}/deploy.sh"
 check "25.1 deploy exit 0" '[ "$RC" -eq 0 ]'
@@ -321,7 +327,7 @@ mkdir -p "$STUB_STATE/logs/lccdk-wf-sandbox"
 : >"$STUB_STATE/logs/lccdk-wf-sandbox/wfsbx-unexpected"
 run "${SANDBOX_DIR}/verify-log-groups.sh"
 check "25.10 unexpected group fails (exit non-zero)" '[ "$RC" -ne 0 ]'
-check "25.11 unexpected group named in summary" 'grep -q "wfsbx-unexpected" "$SANDBOX_DIR/build/log-group-summary.json"'
+check "25.11 unexpected group named in summary" 'grep -q "wfsbx-unexpected" "$SANDBOX_STATE_DIR/log-group-summary.json"'
 rm -f "$STUB_STATE/logs/lccdk-wf-sandbox/wfsbx-unexpected"
 run "${SANDBOX_DIR}/destroy.sh" --yes
 check "25.12 teardown exit 0" '[ "$RC" -eq 0 ]'

@@ -7,7 +7,7 @@
 # CloudWatch Logs groups through the AWS API, and asserts that every expected centralized/companion group
 # exists with the exact retention it was configured with, that no unexpected sandbox log group exists, and
 # (after traffic) that each group actually holds recent events. Writes a machine-readable summary to
-# build/log-group-summary.json.
+# log-group-summary.json in the sandbox state directory (${SANDBOX_STATE_DIR}, default build/).
 #
 # Usage:
 #   SANDBOX_ALLOW_AWS=1 SANDBOX_ID=wfsbx SANDBOX_ACCOUNT=123456789012 SANDBOX_REGION=us-east-1 \
@@ -73,12 +73,12 @@ case "${app_ownership}" in
     *) die "unexpected ownership result for ${app_stack}: ${app_ownership}" ;;
 esac
 
-VG_TMP="${SANDBOX_DIR}/build/.verify-log-groups"
+VG_TMP="${SANDBOX_STATE_DIR}/.verify-log-groups"
 mkdir -p "${VG_TMP}"
 GROUPS_FILE="${VG_TMP}/groups.json"
 EXPECT_FILE="${VG_TMP}/expectations.json"
 EVENTS_FILE="${VG_TMP}/events.json"
-SUMMARY_FILE="${SANDBOX_DIR}/build/log-group-summary.json"
+SUMMARY_FILE="${SANDBOX_STATE_DIR}/log-group-summary.json"
 
 expectations="$(stack_output "${app_stack}" LogGroupExpectations)" ||
     die "app stack is missing the LogGroupExpectations output; redeploy the sandbox with the current construct."

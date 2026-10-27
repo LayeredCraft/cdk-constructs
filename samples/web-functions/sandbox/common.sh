@@ -23,7 +23,13 @@ set -o pipefail
 SANDBOX_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SAMPLES_DIR="$(cd "${SANDBOX_DIR}/.." && pwd)"
 ARTIFACT_BUILD_DIR="${SAMPLES_DIR}/build"
-MANIFEST_FILE="${SANDBOX_DIR}/build/artifacts.json"
+# Directory for sandbox-local state: the artifact manifest, smoke/verify summaries, and scratch files.
+# It defaults to the checkout's build/ directory. Override it with SANDBOX_STATE_DIR so the offline test
+# suites (and any parallel runs) use their own isolated fixtures instead of sharing state with a real
+# deployment or with each other.
+SANDBOX_STATE_DIR="${SANDBOX_STATE_DIR:-${SANDBOX_DIR}/build}"
+export SANDBOX_STATE_DIR
+MANIFEST_FILE="${SANDBOX_STATE_DIR}/artifacts.json"
 PROJECT_FILE="${SANDBOX_DIR}/WebFunctionSandbox.csproj"
 
 # Fixed, distinctive namespace and ownership markers. These MUST match SandboxNaming.cs.

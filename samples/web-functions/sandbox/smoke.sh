@@ -3,7 +3,8 @@
 # smoke.sh - T7c acceptance harness for the Web Function sandbox (design section 19.1, items 3.1-3.8).
 #
 # Read-only: it never mutates AWS. It observes deployed behaviour through the AWS APIs, CloudFront and
-# the endpoint data plane, and writes a machine-readable summary to build/smoke-summary.json.
+# the endpoint data plane, and writes a machine-readable summary to smoke-summary.json in the sandbox
+# state directory (${SANDBOX_STATE_DIR}, default build/).
 #
 # Usage:
 #   SANDBOX_ALLOW_AWS=1 SANDBOX_ID=wfsbx SANDBOX_ACCOUNT=123456789012 SANDBOX_REGION=us-east-1 \
@@ -90,7 +91,7 @@ case "${app_ownership}" in
     *) die "unexpected ownership result for ${app_stack}: ${app_ownership}" ;;
 esac
 
-SMOKE_TMP="${SANDBOX_DIR}/build/.smoke"
+SMOKE_TMP="${SANDBOX_STATE_DIR}/.smoke"
 mkdir -p "${SMOKE_TMP}"
 SMOKE_BODY="${SMOKE_TMP}/body"
 SMOKE_ERR="${SMOKE_TMP}/err"
@@ -555,7 +556,7 @@ write_summary() {
         printf '%s\n' "${line}" >> "${results_file}"
     done
 
-    python3 - "${SANDBOX_DIR}/build/smoke-summary.json" "${results_file}" \
+    python3 - "${SANDBOX_STATE_DIR}/smoke-summary.json" "${results_file}" \
         "${pass_count}" "${fail_count}" "${skip_count}" "${blocked_count}" \
         "${REV_nextjs:-}" "${REV_aspnetcore:-}" "${REV_blazor:-}" <<'PY'
 import json, os, sys
