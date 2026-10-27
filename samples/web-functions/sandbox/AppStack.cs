@@ -276,8 +276,10 @@ internal sealed class AppStack : Stack
         Output(this, "ImportedCallerMutableRoleArn", naming.ImportedCallerMutableRoleArn);
 
         Output(this, "UseLogsFunctionName", useLogs.FunctionName);
+        Output(this, "UseLogsEndpointUrl", useLogs.DefaultEndpoint.Url);
         Output(this, "UseLogsEndpointArn", useLogs.DefaultEndpoint.EndpointArn);
         Output(this, "UseCompanionFunctionName", useCompanion.FunctionName);
+        Output(this, "UseCompanionEndpointUrl", useCompanion.DefaultEndpoint.Url);
         Output(this, "UseCompanionEndpointArn", useCompanion.DefaultEndpoint.EndpointArn);
 
         // Single source of truth for the log-group verification tooling (verify-log-groups.sh): the exact

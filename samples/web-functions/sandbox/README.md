@@ -140,9 +140,31 @@ SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 ./deploy.sh
 # 5. Run the acceptance smoke tests (record the machine-readable summary as evidence).
 SANDBOX_ALLOW_AWS=1 ./smoke.sh
 
-# 5b. Verify the companion ".local" log groups and their retention (read-only). Run once right after
-#     deploy (pre-traffic) and again with --expect-delivery after real requests.
+# 5b. Verify the companion ".local" log groups and their retention (read-only), right after deploy
+#     (pre-traffic): existence, retention, and no unexpected groups.
 SANDBOX_ALLOW_AWS=1 ./verify-log-groups.sh
+
+# 5c. Drive real traffic to the two Use-mode endpoints before the delivery check. smoke.sh (step 5)
+#     only calls the Next.js, ASP.NET Core, and Blazor endpoints, so without this the UseLogs and
+#     UseCompanion groups stay empty and the service-created ".../uselogs.local" companion is never
+#     created. Both URLs are IamAuth, so sign with the sandbox CallerRole (already granted
+#     InvokeFunction on both endpoints) using SigV4.
+APP_STACK="lccdk-wf-sandbox-${SANDBOX_ID}-app"
+output() { aws cloudformation describe-stacks --stack-name "$APP_STACK" --region "$SANDBOX_REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+CALLER_ROLE_ARN="$(output CallerRoleArn)"
+CREDS="$(aws sts assume-role --role-arn "$CALLER_ROLE_ARN" --role-session-name sandbox-delivery \
+  --region "$SANDBOX_REGION" --query Credentials --output json)"
+AK="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["AccessKeyId"])')"
+SK="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["SecretAccessKey"])')"
+TOKEN="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["SessionToken"])')"
+for KEY in UseLogsEndpointUrl UseCompanionEndpointUrl; do
+  curl -sS -o /dev/null --aws-sigv4 "aws:amz:${SANDBOX_REGION}:lambda" \
+    --user "${AK}:${SK}" -H "x-amz-security-token: ${TOKEN}" "$(output "$KEY")" || true
+done
+
+# 5d. Re-run with --expect-delivery: every group (including both Use-mode groups) must now hold
+#     recent events.
 SANDBOX_ALLOW_AWS=1 ./verify-log-groups.sh --expect-delivery
 
 # 6. Update v1 -> v2 and re-check.
