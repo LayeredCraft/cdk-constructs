@@ -159,8 +159,11 @@ AK="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["A
 SK="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["SecretAccessKey"])')"
 TOKEN="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["SessionToken"])')"
 for KEY in UseLogsEndpointUrl UseCompanionEndpointUrl; do
-  curl -sS -o /dev/null --aws-sigv4 "aws:amz:${SANDBOX_REGION}:lambda" \
-    --user "${AK}:${SK}" -H "x-amz-security-token: ${TOKEN}" "$(output "$KEY")" || true
+  URL="$(output "$KEY")"
+  STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --aws-sigv4 "aws:amz:${SANDBOX_REGION}:lambda" \
+    --user "${AK}:${SK}" -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" \
+    -H "x-amz-security-token: ${TOKEN}" "$URL" || true)"
+  echo "invoked ${KEY} (${URL}) -> HTTP ${STATUS}"
 done
 
 # 5d. Re-run with --expect-delivery: every group (including both Use-mode groups) must now hold
