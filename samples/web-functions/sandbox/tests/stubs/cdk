@@ -14,6 +14,7 @@ STATE = os.environ["STUB_STATE"]
 SANDBOX_ID = os.environ.get("SANDBOX_ID", "")
 ACCOUNT = os.environ.get("SANDBOX_ACCOUNT", "")
 REGION = os.environ.get("SANDBOX_REGION", "")
+NAMESPACE = os.environ.get("SANDBOX_NAMESPACE", "lccdk-wf-sandbox")
 
 OWNER = "LayeredCraft.Cdk.Constructs"
 OWNERSHIP_TAG = "lc-webfunction-sandbox-id"
@@ -22,6 +23,7 @@ OWNER_TAG = "lc-webfunction-sandbox-owner"
 STACKS = os.path.join(STATE, "stacks")
 BUCKETS = os.path.join(STATE, "buckets")
 LOGS = os.path.join(STATE, "logs")
+LOG_META = os.path.join(STATE, "logmeta.json")
 for directory in (STACKS, BUCKETS, LOGS):
     os.makedirs(directory, exist_ok=True)
 
@@ -77,6 +79,100 @@ def role_arn(name):
     return "arn:aws:iam::%s:role/%s" % (ACCOUNT, name)
 
 
+# (group name, retentionInDays or None, CloudFormation-owned?) for every log group the app stack
+# produces. Mirrors AppStack.cs: Create-mode functions use the default "/aws/lambda/web/{Name}"
+# namespace, Use-mode functions use a custom, non-AWS namespace. The ".local" companion of the
+# Use-mode-without-companion function is created by Lambda on first request and is never owned by
+# CloudFormation, so it survives stack deletion and must be cleaned up by exact name in destroy.sh.
+def app_log_groups():
+    return [
+        ("/aws/lambda/web/%s-nextjs" % SANDBOX_ID, 14, True),
+        ("/aws/lambda/web/%s-nextjs.local" % SANDBOX_ID, 3, True),
+        ("/aws/lambda/web/%s-aspnetcore" % SANDBOX_ID, 14, True),
+        ("/aws/lambda/web/%s-aspnetcore.local" % SANDBOX_ID, 3, True),
+        ("/aws/lambda/web/%s-blazor" % SANDBOX_ID, 30, True),
+        ("/aws/lambda/web/%s-blazor.local" % SANDBOX_ID, 1, True),
+        ("/%s/%s-uselogs" % (NAMESPACE, SANDBOX_ID), 7, True),
+        ("/%s/%s-uselogs.local" % (NAMESPACE, SANDBOX_ID), None, False),
+        ("/%s/%s-usecompanion" % (NAMESPACE, SANDBOX_ID), 14, True),
+        ("/%s/%s-usecompanion.local" % (NAMESPACE, SANDBOX_ID), 3, True),
+    ]
+
+
+def log_group_expectations():
+    return [
+        {
+            "Function": "%s-nextjs" % SANDBOX_ID,
+            "Centralized": "/aws/lambda/web/%s-nextjs" % SANDBOX_ID,
+            "CentralizedRetentionDays": 14,
+            "Companion": "/aws/lambda/web/%s-nextjs.local" % SANDBOX_ID,
+            "CompanionRetentionDays": 3,
+            "CompanionManaged": True,
+        },
+        {
+            "Function": "%s-aspnetcore" % SANDBOX_ID,
+            "Centralized": "/aws/lambda/web/%s-aspnetcore" % SANDBOX_ID,
+            "CentralizedRetentionDays": 14,
+            "Companion": "/aws/lambda/web/%s-aspnetcore.local" % SANDBOX_ID,
+            "CompanionRetentionDays": 3,
+            "CompanionManaged": True,
+        },
+        {
+            "Function": "%s-blazor" % SANDBOX_ID,
+            "Centralized": "/aws/lambda/web/%s-blazor" % SANDBOX_ID,
+            "CentralizedRetentionDays": 30,
+            "Companion": "/aws/lambda/web/%s-blazor.local" % SANDBOX_ID,
+            "CompanionRetentionDays": 1,
+            "CompanionManaged": True,
+        },
+        {
+            "Function": "%s-uselogs" % SANDBOX_ID,
+            "Centralized": "/%s/%s-uselogs" % (NAMESPACE, SANDBOX_ID),
+            "CentralizedRetentionDays": 7,
+            "Companion": "/%s/%s-uselogs.local" % (NAMESPACE, SANDBOX_ID),
+            "CompanionRetentionDays": None,
+            "CompanionManaged": False,
+        },
+        {
+            "Function": "%s-usecompanion" % SANDBOX_ID,
+            "Centralized": "/%s/%s-usecompanion" % (NAMESPACE, SANDBOX_ID),
+            "CentralizedRetentionDays": 14,
+            "Companion": "/%s/%s-usecompanion.local" % (NAMESPACE, SANDBOX_ID),
+            "CompanionRetentionDays": 3,
+            "CompanionManaged": True,
+        },
+    ]
+
+
+def plant_log_group(name, retention, stored_bytes, events=0):
+    path = os.path.join(LOGS, name.lstrip("/"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "a").close()
+    meta = {}
+    if os.path.exists(LOG_META):
+        with open(LOG_META) as handle:
+            meta = json.load(handle)
+    # "events" is the delivery signal verify-log-groups.sh checks via logs filter-log-events. It is kept
+    # separate from storedBytes so the offline suite reproduces real AWS (storedBytes=0 while events exist)
+    # and fails if the harness regresses to trusting storedBytes for delivery.
+    meta[name] = {"retentionInDays": retention, "storedBytes": stored_bytes, "events": events}
+    with open(LOG_META, "w") as handle:
+        json.dump(meta, handle)
+
+
+def remove_log_group(name):
+    path = os.path.join(LOGS, name.lstrip("/"))
+    if os.path.exists(path):
+        os.remove(path)
+    if os.path.exists(LOG_META):
+        with open(LOG_META) as handle:
+            meta = json.load(handle)
+        if name in meta:
+            del meta[name]
+            with open(LOG_META, "w") as handle:
+                json.dump(meta, handle)
+
+
 def app_outputs():
     outputs = [
         output("SandboxId", SANDBOX_ID),
@@ -100,6 +196,11 @@ def app_outputs():
         output("BlazorDistributionDomain", "127.0.0.1:8444"),
         output("BlazorDistributionId", "EDFDISTBLAZOR"),
         output("BlazorEndpointArn", endpoint_arn("blazor")),
+        output("UseLogsFunctionName", "%s-uselogs" % SANDBOX_ID),
+        output("UseLogsEndpointArn", endpoint_arn("uselogs")),
+        output("UseCompanionFunctionName", "%s-usecompanion" % SANDBOX_ID),
+        output("UseCompanionEndpointArn", endpoint_arn("usecompanion")),
+        output("LogGroupExpectations", json.dumps(log_group_expectations())),
         output("CallerRoleArn", role_arn("%s-caller" % SANDBOX_ID)),
         output("DeniedRoleArn", role_arn("%s-denied" % SANDBOX_ID)),
         output("ImportedCallerImmutableRoleArn", role_arn("%s-imported-caller-immutable" % SANDBOX_ID)),
@@ -118,10 +219,13 @@ def deploy(names):
                     json.dump({"owner": ACCOUNT, "versions": []}, handle)
             write_stack(name, [output("SandboxId", SANDBOX_ID), output("BucketName", bucket_name(kind))])
         elif kind == "app":
-            for workload in ("nextjs", "aspnetcore", "blazor"):
-                path = os.path.join(LOGS, "aws", "lambda", "web", "%s-%s" % (SANDBOX_ID, workload))
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                open(path, "a").close()
+            # Every app log group exists after a successful deploy. Managed (CloudFormation-owned) groups
+            # are seeded with their configured retention; the Lambda-created ".local" companion is seeded
+            # without a retention (no expiry) to mirror the service behaviour it simulates.
+            for group_name, retention, _owned in app_log_groups():
+                # storedBytes=0 mirrors real AWS (which reported 0 while events existed); events=1 gives the
+                # delivery check a real event signal to find after "traffic".
+                plant_log_group(group_name, retention, 0, events=1)
             write_stack(name, app_outputs())
         else:
             write_stack(name, [])
@@ -141,11 +245,12 @@ def destroy(names):
                     sys.exit(1)
                 os.remove(path)
         elif kind == "app":
-            # CloudFormation deletes the log groups it owns together with the stack.
-            for workload in ("nextjs", "aspnetcore", "blazor"):
-                log_group = os.path.join(LOGS, "aws", "lambda", "web", "%s-%s" % (SANDBOX_ID, workload))
-                if os.path.exists(log_group):
-                    os.remove(log_group)
+            # CloudFormation deletes the log groups it owns together with the stack. The Lambda-created
+            # ".local" companion (owned=False) is deliberately left behind: it is not CloudFormation-owned,
+            # so destroy.sh must remove it by exact name.
+            for group_name, _retention, owned in app_log_groups():
+                if owned:
+                    remove_log_group(group_name)
         stack = os.path.join(STACKS, name + ".json")
         if os.path.exists(stack):
             os.remove(stack)

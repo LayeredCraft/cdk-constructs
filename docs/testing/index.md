@@ -325,9 +325,17 @@ template.ShouldHaveNoResourcePolicy();
 // CloudFront OAC and the code-bucket statement
 template.ShouldHaveWebFunctionOac();                                     // signing protocol defaults to "sigv4"
 template.ShouldHaveCodeBucketReadStatement("my-web");
+
+// Log groups (Create mode defaults: centralized 14 days, companion 3 days)
+template.ShouldHaveWebFunctionLogGroup("/aws/lambda/web/my-web", 14);
+template.ShouldHaveCompanionLogGroup("/aws/lambda/web/my-web", 3);
+template.ShouldHaveRevisionDependingOnLogGroups(
+    "my-web",
+    "/aws/lambda/web/my-web",
+    "/aws/lambda/web/my-web.local");
 ```
 
-The assertions require `Effect = Allow`, the expected action (`lambda:InvokeWebFunctionEndpoint`), and the exact endpoint resource, so a `Deny` statement or an unrelated action never satisfies them. `ShouldHaveInvokeGrant` also matches a minimized policy whose `Resource` is an array of endpoint ARNs.
+The invocation assertions require `Effect = Allow`, the expected action (`lambda:InvokeWebFunctionEndpoint`), and the exact endpoint resource, so a `Deny` statement or an unrelated action never satisfies them. `ShouldHaveInvokeGrant` also matches a minimized policy whose `Resource` is an array of endpoint ARNs. The log-group assertions match by log-group **name** and exact `RetentionInDays`; tokenized names cannot be asserted this way. `ShouldHaveRevisionDependingOnLogGroups` resolves each name to its logical ID through the template, so it never hard-codes generated identifiers. Use `ShouldHaveWebFunctionLogGroup`, not `ShouldHaveLogGroup` (the latter is the Lambda Function construct's assertion).
 
 ### AutoData Support
 

@@ -100,15 +100,15 @@ if [ "${skip_smoke}" = "0" ]; then
     [ -n "${expected_build_id}" ] && smoke_args+=(--expect-build-id "${expected_build_id}")
 
     # If a previous stage recorded per-function revisions, hand them to smoke for the v1 -> v2 comparison.
-    revision_state="${SANDBOX_DIR}/build/revision-state.json"
+    revision_state="${SANDBOX_STATE_DIR}/revision-state.json"
     [ -f "${revision_state}" ] && smoke_args+=(--revision-baseline "${revision_state}")
 
     # shellcheck disable=SC2068
     "${SANDBOX_DIR}/smoke.sh" ${smoke_args[@]+"${smoke_args[@]}"}
 
     # Preserve revision/build-id evidence for the next stage (deploy v1, then v2 and compare).
-    if [ -f "${SANDBOX_DIR}/build/smoke-summary.json" ]; then
-        cp "${SANDBOX_DIR}/build/smoke-summary.json" "${revision_state}"
+    if [ -f "${SANDBOX_STATE_DIR}/smoke-summary.json" ]; then
+        cp "${SANDBOX_STATE_DIR}/smoke-summary.json" "${revision_state}"
         log "Recorded revision evidence at ${revision_state}."
     fi
 fi

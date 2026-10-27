@@ -8,8 +8,13 @@ TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STUB_BIN="${TESTS_DIR}/stubs"
 SANDBOX_DIR="$(cd "${TESTS_DIR}/.." && pwd)"
 ARTIFACT_BUILD_DIR="$(cd "${SANDBOX_DIR}/.." && pwd)/build"
-MANIFEST="${SANDBOX_DIR}/build/artifacts.json"
-SUMMARY="${SANDBOX_DIR}/build/smoke-summary.json"
+# Keep every byte of sandbox state (artifact manifest, smoke summary, revision evidence) inside a private
+# temp directory so this suite is isolated from a real deployment and from the lifecycle suite, and does
+# not depend on a pre-existing manifest.
+export SANDBOX_STATE_DIR="$(mktemp -d)"
+trap 'rm -rf "${SANDBOX_STATE_DIR}"' EXIT
+MANIFEST="${SANDBOX_STATE_DIR}/artifacts.json"
+SUMMARY="${SANDBOX_STATE_DIR}/smoke-summary.json"
 
 export SANDBOX_ALLOW_AWS=1
 export SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1
@@ -44,7 +49,7 @@ fresh_state() {
     printf '%s\n' "${SANDBOX_ACCOUNT}" >"${STUB_STATE}/account"
     printf '%s\n' "${ARTIFACT_BUILD_ID}" >"${STUB_STATE}/build-id"
     export STUB_STATE
-    rm -f "${MANIFEST}" "${SUMMARY}" "${SANDBOX_DIR}/build/revision-state.json"
+    rm -f "${MANIFEST}" "${SUMMARY}" "${SANDBOX_STATE_DIR}/revision-state.json"
 }
 
 deploy_app() { run "${SANDBOX_DIR}/deploy.sh" --revision 1 "$@"; }

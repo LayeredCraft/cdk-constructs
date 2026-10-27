@@ -53,7 +53,8 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Handles Lambda permissions for multiple targets (function, version, alias)
 
 **WebFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/WebFunctionConstruct.cs`)
-- Creates an AWS Lambda Web Function from a versioned S3 artifact (`WebFunctionCode.FromBucket`), plus its immutable revision, default endpoint, execution role (optional), log group (optional), and the function's **single** resource-based policy
+- Creates an AWS Lambda Web Function from a versioned S3 artifact (`WebFunctionCode.FromBucket`), plus its immutable revision, default endpoint, execution role (optional), logging (optional), and the function's **single** resource-based policy
+- `WebFunctionLogs.Create` creates the centralized log group and its home-Region `.local` companion (defaults: 14 days and 3 days, shared removal policy); `Use(logGroup, companion)` accepts a caller-owned companion; `ServiceDefault()` creates neither. `WebFunctionConstruct.LocalLogGroup` exposes the managed or supplied companion, and warnings W1/W2 cover unmanaged and remote companions
 - `WebFunctionEndpointConstruct` (`IWebFunctionEndpoint`) represents each endpoint; `AddEndpoint` adds more; `GrantInvoke` (identity- or resource-policy based) and `GrantCloudFrontInvoke` are endpoint-scoped
 - `WebFunctionOrigin` returns a CloudFront `IOrigin` that configures origin access control (OAC) and the required resource-policy statement for `IamAuth` endpoints
 - Workload-neutral: Next.js, ASP.NET Core, and Blazor Static SSR deploy through the same public API; the differences live in the artifacts and configuration only
@@ -185,8 +186,8 @@ The library includes comprehensive testing helpers for consumers:
 
 **WebFunctionConstructAssertions** (`WebFunctionConstructAssertions.cs`):
 - Extension methods for `Template` assertions specific to Web Functions
-- `ShouldHaveWebFunction()`, `ShouldHaveRevision()`, `ShouldHaveRevisionCode()`, `ShouldHaveEndpoint()`, `ShouldHaveEndpointScaling()`, `ShouldHaveInvokeGrant()`, `ShouldHaveSingleResourcePolicy()`, `ShouldHaveNoResourcePolicy()`, `ShouldAllowCloudFront()`, `ShouldAllowResourcePolicyPrincipal()`, `ShouldHaveWebFunctionOac()`, `ShouldHaveCodeBucketReadStatement()`
-- Match by function and endpoint **names**, not logical IDs; require `Effect = Allow` with the expected action and endpoint resource
+- `ShouldHaveWebFunction()`, `ShouldHaveRevision()`, `ShouldHaveRevisionCode()`, `ShouldHaveEndpoint()`, `ShouldHaveEndpointScaling()`, `ShouldHaveInvokeGrant()`, `ShouldHaveSingleResourcePolicy()`, `ShouldHaveNoResourcePolicy()`, `ShouldAllowCloudFront()`, `ShouldAllowResourcePolicyPrincipal()`, `ShouldHaveWebFunctionOac()`, `ShouldHaveCodeBucketReadStatement()`, `ShouldHaveWebFunctionLogGroup()`, `ShouldHaveCompanionLogGroup()`, `ShouldHaveRevisionDependingOnLogGroups()`
+- Match by function and endpoint **names**, not logical IDs; require `Effect = Allow` with the expected action and endpoint resource. Log-group assertions match by log-group name and exact `RetentionInDays`; use `ShouldHaveWebFunctionLogGroup`, not the Lambda construct's `ShouldHaveLogGroup`
 
 **WebFunctionConstructPropsBuilder** (`WebFunctionConstructPropsBuilder.cs`):
 - Fluent builder for Web Function props: `WithFunctionName()`, `WithCode()`, `WithTestArtifact()`, `WithIamAuthEndpoint()`, `WithApplicationManagedEndpoint()`, `WithEndpoint()`, `WithEnvironmentVariable()`, `WithEntryPoint()`, `WithTimeout()`, `WithMaxConcurrencyPerEnvironment()`, `WithRole()`, `WithLogs()`, `Build()`

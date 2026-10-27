@@ -1,6 +1,6 @@
 # Web Function Construct
 
-The `WebFunctionConstruct` deploys an [AWS Lambda Web Function](https://docs.aws.amazon.com/lambda/latest/dg/lambda-web-functions.html): an ordinary HTTP server packaged as a zip, uploaded to S3, and run behind a managed HTTPS endpoint. It owns one Web Function's lifecycle — the function, its current immutable revision, its execution role and log group (each optional), one default endpoint plus any added with `AddEndpoint`, and the function's **single** resource-based policy.
+The `WebFunctionConstruct` deploys an [AWS Lambda Web Function](https://docs.aws.amazon.com/lambda/latest/dg/lambda-web-functions.html): an ordinary HTTP server packaged as a zip, uploaded to S3, and run behind a managed HTTPS endpoint. It owns one Web Function's lifecycle — the function, its current immutable revision, its execution role and log groups (each optional), one default endpoint plus any added with `AddEndpoint`, and the function's **single** resource-based policy.
 
 It is intentionally workload-neutral: Next.js, ASP.NET Core, and Blazor Static SSR deploy through the same public API, and the differences live in the artifacts and configuration only. See the [workload recipes](../examples/web-functions.md).
 
@@ -17,7 +17,7 @@ It is intentionally workload-neutral: Next.js, ASP.NET Core, and Blazor Static S
 - **:globe_with_meridians: CloudFront OAC integration**: `WebFunctionOrigin` returns a CloudFront `IOrigin` that configures origin access control and the required resource-policy statement.
 - **:shield: One resource policy per function**: Every resource-policy contribution flows through a single policy owned by the construct.
 - **:label: Immutable revisions**: Each deployment creates a new revision; endpoints move to it without interruption.
-- **:gear: Configurable role and logs**: Bring your own execution role and log group, or let the construct create them.
+- **:gear: Configurable role and logs**: Bring your own execution role and log groups, or let the construct create the centralized group and its home-Region `.local` companion.
 - **:test_tube: Consumer test helpers**: Fluent `Template` assertions and a props builder in the `Testing` namespace.
 
 ## Intentional Non-Goals (v1)
@@ -92,7 +92,7 @@ public class MyStack : Stack
 | `MaxConcurrencyPerEnvironment` | `int?` | `null` | Max concurrent **requests per environment**, 1–128 (AWS default 64) |
 | `Description` | `string?` | `null` | Revision description |
 | `Role` | `IRole?` | `null` | Execution role; when `null` a role with `AWSLambdaBasicExecutionRole` is created |
-| `Logs` | `WebFunctionLogs` | `WebFunctionLogs.Create()` | Where revision logs go |
+| `Logs` | `WebFunctionLogs` | `WebFunctionLogs.Create()` | Where revision logs go. `Create()` manages the centralized group and its home-Region `.local` companion |
 | `ApplicationLogLevel` | `ApplicationLogLevel?` | `null` | Application log level for the revision |
 | `SystemLogLevel` | `SystemLogLevel?` | `null` | System log level for the revision |
 
@@ -131,12 +131,259 @@ public class MyStack : Stack
 
 ## :shield: Execution Role and Logging
 
-- **Role**: when `Role` is `null`, the construct creates a role with the `AWSLambdaBasicExecutionRole` managed policy, which includes the CloudWatch Logs write permissions. When you supply a role, the construct uses it as-is and does **not** attach the managed policy **or** grant it log-write permissions — make sure a supplied role can write to wherever its logs go (for example by letting the log group's `GrantWrite` apply, or by granting `logs:CreateLogStream` and `logs:PutLogEvents` yourself).
-- **Logs** (`WebFunctionLogs`):
-    - `WebFunctionLogs.Create(retention, removalPolicy)` — the default. Creates `/aws/lambda/web/{FunctionName}` with `RetentionDays.TWO_WEEKS` and `RemovalPolicy.DESTROY`. The name matches Lambda's own default group, so switching between `Create()` and `ServiceDefault()` never moves your logs. Because the default removal policy is `DESTROY`, switching from `Create()` to `ServiceDefault()` deletes the stack-owned log group; Lambda then recreates its default group (with no expiry) on the next invocation. Use `Use(LogGroup.FromLogGroupName(...))` to keep a group under your own lifecycle.
-    - `WebFunctionLogs.ServiceDefault()` — uses the Lambda-provided default group with no expiry and creates no `AWS::Logs::LogGroup`.
-    - `WebFunctionLogs.Use(logGroup)` — routes logs to an existing group. The group is referenced by name, and the execution role is granted `logs:GrantWrite` when the group name is outside `/aws/lambda/*`.
-- **Log levels**: `ApplicationLogLevel` and `SystemLogLevel` reuse the CDK types `Amazon.CDK.AWS.Lambda.ApplicationLogLevel` and `SystemLogLevel`.
+### Execution role
+
+- **Construct-created role** (`Role` is `null`): the construct creates an `ExecutionRole` with the AWS managed `AWSLambdaBasicExecutionRole` policy. That policy includes `logs:CreateLogGroup`, `logs:CreateLogStream`, and `logs:PutLogEvents`, so a created role can write to the default log groups and to a managed `.local` companion.
+- **Supplied role** (`Role` is not `null`): the construct uses it unchanged and never attaches the managed policy. Whether it adds CloudWatch Logs statements depends on the logging mode and the log-group name; see [Execution-role permissions](#execution-role-permissions). When it adds nothing, you must configure the role yourself.
+- **Imported immutable role** (`Role.FromRoleArn(..., new FromRoleArnOptions { Mutable = false })`): the construct never mutates it. You manage every log permission.
+
+`ApplicationLogLevel` and `SystemLogLevel` reuse `Amazon.CDK.AWS.Lambda.ApplicationLogLevel` and `SystemLogLevel`.
+
+### Two CloudWatch Logs groups per Web Function
+
+Every Lambda Web Function writes to **two** CloudWatch Logs groups:
+
+| Group | Default name | Region | Purpose |
+|-------|--------------|--------|---------|
+| **Centralized** | `/aws/lambda/web/{FunctionName}`, or the group supplied to `WebFunctionLogs.Use` | Stack (home) Region | Collects events from every Region that serves requests. Use it for normal queries, metric filters, and alarms. |
+| **Companion** | `{centralized-name}.local` | Every Region that serves a request; the construct manages only the home-Region one | Receives events in the serving Region first. Lambda then centralizes them into the home-Region group. Use the serving Region's `.local` group for the lowest-latency Live Tail. |
+
+Lambda writes to the companion in the serving Region and centralizes those events into the home-Region group. Events are **not removed** from the companion after centralization, so the same events appear in both groups with the same timestamps and messages. The centralized stream name adds a `-{account}-{region}` suffix, which is one way to tell the copies apart. CloudWatch Logs bills storage for both groups, and each group's own retention decides how long its copy remains.
+
+!!! warning "No retention means no expiry"
+    AWS does not automatically expire log events in a group that has no retention configured. Lambda-created groups (a `Use` companion created on first request, and both groups with `ServiceDefault()`) have no expiry. Configure retention explicitly if you need finite storage.
+
+See the AWS documentation for [Lambda Web Function logging](https://docs.aws.amazon.com/lambda/latest/dg/web-functions-logging.html) and [Web Function permissions](https://docs.aws.amazon.com/lambda/latest/dg/web-functions-permissions.html).
+
+### Logging modes
+
+`WebFunctionConstructProps.Logs` is a closed choice of three modes:
+
+| API | Behavior |
+|-----|----------|
+| `WebFunctionLogs.Create(RetentionDays? retention = null, RemovalPolicy? removalPolicy = null, RetentionDays? companionRetention = null)` | Creates the centralized group and its home-Region companion |
+| `WebFunctionLogs.Use(ILogGroup logGroup, ILogGroup? companion = null)` | Uses caller-supplied groups and creates neither |
+| `WebFunctionLogs.ServiceDefault()` | Creates neither group; the service manages both |
+
+After construction, `LogGroup` is the centralized group (or `null` for `ServiceDefault`), and `LocalLogGroup` is the managed or supplied home-Region companion (or `null` when it is not managed).
+
+#### `WebFunctionLogs.Create` (default)
+
+`Create` creates **both** the centralized group and its home-Region companion:
+
+```csharp
+using Amazon.CDK;
+using Amazon.CDK.AWS.Logs;
+using LayeredCraft.Cdk.Constructs;
+using LayeredCraft.Cdk.Constructs.Models;
+
+var web = new WebFunctionConstruct(this, "web", new WebFunctionConstructProps
+{
+    FunctionName = "acme-web",
+    Code = WebFunctionCode.FromBucket(artifacts, "1.2.3/web.zip", new WebFunctionCodeFromBucketOptions
+    {
+        BucketPolicy = WebFunctionCodeBucketPolicy.ExternallyManaged,
+    }),
+    Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+
+    // Retention is independent for the two groups.
+    Logs = WebFunctionLogs.Create(
+        retention: RetentionDays.ONE_MONTH,          // centralized; default TWO_WEEKS
+        removalPolicy: RemovalPolicy.RETAIN,          // both groups; default DESTROY
+        companionRetention: RetentionDays.ONE_WEEK),  // companion; default THREE_DAYS
+});
+
+// Both are construct-created groups in the stack Region.
+ILogGroup centralized = web.LogGroup!;
+ILogGroup companion = web.LocalLogGroup!;
+```
+
+- The centralized group defaults to `RetentionDays.TWO_WEEKS`.
+- The companion defaults to `RetentionDays.THREE_DAYS`. It is a short-lived staging copy whose main use is low-latency Live Tail; three days covers a centralization delay or weekend debugging at modest storage cost.
+- `companionRetention` is independent of `retention`. Both created groups use the **same** `RemovalPolicy`; there is no separate companion removal policy. The default is `RemovalPolicy.DESTROY`.
+- The construct adds explicit dependencies so both groups exist **before** the revision is created. The revision is also deleted before the groups on teardown.
+- `LocalLogGroup` exposes the created companion.
+
+#### `WebFunctionLogs.Use`
+
+`Use(logGroup, companion = null)` routes logs to groups you provide. The construct **never creates a group** in this mode, including a companion.
+
+```csharp
+using Amazon.CDK;
+using Amazon.CDK.AWS.Logs;
+using LayeredCraft.Cdk.Constructs;
+using LayeredCraft.Cdk.Constructs.Models;
+
+// Both groups are caller-owned and can have different retention.
+var centralized = new LogGroup(this, "AppLogs", new LogGroupProps
+{
+    LogGroupName = "/acme/web",
+    Retention = RetentionDays.ONE_MONTH,
+});
+
+var companion = new LogGroup(this, "AppLogsLocal", new LogGroupProps
+{
+    LogGroupName = "/acme/web.local",
+    Retention = RetentionDays.THREE_DAYS,
+});
+
+var web = new WebFunctionConstruct(this, "web", new WebFunctionConstructProps
+{
+    FunctionName = "acme-web",
+    Code = WebFunctionCode.FromBucket(artifacts, "1.2.3/web.zip", new WebFunctionCodeFromBucketOptions
+    {
+        BucketPolicy = WebFunctionCodeBucketPolicy.ExternallyManaged,
+    }),
+    Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+    Logs = WebFunctionLogs.Use(centralized, companion),
+});
+```
+
+- When the optional companion is supplied, it must have the name `{centralizedName}.local`. The construct validates names that are provably literal and throws `ArgumentException` (parameter `companion`) on a mismatch. Tokenized names are accepted rather than rejected speculatively.
+- When the companion is omitted, the construct does not manage it. Lambda creates `{centralizedName}.local` on first request **with no expiry** unless it already exists, and warning [W1](#warnings) explains that retention remains externally managed. `LocalLogGroup` is `null` in this case.
+- When the companion is supplied, `LocalLogGroup` references that group.
+- Same-stack owned groups receive a revision dependency, so they exist before the revision. Imported groups (`LogGroup.FromLogGroupName` / `LogGroup.FromLogGroupArn`) and groups in another stack get no dependency: they must already exist before the deployment. The construct never invents a cross-stack dependency.
+- The construct does not stop Lambda from creating a companion in other serving Regions; see [Multi-Region endpoints](#multi-region-endpoints).
+
+#### `WebFunctionLogs.ServiceDefault`
+
+`ServiceDefault()` creates **neither** group and leaves both to the Lambda service:
+
+```csharp
+Logs = WebFunctionLogs.ServiceDefault()
+```
+
+- Lambda creates `/aws/lambda/web/{FunctionName}` and its `.local` companion on first use with default settings.
+- Neither group has a finite retention: they never expire. The construct does **not** enforce retention in this mode.
+- `LogGroup` and `LocalLogGroup` are both `null`.
+- No [W1](#warnings) warning is emitted, because `Use` is not involved.
+- The service-created groups are not stack-owned and outlive the stack.
+- `ServiceDefault` is **not suitable** when you expect automatically managed retention or CloudFormation-managed deletion.
+
+### Ownership and retention
+
+| Mode | Centralized group | Home-Region `.local` companion | Who manages retention and deletion |
+|------|-------------------|-------------------------------|-------------------------------------|
+| `Create(...)` | Construct creates | Construct creates | Construct/CloudFormation. Defaults are 14 days and 3 days; both follow the same `RemovalPolicy` (`DESTROY` by default, `RETAIN` keeps both). |
+| `Use(g, c)` | Caller supplies | Caller supplies | Caller. The companion's retention is whatever the supplied group declares. |
+| `Use(g)` | Caller supplies | **Not managed.** Lambda creates it on first request unless it already exists. | Centralized: caller. Companion: Lambda default (never expires) until the caller configures it separately. |
+| `ServiceDefault()` | Lambda creates on first request | Lambda creates on first request | Lambda defaults (never expires) for both. Neither group is stack-owned or deleted with the stack. |
+
+Do not switch ownership of an existing companion casually: see [Upgrading an existing deployment](#upgrading-an-existing-deployment-alreadyexists).
+
+### Ordering and teardown
+
+- **`Create`**: the revision depends explicitly on both created groups, not on synthesis order. Teardown deletes the revision first, then the groups (subject to `RemovalPolicy`).
+- **`Use` with same-stack owned groups**: the revision depends on each supplied group that is a resource in the same stack. Imported and cross-stack groups get no dependency and must exist before deployment.
+- **Teardown**: `DESTROY` removes both managed groups after the revision; `RETAIN` keeps both. Service-created and other-Region companions are never removed by this stack.
+
+### Execution-role permissions
+
+CloudWatch Logs authorizes different actions against different resource types. Keep this distinction when writing your own policies:
+
+| Action | Authorized resource | ARN form |
+|--------|--------------------|----------|
+| `logs:CreateLogGroup` | log group | `arn:{partition}:logs:{region}:{account}:log-group:{name}` |
+| `logs:CreateLogStream` | log stream | `arn:{partition}:logs:{region}:{account}:log-group:{name}:log-stream:{stream}` |
+| `logs:PutLogEvents` | log stream | `arn:{partition}:logs:{region}:{account}:log-group:{name}:log-stream:{stream}` |
+
+`ILogGroup.GrantWrite` uses `…:log-group:{name}:*`, whose `:*` covers that group's log streams. The companion grant below uses the documented `…:log-group:{name}.local:log-stream:*` form.
+
+| Execution role | `Create` | `Use`, custom or tokenized name | `Use`, `/aws/lambda/*` name | `ServiceDefault` |
+|----------------|----------|-------------------------------|-----------------------------|------------------|
+| Construct-created (`ExecutionRole`) | `AWSLambdaBasicExecutionRole` only (no extra statements) | Managed policy + `GrantWrite` + companion write (+ companion create, when needed) | Managed policy only | Managed policy only |
+| Supplied, owned mutable role | Caller-managed | `GrantWrite` + companion write (+ companion create) written to the role's default policy | Caller-managed | Caller-managed |
+| Imported, mutable role (`FromRoleArn` default) | Caller-managed | Same statements in an `AWS::IAM::Policy` in this stack | Caller-managed | Caller-managed |
+| Imported, immutable role (`Mutable = false`) | Caller-managed | **Not mutated**; caller-managed | Caller-managed | Caller-managed |
+
+The construct adds companion statements only when its existing write trigger applies: `Use` mode with a log-group name that is a token or is **outside** `/aws/lambda/*`. When the statements apply, they are:
+
+- **Companion write (G1)**: `logs:CreateLogStream` and `logs:PutLogEvents` on `arn:{partition}:logs:{R}:{account}:log-group:{c}.local:log-stream:*`.
+- **Companion create (G2, only when Lambda may create the companion)**: `logs:CreateLogGroup` on `arn:{partition}:logs:{R}:{account}:log-group:{c}.local`. It is added when no companion is supplied, or as soon as any endpoint is `PerRegion` or `MultiRegion`.
+- **`{R}`** is the stack Region while every endpoint is `HomeRegion`, and `*` once any endpoint is `PerRegion`/`MultiRegion`.
+- The construct never grants `logs:CreateLogGroup` on the centralized group, and never uses `logs:*` or a `log-group:*` resource. `CreateLogGroup` is **not** always granted.
+
+Where the construct adds no statements (every `Create` and `ServiceDefault` configuration, immutable imported roles, and `Use` with an `/aws/lambda/*` name), the role must allow at least the following. A construct-created role already does so through `AWSLambdaBasicExecutionRole`; a supplied role is caller-managed:
+
+- `logs:CreateLogStream` and `logs:PutLogEvents` on the centralized group's log streams, `arn:{partition}:logs:{home}:{account}:log-group:{c}:log-stream:*`, and on the companion's log streams, `arn:{partition}:logs:{R}:{account}:log-group:{c}.local:log-stream:*`.
+- `logs:CreateLogGroup` on `arn:{partition}:logs:{R}:{account}:log-group:{c}.local` when a companion may be created (`Use(g)`, `ServiceDefault`, or non-home-Region endpoints).
+- For `ServiceDefault`, also `logs:CreateLogGroup` on `arn:{partition}:logs:{home}:{account}:log-group:{c}`.
+
+If the CDK `@aws-cdk/aws-iam:minimizePolicies` setting combines statements during synthesis, the resulting effective permissions are the same; only the statement layout changes.
+
+### Multi-Region endpoints
+
+The construct provisions a companion only in the **stack (home) Region**. When an endpoint is `PerRegion` or `MultiRegion`, Lambda may run requests in other Regions and creates a companion group there on first request. Those remote groups:
+
+- Are service-created with **no expiry** and are **not** managed by this construct.
+- Are not removed by stack teardown.
+- Require `logs:CreateLogGroup` in those Regions (and write access to their log streams) when the execution role is caller-managed.
+
+Each qualifying endpoint emits warning [W2](#warnings). The construct does not provision cross-Region log groups and does not add cross-stack resources. If you require finite retention outside the home Region, create those regional groups separately (for example in a stack deployed to each Region) and configure their retention there.
+
+### Warnings
+
+The construct emits two acknowledgeable warnings with stable IDs. Unacknowledged warnings can fail strict synthesis (`cdk synth --strict`).
+
+| Warning | ID | Emitted when | Scope |
+|---------|----|--------------|-------|
+| W1 | `@layeredcraft/cdk-constructs:webFunctionUnmanagedCompanionLogGroup` | `Logs = WebFunctionLogs.Use(g)` **without** a companion | The `WebFunctionConstruct` |
+| W2 | `@layeredcraft/cdk-constructs:webFunctionRemoteCompanionLogGroups` | Any endpoint is `PerRegion` or `MultiRegion`, in every logging mode | Each qualifying endpoint (default or added) |
+
+W1 is not emitted for `Create`, `Use(g, c)`, or `ServiceDefault`. For literal names it reads:
+
+> Web Function '{fn}' writes to '{c}', but its companion log group '{c}.local' is not managed by this construct. Lambda creates it on first request with no expiry unless it already exists. Pass the companion to WebFunctionLogs.Use(logGroup, companion) or set its retention separately.
+
+When the function or group name is a token, the message uses descriptive wording instead ("This Web Function writes to a log group whose companion log group is not managed...") and never contains raw token text.
+
+W2 for literal names reads:
+
+> Endpoint '{endpoint}' ({type}) runs requests in Regions other than the stack Region. Lambda creates the companion log group '{c}.local' in each of those Regions on first request with no expiry; this construct does not manage log groups outside the stack Region. Set their retention separately. {mode sentence}
+
+The trailing mode sentence is:
+
+| Logging mode | Sentence |
+|--------------|----------|
+| `Create` | "In the stack Region, the centralized group and its companion are managed by this stack." |
+| `Use(g, c)` | "In the stack Region, the caller-supplied companion is used." |
+| `Use(g)` | "In the stack Region, the companion is not managed either." |
+| `ServiceDefault` | "All of this function's log groups, including the centralized group, are service-managed and never expire." |
+
+Tokenized names use descriptive wording ("This endpoint…" and "a per-Region companion log group") and never contain raw token text.
+
+Acknowledge a warning on the construct, the endpoint, or an ancestor such as the stack. CDK applies an acknowledgement to child scopes, so acknowledging on the stack suppresses it for the whole stack:
+
+```csharp
+using Amazon.CDK;
+
+var web = new WebFunctionConstruct(this, "web", props);
+
+// W1: the caller owns the companion and its retention.
+Amazon.CDK.Annotations.Of(this).AcknowledgeWarning(
+    "@layeredcraft/cdk-constructs:webFunctionUnmanagedCompanionLogGroup",
+    "The companion log group and its retention are managed outside this stack.");
+
+// W2: regional companions are managed out of band.
+Amazon.CDK.Annotations.Of(this).AcknowledgeWarning(
+    "@layeredcraft/cdk-constructs:webFunctionRemoteCompanionLogGroups",
+    "Regional companion groups are created with retention by our regional logging stack.");
+```
+
+The second argument is the reason recorded with the acknowledgement. Use `Amazon.CDK.Annotations` (not `Amazon.CDK.Assertions.Annotations`) to avoid the name clash in a test project.
+
+### Upgrading an existing deployment (`AlreadyExists`)
+
+If a Web Function has already served traffic without a managed companion, Lambda may have created `{centralizedName}.local` already. That includes stacks deployed with earlier `2.6.0-preview` versions, a switch from `ServiceDefault()` to `Create()`, a switch from `Use(g)` to `Use(g, companion)`, or a redeploy after the stack was deleted while its service-created groups remained.
+
+A subsequent CloudFormation deployment that tries to create a group with the same **physical name** fails with `AlreadyExists`. The construct has no adoption, import, or migration mechanism for existing service-created groups.
+
+Supported remedies:
+
+- **Delete the existing service-created group immediately before deploying**, after coordinating the deployment window and accepting the loss of its events. This applies to the `.local` companion, and to the centralized group when moving from `ServiceDefault()` to `Create()`.
+- **Move to a new centralized group name**, for example with `WebFunctionLogs.Use` and a caller-owned pair, so the managed group does not collide with the service-created name.
+
+Assess existing log retention and operational requirements before changing logging ownership. Do not routinely delete production log groups; deleting a group permanently removes its events.
+
 
 ## Function Revisions and Endpoints
 
@@ -148,7 +395,7 @@ Every deploy creates a new **immutable revision**. Changing the code key/version
 
 The construct always creates a `DefaultEndpoint` (endpoint name `default`) and exposes it as the `DefaultEndpoint` property. Add more with `AddEndpoint(id, options)`; each added endpoint has identical semantics to the default one. Endpoint names must be unique per function, so passing `EndpointName = "default"` to `AddEndpoint` fails as a duplicate.
 
-`AddEndpoint` rejects the reserved construct IDs `Function`, `Revision`, `DefaultEndpoint`, `ExecutionRole`, `LogGroup`, and `ResourcePolicy` with an `ArgumentException`.
+`AddEndpoint` rejects the reserved construct IDs `Function`, `Revision`, `DefaultEndpoint`, `ExecutionRole`, `LogGroup`, `LocalLogGroup`, and `ResourcePolicy` with an `ArgumentException`.
 
 ```csharp
 var webhooks = web.AddEndpoint("webhooks", new WebFunctionEndpointOptions
@@ -366,14 +613,23 @@ A deployment that fails is rolled back by CloudFormation to the previous revisio
 
 The `LayeredCraft.Cdk.Constructs.Testing` namespace ships fluent helpers for synthesized templates:
 
-- `WebFunctionConstructAssertions` extension methods on `Template`: `ShouldHaveWebFunction`, `ShouldHaveRevision`, `ShouldHaveRevisionCode`, `ShouldHaveEndpoint`, `ShouldHaveEndpointScaling`, `ShouldHaveInvokeGrant`, `ShouldHaveSingleResourcePolicy`, `ShouldHaveNoResourcePolicy`, `ShouldAllowCloudFront`, `ShouldAllowResourcePolicyPrincipal`, `ShouldHaveWebFunctionOac`, and `ShouldHaveCodeBucketReadStatement`. They match by function and endpoint **names** (not logical IDs) and require `Effect = Allow` with the expected action and the exact endpoint resource, so a Deny or an unrelated action never satisfies them.
+- `WebFunctionConstructAssertions` extension methods on `Template`: `ShouldHaveWebFunction`, `ShouldHaveRevision`, `ShouldHaveRevisionCode`, `ShouldHaveEndpoint`, `ShouldHaveEndpointScaling`, `ShouldHaveInvokeGrant`, `ShouldHaveSingleResourcePolicy`, `ShouldHaveNoResourcePolicy`, `ShouldAllowCloudFront`, `ShouldAllowResourcePolicyPrincipal`, `ShouldHaveWebFunctionOac`, `ShouldHaveCodeBucketReadStatement`, `ShouldHaveWebFunctionLogGroup`, `ShouldHaveCompanionLogGroup`, and `ShouldHaveRevisionDependingOnLogGroups`. The function, endpoint, and policy assertions match by function and endpoint **names** (not logical IDs) and require `Effect = Allow` with the expected action and the exact endpoint resource, so a Deny or an unrelated action never satisfies them. The log-group assertions match by log-group **name** and exact `RetentionInDays`; `ShouldHaveRevisionDependingOnLogGroups` resolves names to logical IDs through the template.
 - `WebFunctionConstructPropsBuilder` via `CdkTestHelper.CreateWebFunctionPropsBuilder()`: `WithFunctionName`, `WithCode`, `WithTestArtifact`, `WithIamAuthEndpoint`, `WithApplicationManagedEndpoint`, `WithEndpoint`, `WithEnvironmentVariable`, `WithEntryPoint`, `WithTimeout`, `WithMaxConcurrencyPerEnvironment`, `WithRole`, `WithLogs`, then `Build()`. `Build()` throws without code or an endpoint.
+
+Note that `ShouldHaveLogGroup` belongs to `LambdaFunctionConstructAssertions`; use `ShouldHaveWebFunctionLogGroup` for Web Functions.
 
 ```csharp
 var template = Template.FromStack(stack);
 template.ShouldHaveWebFunction("acme-web");
 template.ShouldHaveEndpoint("acme-web", "default", WebFunctionAuthType.IamAuth);
 template.ShouldAllowCloudFront("acme-web", "default");
+
+template.ShouldHaveWebFunctionLogGroup("/aws/lambda/web/acme-web", 14);
+template.ShouldHaveCompanionLogGroup("/aws/lambda/web/acme-web", 3);
+template.ShouldHaveRevisionDependingOnLogGroups(
+    "acme-web",
+    "/aws/lambda/web/acme-web",
+    "/aws/lambda/web/acme-web.local");
 ```
 
 ## Workload Recipes
@@ -384,8 +640,8 @@ Detailed recipes for Next.js, ASP.NET Core (Node.js `execve` shim), and Blazor S
 
 - **S3 versioning via escape hatches is not detected.** The owned-bucket inspection only reads literal values in the rendered L2 properties. Versioning enabled through a property override (`CfnBucket`) is not detected; reference such a bucket by name (`Bucket.FromBucketName`) with `ExternallyManaged` instead.
 - **Tokenized configuration is skipped, never rejected.** A token versioning status, encryption algorithm, or key ID can be shown neither compliant nor non-compliant, so validation skips it.
-- **Log-group switching.** Moving an existing function from `WebFunctionLogs.ServiceDefault()` to `Create()` — or redeploying after a stack deletion while `/aws/lambda/web/{name}` still exists — fails with `AlreadyExists`, because Lambda auto-creates the group. Remedy: use `WebFunctionLogs.Use(LogGroup.FromLogGroupName(...))`, or delete/import the existing group.
-- **Service-created default log groups outlive the stack.** With `WebFunctionLogs.ServiceDefault()` (or a supplied role and no group) the construct creates no `AWS::Logs::LogGroup`; the Lambda service creates `/aws/lambda/web/{name}` on first invocation. That group is not part of the stack, has no expiry, and is **not** removed by CloudFormation on teardown, so it keeps the invocation history after the stack is deleted. CDK-managed `Create()` groups are stack-owned and follow their `RemovalPolicy`. In disposable sandboxes, delete leftover service-created groups explicitly by exact name after destroying the stack. Do not routinely delete production log groups.
+- **Log-group switching.** Moving an existing function from `WebFunctionLogs.ServiceDefault()` to `Create()` — or adopting a managed companion where Lambda already created `{name}.local` — can fail with `AlreadyExists`, because Lambda may have auto-created the group. See [Upgrading an existing deployment](#upgrading-an-existing-deployment-alreadyexists) for the supported remedies.
+- **Service-created default log groups outlive the stack.** With `WebFunctionLogs.ServiceDefault()` (or a `Use` companion the construct does not manage) the construct creates no `AWS::Logs::LogGroup`; the Lambda service creates the group on first invocation. Such groups are not part of the stack, have no expiry, and are **not** removed by CloudFormation on teardown, so they keep the invocation history after the stack is deleted. CDK-managed `Create()` groups are stack-owned and follow their `RemovalPolicy`. In disposable sandboxes, delete leftover service-created groups explicitly by exact name after destroying the stack. Do not routinely delete production log groups.
 - **IAM policy propagation.** The revision depends on the execution role's `CfnRole` only, never the role's default policy, so permissions granted to the role may not have propagated when the revision first activates. This avoids CloudFormation cycles for mutually-referencing functions.
 - **CloudFront origin-binding exceptions across jsii.** Validation that runs inside the CDK `IOrigin.Bind` path (and inside `HttpOrigin` construction) surfaces in .NET as a `System.Exception` carrying CDK's message, whereas factory-time checks throw `InvalidOperationException`.
 - **F3006 resource-type warnings.** CDK 2.274.0 emits `F3006` "Unknown resource type `AWS::Lambda::WebFunction*`" validation warnings. They are warnings by default and become **synthesis errors** when `@aws-cdk/core:validateAgainstDefaultRules` is enabled; acknowledge with `CloudFormation-Validate::F3006`.

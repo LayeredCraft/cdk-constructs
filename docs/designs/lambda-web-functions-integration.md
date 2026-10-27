@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **Approved** (revision 4, 2026-10-23) for implementation planning ([#98](https://github.com/LayeredCraft/cdk-constructs/issues/98)). Implementation proceeds through separately planned tasks. |
-| **Date** | 2026-10-22 (revisions 2–3 address design review feedback; revision 4, 2026-10-23, records corrections from the independent T1–T3b implementation review; see [§21](#21-revision-history)) |
+| **Status** | **Approved** (revision 5, 2026-10-26) for implementation planning ([#98](https://github.com/LayeredCraft/cdk-constructs/issues/98), [#104](https://github.com/LayeredCraft/cdk-constructs/issues/104)). Implementation proceeds through separately planned tasks. |
+| **Date** | 2026-10-22 (revisions 2–3 address design review feedback; revision 4, 2026-10-23, records corrections from the independent T1–T3b implementation review; revision 5, 2026-10-26, adds managed `.local` companion log groups; see [§21](#21-revision-history)) |
 | **Authority** | This document is the authoritative architectural record for the feature. No standalone ADRs are written for it at this time. |
 | **Target package** | `LayeredCraft.Cdk.Constructs` (next minor after v2.5.0) |
 | **AWS CDK floor** | `Amazon.CDK.Lib` 2.274.0 (raised from 2.273.0; see [§5.5](#55-cdk-version-floor)) |
@@ -509,14 +509,20 @@ public abstract class WebFunctionLogs
 {
     private protected WebFunctionLogs() { }
 
-    /// <summary>Create /aws/lambda/web/{FunctionName}. Defaults: RetentionDays.TWO_WEEKS, RemovalPolicy.DESTROY.</summary>
-    public static WebFunctionLogs Create(RetentionDays? retention = null, RemovalPolicy? removalPolicy = null);
+    /// <summary>Create /aws/lambda/web/{FunctionName} and (revision 5) its companion {name}.local.
+    /// Defaults: RetentionDays.TWO_WEEKS (centralized), RetentionDays.THREE_DAYS (companion),
+    /// RemovalPolicy.DESTROY (both).</summary>
+    public static WebFunctionLogs Create(
+        RetentionDays? retention = null,
+        RemovalPolicy? removalPolicy = null,
+        RetentionDays? companionRetention = null);              // revision 5
 
-    /// <summary>Write to an existing log group, passed by name to the revision.</summary>
-    public static WebFunctionLogs Use(ILogGroup logGroup);
+    /// <summary>Write to an existing log group, passed by name to the revision. Revision 5: optionally declare
+    /// the caller-owned companion ({name}.local). The construct never creates a companion for a supplied group.</summary>
+    public static WebFunctionLogs Use(ILogGroup logGroup, ILogGroup? companion = null);   // companion: revision 5
 
-    /// <summary>Create nothing and let Lambda use its default group (/aws/lambda/web/{FunctionName}),
-    /// which has no expiry.</summary>
+    /// <summary>Create nothing. Lambda creates the default group (/aws/lambda/web/{FunctionName}) and its
+    /// companion ({name}.local) on first use; neither expires (revision 5 wording).</summary>
     public static WebFunctionLogs ServiceDefault();
 }
 
@@ -532,6 +538,8 @@ public sealed class WebFunctionConstruct : Construct, IGrantable
     public IPrincipal GrantPrincipal { get; }  // Role.GrantPrincipal: lets table.GrantReadData(webFunction) etc.
                                                // (permissions OF this function, never invoke permissions ON it)
     public ILogGroup? LogGroup { get; }        // the created or supplied group; null for ServiceDefault()
+    public ILogGroup? LocalLogGroup { get; }   // revision 5: the home-Region companion, created (Create) or
+                                               // supplied (Use with companion); otherwise null
 
     public WebFunctionEndpointConstruct DefaultEndpoint { get; }
     public IReadOnlyList<WebFunctionEndpointConstruct> Endpoints { get; }   // a genuinely read-only view (rev 4)
@@ -552,19 +560,23 @@ Resources created (stable child IDs, a public contract for `Node.FindChild` esca
 | *(consumer id)* | additional `WebFunctionEndpointConstruct` | `AddEndpoint` |
 | `ExecutionRole` | `AWS::IAM::Role` + `AWSLambdaBasicExecutionRole` | `Role == null` |
 | `LogGroup` | `AWS::Logs::LogGroup` named `/aws/lambda/web/{FunctionName}` | `Logs = WebFunctionLogs.Create(...)` (default) |
+| `LocalLogGroup` *(revision 5)* | `AWS::Logs::LogGroup` named `{centralizedName}.local` (Erratum B) | `Logs = WebFunctionLogs.Create(...)` (default) |
 | `ResourcePolicy` | `AWS::Lambda::ResourcePolicy` (`ResourceArn` = function ARN) | first statement only |
 
 **Reserved child IDs (revision 4).** `Function`, `Revision`, `DefaultEndpoint`, `ExecutionRole`, `LogGroup`, and
 `ResourcePolicy` are reserved whether or not the corresponding resource exists in a given configuration. `AddEndpoint`
 rejects them with `ArgumentException`, so a lazily created child (the resource policy) or a later configuration change
-(switching `Logs` to `Create()`) can never collide with a consumer endpoint.
+(switching `Logs` to `Create()`) can never collide with a consumer endpoint. *Revision 5:* `LocalLogGroup` is
+reserved on the same terms.
 
 Notes:
 
 - The created log group's name equals AWS's default, so switching between `Create()` and `ServiceDefault()` never
   moves logs. Switching from `Create()` to `ServiceDefault()` deletes the CloudFormation-managed group under the
   default `DESTROY` policy; Lambda then recreates it without expiry. A group supplied with `Use(...)` is passed by
-  name, and the role gets `logGroup.GrantWrite(role)` when the name is outside `/aws/lambda/*`.
+  name, and the role gets `logGroup.GrantWrite(role)` when the name is outside `/aws/lambda/*`. *Revision 5:* the
+  same applies to the `.local` companion, and the `Use` grant also covers it; see
+  [Revision 5: companion log groups](#revision-5-companion-local-log-groups-104).
 - **Default retention is `RetentionDays.TWO_WEEKS`.** That matches the only existing retention convention in the
   library (`LambdaFunctionConstruct.cs:69`) and keeps a fresh deployment's log storage modest. It is a default, not a
   policy: Sharedale's 30 days is `WebFunctionLogs.Create(RetentionDays.ONE_MONTH)`. A Web Function-only default of 30
@@ -584,6 +596,223 @@ Notes:
 - No revision KMS key in v1 ([§8.7](#87-kms-scope-decision)).
 - Tags: `Tags.Of(construct)` reaches the taggable `CfnWebFunction`. Endpoints and revisions inherit function tags
   for ABAC.
+
+#### Revision 5: companion (`.local`) log groups (#104)
+
+**AWS behavior** (verified 2026-10-26 against the Lambda Web Functions
+[logging](https://docs.aws.amazon.com/lambda/latest/dg/web-functions-logging.html) and
+[permissions](https://docs.aws.amazon.com/lambda/latest/dg/web-functions-permissions.html) pages):
+
+- Every Web Function logs to two groups. The **centralized** group (`/aws/lambda/web/{FunctionName}`, or the group
+  named in `LoggingConfig.LogGroup`) lives in the home Region. The **companion** is named the centralized group's name
+  followed by `.local`, "for both the default log group and a custom log group".
+- Lambda writes to `.local` "in every Region where requests run, including the home Region", then centralizes into the
+  home Region. Events stay in `.local` after centralization; each group's retention decides how long they remain.
+  The two groups therefore hold the same events (observed in Sharedale staging: identical timestamps and messages;
+  the centralized stream name adds `-{account}-{region}`).
+- "If either log group does not exist, Lambda creates it on first use with default settings". Default settings
+  never expire. To apply settings from the start, AWS says to "create the log group and its `.local` companion
+  yourself before you route traffic to the revision". No setting disables the companion.
+- "If the role cannot write to the `.local` log group in a Region, Lambda does not deliver logs from that Region."
+- Live Tail with the least delay runs on `.local` in the serving Region; centralization typically takes minutes.
+
+**Behavior by mode.**
+
+| `Logs` | Centralized group | Home-Region companion | Companions in other serving Regions | Revision depends on |
+|---|---|---|---|---|
+| `Create(r, p, c)` | Created: `/aws/lambda/web/{FunctionName}`, retention `r` (`TWO_WEEKS`), policy `p` (`DESTROY`) | Created: child `LocalLogGroup`, retention `c` (`THREE_DAYS`), same policy `p` | Service-created, no expiry, unmanaged (W2) | Both groups |
+| `Use(g)` | Caller's `g` | Unmanaged: Lambda creates it on first request unless it exists (W1) | Service-created, unmanaged (W2) | `g` if owned and in this stack |
+| `Use(g, c)` | Caller's `g` | Caller's `c` | Service-created, unmanaged (W2) | `g` and `c`, each if owned and in this stack |
+| `ServiceDefault()` | Service-created, no expiry | Service-created, no expiry | Service-created, no expiry (W2) | Neither (unchanged) |
+
+Rules:
+
+- **Name.** The companion name is the centralized group's name plus `.local`, derived mode-specifically:
+  - *Create mode* derives it from the **configured centralized log-group name used to create the CloudFormation
+    resource** (the value passed as `LogGroupName`, e.g. `/aws/lambda/web/{FunctionName}`), never recomputed
+    independently and never re-derived from `FunctionName`. A literal configured name yields a literal companion name;
+    a token configured name renders as `Fn::Join`.
+  - *Use mode* derives the companion's expected name from the supplied centralized group's `LogGroupName` property.
+    For a same-stack owned group that property can be a CloudFormation `Ref` (the L2 property is a token even when the
+    group was given an explicit name), so the derived name may be a token rather than a literal.
+  *Erratum B (revision 5, implementation review):* do **not** mandate reading the L2 `LogGroup.LogGroupName` property in
+  Create mode. There the L2 property is always a CloudFormation token (`Ref`) even for an explicitly named group, so
+  using it would force every companion name — including a literal `FunctionName` with no tokens — to render as
+  `Fn::Join`, contradicting the literal-name expectations of tests T1/T4. Create mode therefore derives the companion
+  name from the configured name string it passes to the centralized `LogGroup`, preserving the exact deployed name. In
+  `Use` mode the supplied group's `LogGroupName` is the source of the expected name, as above. Companion-name
+  validation ([§14](#14-validation-and-error-handling)) may inspect the underlying `CfnLogGroup` to compare provably
+  literal names; unresolved expressions are accepted rather than rejected speculatively, as described under *Companion
+  validation*.
+- **Retention and removal.** `companionRetention` is independent of `retention`. The companion takes the same
+  `RemovalPolicy`; there is no separate companion policy. The `THREE_DAYS` default reflects what the companion is
+  for: it only stages events that are already centralized within minutes, and its main use is low-latency Live
+  Tail. Three days covers a centralization delay or weekend debugging at small storage cost. The centralized default
+  stays `TWO_WEEKS` (§18 item 1).
+- **Supplied groups.** The construct never creates a companion for a caller-supplied centralized group. A supplied or
+  imported group may be shared by several functions, so creating `{name}.local` per construct would collide
+  (`AlreadyExists`) and split ownership between the caller (the parent) and this stack (the companion).
+- **Companion validation.** When both configured names are provably literal and the companion's name is not exactly
+  `{name}.local`, `Use` throws `ArgumentException` (parameter `companion`). Lambda derives the companion name itself,
+  so a different group would never receive events. Tokens skip the check and are never rejected. For a same-stack owned
+  L2 `LogGroup`, the configured name is read from the underlying `CfnLogGroup` reached through the construct's default
+  child (`Node.DefaultChild`), not from the L2 `LogGroupName` property (see Erratum B); for an imported group the L2
+  property is used. The supplied companion is not otherwise inspected (its retention is the caller's). No reflection or
+  private CDK internals are used.
+- **`LocalLogGroup`** is the created companion (`Create`), the supplied companion (`Use(g, c)`), or `null`.
+
+**Ordering.** For `Create`, the revision has an explicit `Node.AddDependency` on both `LogGroup` and
+`LocalLogGroup`, not synthesis order. This also orders teardown: the revision is deleted before the groups. For
+`Use`, the revision depends on each supplied group only when it is an owned resource (`Node.DefaultChild` is a
+`CfnResource`) **and** `Stack.Of(group) == Stack.Of(this)`. Imported groups (`FromLogGroupName`/`FromLogGroupArn`) and
+groups in other stacks get no dependency; the construct adds no cross-stack dependency. Where a token name already
+makes CDK add its normal reference or stack dependency, that is left as is. Imported and cross-stack groups must
+exist before the deployment (documented caller ordering).
+
+**Execution-role permissions.** The CloudWatch Logs actions have different resource types (AWS Service
+Authorization Reference, machine-readable `servicereference.us-east-1.amazonaws.com/v1/logs/logs.json`, read
+2026-10-26):
+
+| Action | Resource type | ARN format |
+|---|---|---|
+| `logs:CreateLogGroup` | `log-group` | `arn:${Partition}:logs:${Region}:${Account}:log-group:${LogGroupName}` |
+| `logs:CreateLogStream` | `log-stream` | `arn:${Partition}:logs:${Region}:${Account}:log-group:${LogGroupName}:log-stream:${LogStreamName}` |
+| `logs:PutLogEvents` | `log-stream` | same as `CreateLogStream` |
+
+The Web Functions example policy attaches all three actions to `…:log-group:{name}:*` and
+`arn:aws:logs:*:{account}:log-group:{name}.local:*`. That form matches the log-stream ARNs. The documented
+`log-group` ARN format has no `:*` suffix, and AWS does not say whether `CreateLogGroup` is also authorized against
+the `:*` form. Revision 5 therefore writes one statement per resource type with the documented formats, rather than
+copying the example's single resource list. The sandbox gate verifies the result ([§19.1](#191-release-acceptance-criteria) 3.9).
+
+`CreateLogGroup` is needed only where **Lambda** creates a group:
+
+| Group | Exists before the revision serves traffic? | Role needs `CreateLogGroup` |
+|---|---|---|
+| `Create`: centralized and home-Region companion | Yes (CloudFormation, explicit `DependsOn`) | No |
+| `Use`: centralized group | Yes (it is an existing group by contract) | No |
+| `Use(g, c)`: home-Region companion | Yes (supplied) | No |
+| `Use(g)`: home-Region companion | Not necessarily | Yes, home Region |
+| `ServiceDefault`: both home-Region groups | No | Yes |
+| Any mode: companions in other serving Regions | No | Yes, in those Regions |
+
+What the construct grants. The trigger is unchanged: the existing `ShouldGrantWrite` rule (`Use` mode with a group
+name outside `/aws/lambda/*`, or a token). It applies to whatever role the construct uses, through the same
+`Grant.AddToPrincipal` mechanism as `ILogGroup.GrantWrite`. A no-op for immutable roles is accepted, as today. When
+that rule holds:
+
+- **Unchanged:** `logGroup.GrantWrite(Role)`: `logs:CreateLogStream` and `logs:PutLogEvents` on the group's
+  `LogGroupArn` (`…:log-group:{name}:*`, home Region). It is kept as is for template stability; its `:*` form covers
+  exactly that group's log-stream ARNs.
+- **G1 (new, always):** `logs:CreateLogStream`, `logs:PutLogEvents` on
+  `arn:{partition}:logs:{R}:{account}:log-group:{name}.local:log-stream:*`.
+- **G2 (new, only when Lambda may create the companion):** when no companion is supplied, or once any endpoint is
+  `PerRegion`/`MultiRegion`: `logs:CreateLogGroup` on `arn:{partition}:logs:{R}:{account}:log-group:{name}.local`.
+- **`{R}`** is the stack Region while every endpoint is `HomeRegion`. It is `*` once any `PerRegion`/`MultiRegion`
+  endpoint exists (`DefaultEndpoint` or `AddEndpoint`). It is resolved at synthesis (a `Lazy` value), so an endpoint
+  added later widens the same statements instead of adding duplicates. A Region wildcard is used instead of a Region
+  list because endpoint `Regions` may be tokens and AWS documents the wildcard for `.local`. Both statements stay
+  scoped to the exact companion name and the stack's account. ARNs are built with `Stack.FormatArn`
+  (`ArnFormat.COLON_RESOURCE_NAME`); `{name}` may be a token.
+- **Never:** `CreateLogGroup` on the centralized group; `logs:*`; `log-group:*`; any other account.
+- **Mechanism.** Configuration order must not matter. For example, a construct created with a `HomeRegion` default
+  endpoint and then given a `PerRegion` endpoint through `AddEndpoint` must synthesize the widened permissions.
+  - `{R}` is one **uncached** lazy string: `Lazy.UncachedString` with a private producer derived from jsii's
+    `DeputyBase` implementing `IStringProducer` (a jsii requirement). It reads a private "has a non-home-Region
+    endpoint" flag on the construct and returns `*` or `Stack.Of(this).Region`.
+    *Erratum C (revision 5, implementation review):* the cached `Lazy.String` / `IStableStringProducer` form must
+    **not** be used. `Lazy.String` resolves its value once and caches it, so if a role policy is resolved (for example
+    by `Stack.Resolve` or an early render) before `AddEndpoint` adds a `PerRegion`/`MultiRegion` endpoint, the cached
+    value keeps the home Region and the permissions never widen. `Lazy.UncachedString` (`IStringProducer.Produce`
+    takes the `IResolveContext`) is re-evaluated on every render, so the G1/G2 ARNs reflect the **final** configured
+    endpoint set regardless of when the policy is first resolved. Endpoint configuration must be complete before the
+    template is rendered; no policy document is edited after rendering, and no `PolicyStatement` is changed after it is
+    added.
+  - G1 is added once in the constructor.
+  - G2 is added at most once, guarded by a private flag: either in the constructor (no companion supplied) or by the
+    endpoint-creation path the first time a `PerRegion`/`MultiRegion` endpoint is created. Adding a statement to a
+    role's policy before synthesis is ordinary CDK behavior.
+  - Configuration made after synthesis (for example `AddEndpoint` after `Template.FromStack`) is unsupported, as for
+    any CDK construct.
+  - Verified 2026-10-26 with a scratch probe on `Amazon.CDK.Lib` 2.274.0 (.NET/jsii), not repository code:
+    - a G1 statement added before the "add endpoint" step resolved to `logs:*:` once the flag was set, and a later
+      G2 joined the same policy without duplicates;
+    - a `HomeRegion`-only configuration resolved to the literal stack Region, or to `Ref AWS::Region` in a stack with
+      no fixed account or Region;
+    - an imported role with `Mutable = false` received no policy in any case;
+    - an imported mutable role received an `AWS::IAM::Policy` attached by role name.
+
+| Execution role | `Create` | `Use`, custom or token name | `Use`, `/aws/lambda/*` name | `ServiceDefault` |
+|---|---|---|---|---|
+| Created (`ExecutionRole`) | `AWSLambdaBasicExecutionRole` (unchanged) | Managed policy + `GrantWrite` + G1 (+ G2) in its `DefaultPolicy` | Managed policy only | Managed policy only |
+| Supplied, owned mutable (`Role`/`LazyRole`) | None: caller-managed | `GrantWrite` + G1 (+ G2) | None: caller-managed | None: caller-managed |
+| Imported, mutable (`Role.FromRoleArn` default) | None: caller-managed | Same statements in an `AWS::IAM::Policy` in this stack (as `GrantWrite` does today) | None: caller-managed | None: caller-managed |
+| Imported, immutable (`Mutable = false`) | None: caller-managed | **Not mutated**; caller-managed | None: caller-managed | None: caller-managed |
+
+Where the construct grants nothing, the caller's role must allow at least the following (or attach
+`AWSLambdaBasicExecutionRole`). `{c}` is the centralized name; `{R}` is the home Region, or `*` when endpoints serve
+other Regions.
+
+- `logs:CreateLogStream`, `logs:PutLogEvents` on `arn:{p}:logs:{home}:{acct}:log-group:{c}:log-stream:*` and
+  `arn:{p}:logs:{R}:{acct}:log-group:{c}.local:log-stream:*`.
+- `logs:CreateLogGroup` on `arn:{p}:logs:{R}:{acct}:log-group:{c}.local` when no companion exists beforehand
+  (`ServiceDefault`, `Use(g)`) or endpoints serve other Regions. For `ServiceDefault`, also on
+  `arn:{p}:logs:{home}:{acct}:log-group:{c}`.
+
+These grants do not touch `GrantInvoke` principal classification ([§10.2](#102-grantinvoke-semantics)); the revision 4
+"no speculative mutation" rule concerns invoke grants. The `CdkUpgradeGuard_*` suite must pass unchanged.
+
+**Warnings.** Two acknowledgeable warnings use `Annotations.Of(scope).AddWarningV2(id, message)`; CDK appends
+` [ack: {id}]`. These are the library's first warnings; existing diagnostics are `AddInfo` without IDs. CDK 2.274
+also offers `Validations.Of(scope).AddWarning` (IDs prefixed `annotation::`). Revision 5 keeps `AddWarningV2`, which
+is supported and works with `AcknowledgeWarning`. There is no diagnostics framework: two private constant IDs and
+message builders live in the existing classes. Names render literally when resolvable, otherwise as a descriptive
+phrase. Messages never contain `${Token[`.
+
+| | W1 | W2 |
+|---|---|---|
+| ID | `@layeredcraft/cdk-constructs:webFunctionUnmanagedCompanionLogGroup` | `@layeredcraft/cdk-constructs:webFunctionRemoteCompanionLogGroups` |
+| Scope | The `WebFunctionConstruct` | Each qualifying `WebFunctionEndpointConstruct` (default or added) |
+| Condition | `Logs = Use(g)` without a companion | `EndpointType` is `PerRegion` or `MultiRegion`, in every `Logs` mode |
+| Not emitted | `Create`, `Use(g, c)`, `ServiceDefault` | `HomeRegion` endpoints |
+
+W1 message: "Web Function '{fn}' writes to '{c}', but its companion log group '{c}.local' is not managed by this
+construct. Lambda creates it on first request with no expiry unless it already exists. Pass the companion to
+WebFunctionLogs.Use(logGroup, companion) or set its retention separately."
+
+W2 message: "Endpoint '{endpoint}' ({type}) runs requests in Regions other than the stack Region. Lambda creates the
+companion log group '{c}.local' in each of those Regions on first request with no expiry; this construct does not
+manage log groups outside the stack Region. Set their retention separately." It is followed by the mode's sentence:
+
+| Mode | Sentence |
+|---|---|
+| `Create` | "In the stack Region, the centralized group and its companion are managed by this stack." |
+| `Use(g, c)` | "In the stack Region, the caller-supplied companion is used." |
+| `Use(g)` | "In the stack Region, the companion is not managed either." |
+| `ServiceDefault` | "All of this function's log groups, including the centralized group, are service-managed and never expire." |
+
+Acknowledgement: `Annotations.Of(scope).AcknowledgeWarning(id, reason)` on the construct, the endpoint, or an
+ancestor such as the stack (CDK applies an acknowledgement to child scopes). Unacknowledged warnings fail
+`cdk synth --strict`; acknowledged ones do not.
+
+**Adopting managed companions where Lambda already created them.** When a function has served traffic without a
+managed companion, `{c}.local` already exists. That covers stacks deployed with 2.6.0-preview.27 or earlier
+previews, `ServiceDefault()` → `Create()`, and `Use(g)` → `Use(g, newGroup)`. The next deployment that creates it
+fails with `AlreadyExists`. The same applies to a centralized group Lambda created. Remedies, documented and not
+automated: delete the service-created group (or groups) immediately before deploying, accepting the loss of their
+events; or move to a new centralized group name, for example `Use` with a caller-owned pair. There is no adoption,
+import, or migration support (out of scope in #104).
+
+**Compatibility.** Every existing source call compiles unchanged: `Create()`, `Create(r)`, `Create(r, p)`, named
+arguments, and `Use(g)`. Appending optional parameters changes the compiled signatures, so assemblies built against
+2.6.0-preview.27 must be recompiled (otherwise `MissingMethodException`). That is accepted: no stable 2.6.0 exists, and
+compatibility overloads would add permanent redundant API to the first stable release. Templates change for
+every `Create` configuration (a second group and a dependency). `Use` with a custom name gains G1/G2. A same-stack
+supplied group gains a dependency.
+
+**Out of scope (#104):** log groups in non-home Regions; changing the centralized default name or retention;
+log-level, metric, or subscription-filter helpers; adoption or import of existing service-created groups; custom
+resources.
 
 ### 8.4 Endpoints
 
@@ -766,6 +995,17 @@ public static class WebFunctionConstructAssertions
     public static void ShouldAllowResourcePolicyPrincipal(this Template t, string functionName, string endpointName, string principalArn);
     public static void ShouldHaveWebFunctionOac(this Template t, string signingProtocol = "sigv4");
     public static void ShouldHaveCodeBucketReadStatement(this Template t, string functionName);
+    // Revision 5 (#104). Match by log-group NAME, exact RetentionInDays; DependsOn logical IDs are resolved through
+    // the template, never asserted directly:
+    // Erratum A (revision 5, implementation review): the Web Function log-group assertion is named
+    // ShouldHaveWebFunctionLogGroup, not ShouldHaveLogGroup. ShouldHaveLogGroup is already published by
+    // LambdaFunctionConstructAssertions (Template, string, int retentionDays = 14) in the same namespace, so a second
+    // (Template, string, int) overload would be an ambiguous call (CS0121) for consumers. ShouldHaveLogGroup is left
+    // unchanged; no conflicting overloads are added.
+    public static void ShouldHaveWebFunctionLogGroup(this Template t, string logGroupName, int retentionDays);
+    public static void ShouldHaveCompanionLogGroup(this Template t, string centralizedLogGroupName, int retentionDays);
+    public static void ShouldHaveRevisionDependingOnLogGroups(this Template t, string functionName,
+        params string[] logGroupNames);
 }
 
 /// <summary>Follows the repository's builder convention (CognitoUserPoolConstructPropsBuilder,
@@ -1371,6 +1611,10 @@ Revision 4: `Role → Revision` means the role's `CfnRole` only, never the role'
 notes). Permissions granted to the execution role through its default policy are therefore not ordered before the
 revision, which avoids cycles when functions reference each other.
 
+Revision 5: `LogGroup + LocalLogGroup → Revision` for `Create` (explicit). For `Use`, only owned same-stack supplied
+groups get a dependency; imported and cross-stack groups must already exist
+([§8.3 revision 5](#revision-5-companion-local-log-groups-104)).
+
 ### 12.2 Updates, replacement, rollback
 
 | Change | Effect | Guidance |
@@ -1464,6 +1708,11 @@ unaffected until the consumer changes it.
   construct paths and therefore logical IDs of named resources (function, endpoint, log group), and would change the
   log group default. It would need `OverrideLogicalId` and `WebFunctionLogs.Use(...)`, or a planned recreate.
   Its bucket policy maps to `ExternallyManaged`.
+- *Revision 5 (#104):* `WebFunctionLogs.Create`/`Use` gain trailing optional parameters. Source compatible; binary
+  incompatible with 2.6.0-preview.27 (recompile). Adopting a managed companion where Lambda already created
+  `{name}.local` fails with `AlreadyExists`; remedies in [§8.3 revision 5](#revision-5-companion-local-log-groups-104).
+  The Sharedale migration is now tracked in sharedale/sharedale#162, which recreates its environments on the new
+  `/aws/lambda/web/{name}` names.
 
 ---
 
@@ -1507,6 +1756,8 @@ does not own (distribution behaviors, supplied OACs, imported buckets).
 | *Revision 4:* `GrantInvoke` with any wildcard principal, conditioned or not | endpoint | `InvalidOperationException` |
 | *Revision 4:* `AddEndpoint` id is reserved (`Function`, `Revision`, `DefaultEndpoint`, `ExecutionRole`, `LogGroup`, `ResourcePolicy`) | `AddEndpoint` | `ArgumentException` |
 | *Revision 4:* resource-policy statement invalid for a resource policy (`ValidateForResourcePolicy` on the candidate document) | `AddToResourcePolicy` (eager, transactional; §10.3) | `InvalidOperationException` |
+| *Revision 5:* `Use(logGroup, companion)` with both names literal and `companion` not named `{logGroup}.local` | `WebFunctionLogs.Use` | `ArgumentException` (`companion`) |
+| *Revision 5:* `AddEndpoint` id `LocalLogGroup` (added to the reserved set) | `AddEndpoint` | `ArgumentException` |
 
 Revision 4 clarification of the owned-bucket rule (implementation follow-up, not T3c). Owned-bucket inspection checks
 only literal values in the L2-rendered properties. It treats unresolved values conservatively: a token or unrecognized
@@ -1645,6 +1896,66 @@ behaviors.
 single-resource-policy checks) and for `WebFunctionConstructPropsBuilder` (`Build()` throws without an auth choice
 or code; `WithTestArtifact` synthesizes without credentials).
 
+**Revision 5 additions (companion log groups, #104):**
+
+- *Synthesis.*
+  - T1: `Create()` → exactly two `AWS::Logs::LogGroup`: `/aws/lambda/web/{fn}` with `RetentionInDays` 14 and
+    `/aws/lambda/web/{fn}.local` with 3, both `Delete`.
+  - T2: `Create(ONE_MONTH, RETAIN, ONE_DAY)` → 30 and 1, both `Retain`.
+  - T3: the revision's `DependsOn` contains both log-group logical IDs.
+  - T4: a token `FunctionName` → the companion name is `Fn::Join` of the centralized name and `.local`.
+  - T5: the companion's path ends in `/LocalLogGroup`. `LocalLogGroup` is non-null for `Create` and `Use(g, c)`, and
+    null for `Use(g)` and `ServiceDefault`.
+  - T6: `Use(g)` → the construct creates no log group; `LoggingConfig.LogGroup` is `g`'s name.
+  - T7: `Use(g, c)` in the same stack → the revision depends on both, and no group is created.
+  - T8: imported groups → no `DependsOn` on them, no error.
+  - T9: a literal companion-name mismatch throws `ArgumentException` (`companion`); token names are accepted.
+  - T10: `ServiceDefault` → no log group, no `LoggingConfig.LogGroup`.
+  - T11: `AddEndpoint("LocalLogGroup", …)` throws.
+- *Permissions* (assert exact actions and resources; `{p}`/`{acct}` are `AWS::Partition`/`AWS::AccountId`):
+  - P1: created role with `Create` → only `AWSLambdaBasicExecutionRole`; no new logs statement.
+  - P2: supplied owned `Role` with `Use(custom)`, `HomeRegion` → the existing `GrantWrite` statement, plus G1 on the
+    stack-Region `…:log-group:{c}.local:log-stream:*`, plus G2 `logs:CreateLogGroup` on the stack-Region
+    `…:log-group:{c}.local`. Nothing else.
+  - P3: as P2 with a supplied companion → G1 only; no `CreateLogGroup` anywhere.
+  - P4: as P3 plus a `PerRegion` endpoint via `AddEndpoint` → G1 and G2 with Region `*`; exactly one statement each,
+    no duplicates.
+  - P5: imported mutable role → the statements in an `AWS::IAM::Policy` attached by role name.
+  - P6: imported immutable role → no IAM policy, no exception.
+  - P7: supplied role with `Create`, with `ServiceDefault`, or with `Use("/aws/lambda/…")` → no logs statements.
+  - P8: a token custom name → G1/G2 resources are `Fn::Join` scoped to that name.
+  - P9: no template contains `logs:*`, a `log-group:*` resource, or `CreateLogGroup` on a centralized group.
+  - P10: the `CdkUpgradeGuard_*` suite is unchanged and passes.
+  - P11 (ordering regression): a `HomeRegion` default endpoint, then `AddEndpoint(PerRegion)` and, in a separate test,
+    `AddEndpoint(MultiRegion)` → the final template's G1 has Region `*`. G2 is present with Region `*` even when a
+    companion was supplied. There is exactly one G1 and one G2. These are the same results as configuring the
+    non-home endpoint as the default endpoint.
+  - P12: several non-home endpoints added in sequence → still exactly one G1 and one G2.
+  - P13: `HomeRegion` default plus `AddEndpoint(HomeRegion)` → Region remains the stack Region; no G2 when a companion
+    was supplied.
+  - P14: a stack with no fixed account or Region → `Ref AWS::Region`, or `*` after a non-home `AddEndpoint`, and
+    `Ref AWS::AccountId`.
+  - P15: an imported immutable role with a non-home `AddEndpoint` → no `AWS::IAM::Policy`, no exception, and the role
+    is unchanged.
+- *Warnings* (`Annotations.FromStack`):
+  - Wa: W1 is present for `Use(g)`, and absent for `Create`, `Use(g, c)`, and `ServiceDefault`.
+  - Wb: W2 is present on each `PerRegion`/`MultiRegion` endpoint path (default and `AddEndpoint`), with the
+    mode-specific sentence for all four modes.
+  - Wc: `HomeRegion`-only configurations have no W2 (`HasNoWarning("*", …webFunctionRemote…)`), and no W1 except
+    under `Use(g)`.
+  - Wd: stable IDs. Each message ends with ` [ack: {exact id}]`, and the ID constants match the strings in §8.3.
+  - We: strict synthesis. The entries are warning-level metadata (`aws:cdk:warning`, which `--strict` fails on), not
+    info.
+  - Wf: acknowledgement. `AcknowledgeWarning(id)` after construction on the construct, the endpoint, or the stack
+    removes the warning (`HasNoWarning`). A second test pins CDK's behavior for an acknowledgement made on the stack
+    *before* the construct is created, and the docs state the supported order accordingly.
+  - Wg: messages contain no `${Token[`.
+- *Helpers:* positive and negative tests for the three new assertions (wrong retention, missing companion, missing
+  dependency).
+- *Goldens:* regenerate deliberately and review every diff. Every `Create` golden gains only the `.local` group and
+  the `DependsOn`. `web-function-use-log-group.json` gains the revision dependency on its same-stack group and G1/G2
+  in the supplied role's policy. Existing-construct goldens show zero diff.
+
 **Deployed validation:** a **release gate**, not CI; see [§19.1](#191-release-acceptance-criteria).
 
 ---
@@ -1658,6 +1969,11 @@ or code; `WithTestArtifact` synthesizes without credentials).
   before deploy); endpoints and `AddEndpoint`; behavior on revision change; `GrantInvoke` (same- vs cross-account,
   the caller signs SigV4 with `UNSIGNED-PAYLOAD`, strip semantics); resource-policy single-owner contract; OAC
   origin; cache/header guidance; replacement table; validation errors; limitations.
+  *Revision 5:* a logging section covering why there are two groups, why events appear duplicated, which group to
+  query (centralized) versus Live Tail (`.local` in the serving Region), the default retentions and why the companion
+  is short, an ownership table per mode, the execution-role permission matrix and caller-provided permissions, the
+  W1/W2 IDs and how to acknowledge them (and the `--strict` impact), non-home-Region companions, `AlreadyExists`
+  remedies, and teardown. The `WebFunctionLogs` XML docs and `CHANGELOG.md` say the same.
 - **Workload recipes** (in the same page or `docs/examples/web-functions.md`):
   1. *Next.js*: `output: "standalone"`; zip root = standalone output + `.next/static` + `public`; `index.js` that sets
      `HOSTNAME`/`PORT` from `AWS_LAMBDA_HTTP_ENDPOINT`, adjusts `NODE_PATH` for pnpm, handles SIGTERM, and requires
@@ -1711,6 +2027,12 @@ regional `RateLimit` variance; deployment-time 403 windows.
 | Revision cleanup quota (50) under frequent deploys | AWS cleans up automatically; documented |
 | AWS service still new (behavior, Regions, quotas changing) | Required sandbox deployment before every release that changes these constructs (§19.1) |
 | CDK default-rule validation warnings for Web Function types | Document; re-check on 2.274+ |
+| *Rev 5:* companions in non-home serving Regions are service-created with no expiry | Out of scope by design; W2 warning; documented out-of-band retention |
+| *Rev 5:* `AlreadyExists` when adopting a managed companion Lambda already created | Documented remedies (delete before deploy, or a new group name); no adoption machinery |
+| *Rev 5:* CloudWatch Logs authorizes `CreateLogGroup` against a different ARN form than the documented `log-group` format | Sandbox gate check 3.9; if denied, revise G2's resource and re-review |
+| *Rev 5:* supplied roles with `Create`/`ServiceDefault`, and immutable roles, lack `.local` permissions, so logs are not delivered from that Region | Caller-managed by contract; exact permissions documented (§8.3 rev 5) |
+| *Rev 5:* binary break versus 2.6.0-preview.27 | Pre-stable; documented in `CHANGELOG.md`; recompile |
+| *Rev 5:* new warnings fail `cdk synth --strict` for multi-Region consumers | Stable IDs; acknowledgement documented |
 | No customer-managed revision key in v1 | Documented deferral and L1 escape hatch (§8.7) |
 
 ---
@@ -1799,6 +2121,17 @@ The feature is **not published** until all of the following hold:
       asset (e.g. `app.css` or a `_framework` file) are served successfully, using the Node.js `execve` shim approach
       from `j-d-ha/lambda-web-function-not-node` (apphost `server` + `index.js` shim + readiness POST). The sample is
       ordinary consumer code; no Blazor-specific library abstraction or packaging logic is introduced.
+   9. *Revision 5 (#104), required for the preview that carries it:* companion log groups.
+      - After deployment and before traffic, both groups exist, created by CloudFormation, with the configured
+        retention.
+      - After real requests, both still have that retention: the companion was **not** created with unlimited
+        retention. Events reach the centralized group, and `.local` holds the same events.
+      - No other `.local` group (or group without retention) appears for the sandbox functions.
+      - A supplied-role `Use(custom)` function **without** a supplied companion delivers logs. This exercises G1 and the
+        documented-format G2 `CreateLogGroup` ARN. If it cannot be exercised, record "not verified" and treat G2's
+        ARN form as unverified.
+      - Teardown removes both managed groups, and `.local` is not recreated after stack deletion (re-check after a few
+        minutes). Service-created groups from the `Use(custom)` scenario are deleted by exact name.
 4. The results (date, account alias, CDK version, revision IDs, observed status codes) are recorded in the release
    PR. Any criterion not verified is listed explicitly.
 
@@ -1937,3 +2270,58 @@ regardless of `Mutable`, rejected `PrincipalWithConditions`, and made resource-p
 sandbox check (§10.2 rev-4 item 4, §15, §19.1 3.3). A third clarification (2026-10-23, T3c acceptance) restated E1:
 same-stack ownership with an owned endpoint is sufficient even in an env-agnostic stack, and cross-stack grants need
 matching literal accounts (§10.2 E1).
+
+**Revision 5 (2026-10-26): managed `.local` companion log groups ([#104](https://github.com/LayeredCraft/cdk-constructs/issues/104)); status Approved.**
+The decisions, the IAM refinement, and the written revision were approved by the maintainer on 2026-10-26. A final
+check confirmed that the companion permissions hold whatever the configuration order (`AddEndpoint` after
+construction) through a synthesis-time `Lazy` Region. That mechanism is recorded under "Execution-role permissions"
+and pinned by P11–P15. Planned as
+bead `cdkc-18e.18`; consumer validation is sharedale/sharedale#162 on a published `2.6.0-preview.N`. All changes are in
+[§8.3 revision 5](#revision-5-companion-local-log-groups-104) unless noted.
+
+1. *D1 Retention.* The companion defaults to `THREE_DAYS`. The centralized default stays `TWO_WEEKS`.
+2. *D2 Create.* `Create(retention, removalPolicy, companionRetention)`. The companion takes the centralized group's
+   removal policy.
+3. *D3 Naming.* `{centralizedName}.local`, from the centralized group's configured name (Erratum B), token-safe. New child and
+   reserved ID `LocalLogGroup` (§8.3, §14). New `WebFunctionConstruct.LocalLogGroup` property.
+4. *D4 Use.* `Use(logGroup, companion = null)`. A companion is never created for a supplied group. Literal name
+   mismatches are rejected (§14).
+5. *D5 W1* when `Use` has no companion.
+6. *D6 Ordering.* Explicit revision dependencies on managed groups. Only owned same-stack supplied groups get a
+   dependency; no invented cross-stack or imported dependencies (§12.1).
+7. *D7 IAM.* The resource types were verified against the Service Authorization Reference. The design uses one
+   statement per resource type: G1 on the `.local` log-stream ARN, and G2 `CreateLogGroup` on the `.local` log-group
+   ARN, only where Lambda may create the group. Region scope is the stack Region, or `*` with
+   `PerRegion`/`MultiRegion` endpoints. The existing grant trigger and role ownership contract are unchanged:
+   created roles keep `AWSLambdaBasicExecutionRole`, supplied roles stay caller-managed outside `Use`, and immutable
+   roles are not mutated. The caller-provided permissions are documented.
+8. *D8 W2* for `PerRegion`/`MultiRegion` endpoints in every `Logs` mode, with mode-accurate text. The warnings use
+   `AddWarningV2` with stable IDs; acknowledgement and `--strict` behavior are documented and tested (§15).
+9. *D9* No resources in other Regions; no migration or adoption machinery; no custom resources.
+10. *D10* `ServiceDefault()` is unchanged; its docs now say both groups are service-created and never expire.
+    `AlreadyExists` on adoption is documented, with remedies.
+
+Also: new assertions (§8.6), tests T1–T11, P1–P15, Wa–Wg (§15), documentation scope (§16), risks (§17), sandbox
+check 3.9 (§19.1), and compatibility (§13: source compatible, binary incompatible with 2.6.0-preview.27).
+*Deviation from the reviewed proposal:* the single `…:{name}.local:*` resource for all three actions, copied from the
+AWS example, was replaced by per-resource-type statements, and `CreateLogGroup` was narrowed to the cases where
+Lambda creates the group (maintainer IAM refinement).
+
+*Errata (implementation review of `f411074`, 2026-10-26; revision 5 retained, no revision 6).* The maintainer accepted
+the implementation with targeted corrections. The following three corrections are applied in place to the revision-5
+text above and do not change the approved scope:
+
+- **Erratum A.** The new Web Function log-group assertion is `ShouldHaveWebFunctionLogGroup`, not
+  `ShouldHaveLogGroup` (already published by `LambdaFunctionConstructAssertions`; a second `(Template, string, int)`
+  overload would be ambiguous for consumers — CS0121). See §8.6.
+- **Erratum B.** The companion name is derived mode-specifically. In **Create mode** it comes from the configured
+  centralized log-group name used for CloudFormation creation, not by reading the L2 `LogGroup.LogGroupName` property
+  (which is always a `Ref` token and would force `Fn::Join` even for a literal name). In **Use mode** the expected name
+  comes from the supplied group's `LogGroupName` property, which for a same-stack owned group can itself be a `Ref`.
+  Deployed naming is unchanged. Companion-name validation compares only *provably literal* names and may read the
+  underlying `CfnLogGroup` through the construct's default child for owned groups; unresolved expressions are accepted
+  rather than rejected speculatively. See "Name" and "Companion validation" in §8.3.
+- **Erratum C.** `{R}` uses the **uncached** `Lazy.UncachedString` (`IStringProducer`), not the caching `Lazy.String`
+  (`IStableStringProducer`). A cached value resolved before `AddEndpoint` would keep the home Region and never widen;
+  the uncached form re-evaluates on every render so G1/G2 reflect the final endpoint set. See "Mechanism" in §8.3 and
+  the ordering tests P11–P15 (§15).

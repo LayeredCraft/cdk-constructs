@@ -44,6 +44,26 @@ internal sealed class SandboxNaming(SandboxConfiguration configuration)
 
     public string BlazorFunctionName => $"{Prefix}-blazor";
 
+    // Use-mode workloads (§19.1 3.9). Each supplies its own execution role and a caller-owned centralized
+    // log group whose name deliberately lives *outside* /aws/lambda/*, so the library's ShouldGrantWrite
+    // rule treats it as caller-managed and emits the companion grants (G1, and G2 when Lambda must create
+    // the companion). UseLogs supplies no companion (Lambda creates it); UseCompanion supplies both groups.
+    public string UseLogsFunctionName => $"{Prefix}-uselogs";
+
+    public string UseCompanionFunctionName => $"{Prefix}-usecompanion";
+
+    public string UseLogsCentralizedGroupName => $"/{Namespace}/{Prefix}-uselogs";
+
+    public string UseLogsCompanionGroupName => $"{UseLogsCentralizedGroupName}.local";
+
+    public string UseCompanionCentralizedGroupName => $"/{Namespace}/{Prefix}-usecompanion";
+
+    public string UseCompanionCompanionGroupName => $"{UseCompanionCentralizedGroupName}.local";
+
+    public string UseLogsRoleName => $"{Prefix}-uselogs-role";
+
+    public string UseCompanionRoleName => $"{Prefix}-usecompanion-role";
+
     // Two imported caller roles: the sandbox imports one with Mutable = false and one with the default (mutable),
     // covering both resource-policy-only authorization sub-cases in the acceptance matrix (§19.1 3.3).
     public string ImportedCallerImmutableRoleName => $"{Prefix}-imported-caller-immutable";

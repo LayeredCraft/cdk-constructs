@@ -13,8 +13,11 @@
 #   3. SANDBOX_ALLOW_AWS=1 and SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1
 # The live AWS account and Region are verified before anything is deleted, and each stack is proven to
 # be sandbox-owned (ownership tag + SandboxId output) before it is touched. The sandbox-owned buckets
-# are emptied (all versions and delete markers) and then deleted by CloudFormation, never directly. Log
-# groups are likewise left to CloudFormation; this script never deletes a resource by predictable name.
+# are emptied (all versions and delete markers) and then deleted by CloudFormation, never directly.
+# CloudFormation-owned log groups are likewise deleted with their stacks. The single exception is the
+# companion ".local" group Lambda creates on first use for a Use-mode function (it is never owned by
+# CloudFormation, so it survives stack deletion): that group is removed by its exact, sandbox-namespaced
+# name, and only after confirming it exists. No resource is ever deleted by wildcard or by guessing.
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
@@ -110,7 +113,48 @@ for stack_bucket in "$(stack_name_external):$(bucket_external)" "$(stack_name_ar
     destroy_owned_stack "${stack}"
 done
 
-# Log groups are owned and deleted by CloudFormation with their stacks; do not delete them directly.
+# CloudWatch log groups owned by CloudFormation are deleted with their stacks. The one group Lambda
+# creates on first use (the ".local" companion of a Use-mode function, which CloudFormation never owns)
+# is not covered by stack deletion, so remove it explicitly by exact name.
+delete_sandbox_log_group() {
+    local name="$1" required_prefix="/${SANDBOX_NAMESPACE}/${SANDBOX_ID}-"
+    case "${name}" in
+        "${required_prefix}"*)
+            ;;
+        *)
+            die "Refusing to delete log group '${name}': it is not within the sandbox namespace '${required_prefix}'."
+            ;;
+    esac
+
+    local listed
+    listed="$(aws_cmd logs describe-log-groups --log-group-name-prefix "${name}" --output json 2>/dev/null || printf '{"logGroups":[]}')"
+    local present
+    present="$(printf '%s' "${listed}" | python3 -c 'import json,sys
+name=sys.argv[1]
+groups=json.load(sys.stdin).get("logGroups",[])
+print("yes" if any(g.get("logGroupName")==name for g in groups) else "no")' "${name}")"
+
+    if [ "${present}" != "yes" ]; then
+        warn "Log group ${name} not present; nothing to remove."
+        return 0
+    fi
+
+    log "Removing service-created log group ${name} (not owned by CloudFormation)."
+    aws_cmd logs delete-log-group --log-group-name "${name}" >/dev/null
+
+    listed="$(aws_cmd logs describe-log-groups --log-group-name-prefix "${name}" --output json 2>/dev/null || printf '{"logGroups":[]}')"
+    present="$(printf '%s' "${listed}" | python3 -c 'import json,sys
+name=sys.argv[1]
+groups=json.load(sys.stdin).get("logGroups",[])
+print("yes" if any(g.get("logGroupName")==name for g in groups) else "no")' "${name}")"
+    if [ "${present}" = "yes" ]; then
+        die "Log group ${name} still exists after deletion. Not removing the manifest."
+    fi
+    log "Confirmed log group ${name} is gone."
+}
+
+# Strictly scoped to the sandbox namespace; only the known service-created companion group is targeted.
+delete_sandbox_log_group "$(uselogs_companion_group)"
 
 # Only remove the manifest once every stack has been confirmed gone.
 rm -f "${MANIFEST_FILE}"

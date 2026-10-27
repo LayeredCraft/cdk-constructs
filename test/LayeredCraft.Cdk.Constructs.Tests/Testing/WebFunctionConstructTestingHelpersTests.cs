@@ -5,6 +5,8 @@ using Amazon.CDK.AWS.CloudFront;
 using Amazon.CDK.AWS.CloudFront.Origins;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.S3;
+using LogGroup = Amazon.CDK.AWS.Logs.LogGroup;
+using LogGroupProps = Amazon.CDK.AWS.Logs.LogGroupProps;
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
 using LayeredCraft.Cdk.Constructs;
@@ -833,5 +835,124 @@ public class WebFunctionConstructTestingHelpersTests
 
         props.EnvironmentVariables["KEY"].Should().Be("VALUE");
         props.EnvironmentVariables.ContainsKey("LATE").Should().BeFalse();
+    }
+
+    // ---- #104 companion log group assertions -----------------------------------
+
+    private static WebFunctionConstruct CreateUseFunction(Stack stack, WebFunctionLogs logs, string id = "web-function")
+    {
+        var artifacts = Bucket.FromBucketName(stack, id + "Artifacts", ArtifactsBucketName);
+        return new WebFunctionConstruct(stack, id, new WebFunctionConstructProps
+        {
+            FunctionName = "test-web-function",
+            Code = WebFunctionCode.FromBucket(
+                artifacts,
+                "artifacts/app.zip",
+                new WebFunctionCodeFromBucketOptions { BucketPolicy = WebFunctionCodeBucketPolicy.ExternallyManaged }),
+            Endpoint = new WebFunctionEndpointOptions { AuthType = WebFunctionAuthType.IamAuth },
+            Logs = logs,
+        });
+    }
+
+    [Fact]
+    public void ShouldHaveWebFunctionLogGroup_ShouldPassForCentralizedGroup()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        _ = CreateFunction(stack, out _);
+
+        var act = () => Template.FromStack(stack).ShouldHaveWebFunctionLogGroup("/aws/lambda/web/test-web-function", 14);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ShouldHaveWebFunctionLogGroup_ShouldThrowForWrongRetention()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        _ = CreateFunction(stack, out _);
+
+        var act = () => Template.FromStack(stack).ShouldHaveWebFunctionLogGroup("/aws/lambda/web/test-web-function", 30);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*log group '/aws/lambda/web/test-web-function'*RetentionInDays = 30*");
+    }
+
+    [Fact]
+    public void ShouldHaveWebFunctionLogGroup_ShouldThrowForMissingGroup()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        _ = CreateFunction(stack, out _);
+
+        var act = () => Template.FromStack(stack).ShouldHaveWebFunctionLogGroup("/aws/lambda/web/other-function", 14);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*No log group named '/aws/lambda/web/other-function' was found*");
+    }
+
+    [Fact]
+    public void ShouldHaveCompanionLogGroup_ShouldPassForCompanionGroup()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        _ = CreateFunction(stack, out _);
+
+        var act = () => Template.FromStack(stack).ShouldHaveCompanionLogGroup("/aws/lambda/web/test-web-function", 3);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ShouldHaveCompanionLogGroup_ShouldThrowForWrongRetention()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        _ = CreateFunction(stack, out _);
+
+        var act = () => Template.FromStack(stack).ShouldHaveCompanionLogGroup("/aws/lambda/web/test-web-function", 14);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*companion log group '/aws/lambda/web/test-web-function.local'*RetentionInDays = 14*");
+    }
+
+    [Fact]
+    public void ShouldHaveCompanionLogGroup_ShouldThrowWhenCompanionMissing()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var imported = LogGroup.FromLogGroupName(stack, "External", "/custom/logs");
+        _ = CreateUseFunction(stack, WebFunctionLogs.Use(imported));
+
+        var act = () => Template.FromStack(stack).ShouldHaveCompanionLogGroup("/custom/logs", 3);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*No companion log group named '/custom/logs.local' was found*");
+    }
+
+    [Fact]
+    public void ShouldHaveRevisionDependingOnLogGroups_ShouldPassForManagedGroups()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        _ = CreateFunction(stack, out _);
+
+        var act = () => Template.FromStack(stack).ShouldHaveRevisionDependingOnLogGroups(
+            "test-web-function",
+            "/aws/lambda/web/test-web-function",
+            "/aws/lambda/web/test-web-function.local");
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ShouldHaveRevisionDependingOnLogGroups_ShouldThrowWhenDependencyMissing()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack();
+        var imported = LogGroup.FromLogGroupName(stack, "External", "/custom/logs");
+        _ = new LogGroup(stack, "Unrelated", new LogGroupProps { LogGroupName = "/unrelated/logs" });
+        _ = CreateUseFunction(stack, WebFunctionLogs.Use(imported));
+
+        // The group exists in the template but the revision does not depend on it.
+        var act = () => Template.FromStack(stack).ShouldHaveRevisionDependingOnLogGroups(
+            "test-web-function",
+            "/unrelated/logs");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*revision for 'test-web-function'*depend on the log group '/unrelated/logs'*");
     }
 }

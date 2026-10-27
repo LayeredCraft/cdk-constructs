@@ -23,7 +23,7 @@ and `lc-webfunction-sandbox-id`. Buckets, functions and roles keep the shorter `
 | --- | --- | --- |
 | `lccdk-wf-sandbox-<id>-artifacts` | versioned, SSE-S3, private S3 bucket | Owned artifact bucket used with the library's default `Automatic` code-bucket policy |
 | `lccdk-wf-sandbox-<id>-external` | versioned, SSE-S3, private bucket; two IAM roles | Pre-provisioned "external" bucket (`ExternallyManaged` policy) and the imported caller roles |
-| `lccdk-wf-sandbox-<id>-app` | 3 Web Functions, 4 endpoints, 2 CloudFront distributions (3 with the second distribution), 2 OACs, 5 IAM roles, 1 IAM policy, 3 log groups | Next.js standalone, ASP.NET Core (with a second endpoint), and Blazor Static SSR |
+| `lccdk-wf-sandbox-<id>-app` | 5 Web Functions, 6 endpoints, 2 CloudFront distributions (3 with the second distribution), 2 OACs, 7 IAM roles, 3 IAM policies, 9 log groups | Next.js, ASP.NET Core (with a second endpoint), and Blazor Static SSR, plus two Use-mode logging functions |
 
 The app stack declares an explicit CDK dependency on the artifacts and external stacks, and every deploy
 synthesizes the **complete** app (all three stacks) so the support stacks keep the cross-stack exports the
@@ -37,7 +37,11 @@ Workloads:
 - **ASP.NET Core** (Node.js `execve` shim entrypoint) - `IamAuth` default endpoint plus an `alt` endpoint,
   using the `ExternallyManaged` code-bucket policy.
 - **Blazor Static SSR** - `IamAuth` default endpoint behind an OAC distribution; `/_framework/*` and
-  `/_content/*` are cached.
+  `/_content/*` are cached. Uses a non-default `Create(ONE_MONTH, ..., ONE_DAY)` companion retention.
+- **Use-mode logging** - a function whose centralised log group is caller-owned with a custom (non-AWS)
+  name and a caller-supplied execution role, and a second function that also supplies its own companion
+  group. Together these exercise the `WebFunctionLogs.Use` grants (G1, and G2 for the function that lets
+  Lambda create its companion).
 
 ## Prerequisites
 
@@ -136,6 +140,36 @@ SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 ./deploy.sh
 # 5. Run the acceptance smoke tests (record the machine-readable summary as evidence).
 SANDBOX_ALLOW_AWS=1 ./smoke.sh
 
+# 5b. Verify the companion ".local" log groups and their retention (read-only), right after deploy
+#     (pre-traffic): existence, retention, and no unexpected groups.
+SANDBOX_ALLOW_AWS=1 ./verify-log-groups.sh
+
+# 5c. Drive real traffic to the two Use-mode endpoints before the delivery check. smoke.sh (step 5)
+#     only calls the Next.js, ASP.NET Core, and Blazor endpoints, so without this the UseLogs and
+#     UseCompanion groups stay empty and the service-created ".../uselogs.local" companion is never
+#     created. Both URLs are IamAuth, so sign with the sandbox CallerRole (already granted
+#     InvokeFunction on both endpoints) using SigV4.
+APP_STACK="lccdk-wf-sandbox-${SANDBOX_ID}-app"
+output() { aws cloudformation describe-stacks --stack-name "$APP_STACK" --region "$SANDBOX_REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+CALLER_ROLE_ARN="$(output CallerRoleArn)"
+CREDS="$(aws sts assume-role --role-arn "$CALLER_ROLE_ARN" --role-session-name sandbox-delivery \
+  --region "$SANDBOX_REGION" --query Credentials --output json)"
+AK="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["AccessKeyId"])')"
+SK="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["SecretAccessKey"])')"
+TOKEN="$(echo "$CREDS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["SessionToken"])')"
+for KEY in UseLogsEndpointUrl UseCompanionEndpointUrl; do
+  URL="$(output "$KEY")"
+  STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --aws-sigv4 "aws:amz:${SANDBOX_REGION}:lambda" \
+    --user "${AK}:${SK}" -H "x-amz-content-sha256: UNSIGNED-PAYLOAD" \
+    -H "x-amz-security-token: ${TOKEN}" "$URL" || true)"
+  echo "invoked ${KEY} (${URL}) -> HTTP ${STATUS}"
+done
+
+# 5d. Re-run with --expect-delivery: every group (including both Use-mode groups) must now hold
+#     recent events.
+SANDBOX_ALLOW_AWS=1 ./verify-log-groups.sh --expect-delivery
+
 # 6. Update v1 -> v2 and re-check.
 SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 ./update-to-v2.sh
 SANDBOX_ALLOW_AWS=1 ./smoke.sh
@@ -154,7 +188,8 @@ SANDBOX_ALLOW_AWS=1 SANDBOX_ACKNOWLEDGE_SHARED_ACCOUNT=1 SANDBOX_CONFIRM_DESTROY
 | `deploy.sh` | Ordered deploy: support stacks, upload, app stack |
 | `update-to-v2.sh` | Uploads and deploys the `v2` revision (the update path) |
 | `smoke.sh` | AWS acceptance smoke tests (sections 3.1-3.8) with explicit expected results |
-| `destroy.sh` | Empties stack-owned buckets (object versions + delete markers only), destroys the stacks, deletes log groups |
+| `verify-log-groups.sh` | Read-only companion `.local` log-group acceptance (section 19.1, item 3.9): existence, retention, delivery, and no unexpected groups |
+| `destroy.sh` | Empties stack-owned buckets (object versions + delete markers only), destroys the stacks, and removes the service-created companion log group by exact name |
 | `run-workflow.sh` | Convenience wrapper chaining validate -> synth -> deploy -> smoke |
 
 `upload-artifacts.sh` records the bucket/key/version identity of each revision in
@@ -166,9 +201,11 @@ Each run creates a small number of Lambda Web Functions, two or three CloudFront
 for the artifacts, and CloudWatch log groups. Cost is dominated by the CloudFront distributions
 (per-hour) and any request/transfer volume. Tear down promptly; `destroy.sh` removes everything.
 
-## Recording evidence (T7c)
+## Recording evidence (T7)
 
-`smoke.sh` prints a PASS/FAIL/SKIP line per check and writes `build/smoke-summary.json`. Capture both, plus
+`smoke.sh` prints a PASS/FAIL/SKIP line per check and writes `build/smoke-summary.json`.
+`verify-log-groups.sh` prints a PASS/FAIL/SKIP/BLOCKED line per log-group check and writes
+`build/log-group-summary.json` (with its `phase`: `pre-traffic` or `delivery`). Capture both, plus
 the CloudFormation outputs from the app stack, as the acceptance evidence. Authorization checks retry with
 backoff so a transient 403 during permission propagation is reported separately from a persistent
 authorization failure.
