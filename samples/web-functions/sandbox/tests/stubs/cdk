@@ -144,7 +144,7 @@ def log_group_expectations():
     ]
 
 
-def plant_log_group(name, retention, stored_bytes):
+def plant_log_group(name, retention, stored_bytes, events=0):
     path = os.path.join(LOGS, name.lstrip("/"))
     os.makedirs(os.path.dirname(path), exist_ok=True)
     open(path, "a").close()
@@ -152,7 +152,10 @@ def plant_log_group(name, retention, stored_bytes):
     if os.path.exists(LOG_META):
         with open(LOG_META) as handle:
             meta = json.load(handle)
-    meta[name] = {"retentionInDays": retention, "storedBytes": stored_bytes}
+    # "events" is the delivery signal verify-log-groups.sh checks via logs filter-log-events. It is kept
+    # separate from storedBytes so the offline suite reproduces real AWS (storedBytes=0 while events exist)
+    # and fails if the harness regresses to trusting storedBytes for delivery.
+    meta[name] = {"retentionInDays": retention, "storedBytes": stored_bytes, "events": events}
     with open(LOG_META, "w") as handle:
         json.dump(meta, handle)
 
@@ -220,7 +223,9 @@ def deploy(names):
             # are seeded with their configured retention; the Lambda-created ".local" companion is seeded
             # without a retention (no expiry) to mirror the service behaviour it simulates.
             for group_name, retention, _owned in app_log_groups():
-                plant_log_group(group_name, retention, 1024)
+                # storedBytes=0 mirrors real AWS (which reported 0 while events existed); events=1 gives the
+                # delivery check a real event signal to find after "traffic".
+                plant_log_group(group_name, retention, 0, events=1)
             write_stack(name, app_outputs())
         else:
             write_stack(name, [])

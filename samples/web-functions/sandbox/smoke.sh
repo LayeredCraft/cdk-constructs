@@ -637,7 +637,7 @@ else
 fi
 
 # 3.2 - revision activation
-for pair in "WebFunction:3" "WebFunctionRevision:3" "WebFunctionEndpoint:4"; do
+for pair in "WebFunction:5" "WebFunctionRevision:5" "WebFunctionEndpoint:6"; do
     type="${pair%%:*}"
     expected="${pair##*:}"
     actual="$(aws_cmd cloudformation describe-stack-resources --stack-name "${app_stack}" \

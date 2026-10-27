@@ -232,11 +232,11 @@ if service == "cloudformation" and sub == "describe-stack-resources":
         sys.exit(254)
     q = opt("--query") or ""
     if "WebFunctionRevision" in q:
-        ids = ["NextJsRevision", "AspNetCoreRevision", "BlazorRevision"]
+        ids = ["NextJsRevision", "AspNetCoreRevision", "BlazorRevision", "UseLogsRevision", "UseCompanionRevision"]
     elif "WebFunctionEndpoint" in q:
-        ids = ["NextJsDefaultEndpoint", "AspNetCoreDefaultEndpoint", "AspNetCoreAltEndpoint", "BlazorDefaultEndpoint"]
+        ids = ["NextJsDefaultEndpoint", "AspNetCoreDefaultEndpoint", "AspNetCoreAltEndpoint", "BlazorDefaultEndpoint", "UseLogsDefaultEndpoint", "UseCompanionDefaultEndpoint"]
     elif "WebFunction" in q:
-        ids = ["NextJsFunction", "AspNetCoreFunction", "BlazorFunction"]
+        ids = ["NextJsFunction", "AspNetCoreFunction", "BlazorFunction", "UseLogsFunction", "UseCompanionFunction"]
     else:
         ids = []
     if opt("--output", "json") == "text":
@@ -350,7 +350,35 @@ if service == "logs" and sub == "describe-log-groups":
     if opt("--output", "json") == "text":
         sys.stdout.write("\n".join(found) + ("\n" if found else ""))
     else:
-        sys.stdout.write(json.dumps({"logGroups": groups}) + "\n")
+        # Mirror the real CLI: --output json is pretty-printed across multiple lines.
+        sys.stdout.write(json.dumps({"logGroups": groups}, indent=2) + "\n")
+    sys.exit(0)
+
+if service == "logs" and sub == "filter-log-events":
+    # Reads the event count planted in logmeta.json. Deliberately independent of storedBytes so tests can
+    # prove delivery is verified from real events (real CloudWatch reports storedBytes=0 while events exist).
+    group = opt("--log-group-name")
+    meta = {}
+    if os.path.exists(os.path.join(STATE, "logmeta.json")):
+        with open(os.path.join(STATE, "logmeta.json")) as _mf:
+            meta = json.load(_mf)
+    count = int((meta.get(group) or {}).get("events") or 0)
+    try:
+        limit = int(opt("--limit", "1") or "1")
+    except ValueError:
+        limit = 1
+    try:
+        start = int(opt("--start-time", "0") or "0")
+    except ValueError:
+        start = 0
+    events = []
+    for i in range(min(count, limit)):
+        events.append({"timestamp": start + i, "message": "stub log event %d" % (i + 1),
+                       "ingestionTime": start + i})
+    if opt("--output", "json") == "text":
+        sys.stdout.write(" ".join(e["message"] for e in events) + ("\n" if events else ""))
+    else:
+        sys.stdout.write(json.dumps({"events": events}, indent=2) + "\n")
     sys.exit(0)
 
 if service == "logs" and sub == "delete-log-group":

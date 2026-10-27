@@ -14,8 +14,9 @@
 #       ./verify-log-groups.sh [--expect-delivery] [--attempts <n>] [--no-retry]
 #
 # Flags:
-#   --expect-delivery   after real traffic: require every expected group to exist and to hold >0 stored bytes
-#                       (the companion group Lambda creates on first request is only required in this phase)
+#   --expect-delivery   after real traffic: require every expected group to exist and to hold >0 recent log
+#                       events (queried with logs filter-log-events, not storedBytes; the companion group
+#                       Lambda creates on first request is only required in this phase)
 #   --attempts <n>      retry attempts for eventual-consistency checks (1-60, default 8)
 #   --no-retry          disable retries (equivalent to --attempts 1)
 
@@ -76,6 +77,7 @@ VG_TMP="${SANDBOX_DIR}/build/.verify-log-groups"
 mkdir -p "${VG_TMP}"
 GROUPS_FILE="${VG_TMP}/groups.json"
 EXPECT_FILE="${VG_TMP}/expectations.json"
+EVENTS_FILE="${VG_TMP}/events.json"
 SUMMARY_FILE="${SANDBOX_DIR}/build/log-group-summary.json"
 
 expectations="$(stack_output "${app_stack}" LogGroupExpectations)" ||
@@ -86,6 +88,41 @@ printf '%s' "${expectations}" >"${EXPECT_FILE}"
 
 # --- Describe the sandbox groups (bounded retries for eventual consistency) -----------------------
 
+# Query real log events for every expected group. Writes a JSON object mapping each group name to the
+# number of events found in the lookback window. Uses logs filter-log-events because storedBytes is an
+# unreliable delivery signal (it can report 0 while events exist).
+collect_events() {
+    python3 - "${EXPECT_FILE}" "${EVENTS_FILE}" <<'PY'
+import json, os, subprocess, sys
+
+expect_path, out_path = sys.argv[1], sys.argv[2]
+expectations = json.load(open(expect_path))
+region = os.environ.get("SANDBOX_REGION", "us-east-1")
+start_ms = int(__import__("time").time() * 1000) - 4 * 3600 * 1000
+
+
+def event_count(name):
+    try:
+        proc = subprocess.run(
+            ["aws", "--region", region, "logs", "filter-log-events",
+             "--log-group-name", name, "--start-time", str(start_ms),
+             "--limit", "1", "--output", "json"],
+            capture_output=True, text=True)
+        if proc.returncode != 0:
+            return 0
+        return len(json.loads(proc.stdout or "{}").get("events", []))
+    except Exception:
+        return 0
+
+
+counts = {}
+for e in expectations:
+    for key in ("Centralized", "Companion"):
+        counts[e[key]] = event_count(e[key])
+json.dump(counts, open(out_path, "w"), indent=2)
+PY
+}
+
 collect_groups() {
     local attempt=1
     local central custom
@@ -94,21 +131,16 @@ collect_groups() {
         custom="$(aws_cmd logs describe-log-groups --log-group-name-prefix "/${SANDBOX_NAMESPACE}/${SANDBOX_ID}-" --output json 2>/dev/null || printf '{"logGroups":[]}')"
         printf '%s\n%s\n' "${central}" "${custom}" >"${GROUPS_FILE}"
         [ "${expect_delivery}" -eq 0 ] && return 0
-        # In the delivery phase, keep probing until every expected group holds bytes (bounded).
-        if python3 - "${EXPECT_FILE}" "${GROUPS_FILE}" <<'PY'
+        collect_events
+        # In the delivery phase, keep probing until every expected group holds real events (bounded).
+        if python3 - "${EXPECT_FILE}" "${EVENTS_FILE}" <<'PY'
 import json, sys
+
 expectations = json.load(open(sys.argv[1]))
-groups = []
-for line in open(sys.argv[2]):
-    line = line.strip()
-    if not line:
-        continue
-    groups += json.loads(line).get("logGroups", [])
-by_name = {g.get("logGroupName"): g for g in groups}
+counts = json.load(open(sys.argv[2]))
 for e in expectations:
     for key in ("Centralized", "Companion"):
-        g = by_name.get(e[key])
-        if g is None or int(g.get("storedBytes") or 0) <= 0:
+        if int(counts.get(e[key]) or 0) <= 0:
             sys.exit(1)
 sys.exit(0)
 PY
@@ -125,19 +157,36 @@ collect_groups
 
 # --- Evaluate the expectations and write the summary ----------------------------------------------
 
-python3 - "${EXPECT_FILE}" "${GROUPS_FILE}" "${expect_delivery}" "${SUMMARY_FILE}" <<'PY'
+python3 - "${EXPECT_FILE}" "${GROUPS_FILE}" "${expect_delivery}" "${EVENTS_FILE}" "${SUMMARY_FILE}" <<'PY'
 import json, os, sys
 
-expect_path, groups_path, delivery, out_path = sys.argv[1:5]
+expect_path, groups_path, delivery, events_path, out_path = sys.argv[1:6]
 delivery = delivery == "1"
 
 expectations = json.load(open(expect_path))
-groups = []
-for line in open(groups_path):
-    line = line.strip()
-    if not line:
-        continue
-    groups += json.loads(line).get("logGroups", [])
+try:
+    events_by_name = json.load(open(events_path))
+except Exception:
+    events_by_name = {}
+
+
+def read_groups(path):
+    # The AWS CLI pretty-prints --output json across many lines, so decode a
+    # stream of concatenated JSON objects rather than assuming one object per line.
+    data = open(path).read()
+    decoder = json.JSONDecoder()
+    idx, end, out = 0, len(data), []
+    while idx < end:
+        while idx < end and data[idx] in " \t\r\n":
+            idx += 1
+        if idx >= end:
+            break
+        obj, idx = decoder.raw_decode(data, idx)
+        out += obj.get("logGroups", [])
+    return out
+
+
+groups = read_groups(groups_path)
 by_name = {g.get("logGroupName"): g for g in groups}
 
 results = []
@@ -179,12 +228,12 @@ def check_group(label, name, expected_days, must_exist, managed):
             record("FAIL", f"{label} retention",
                    f"{name} expected retentionInDays={expected_days}, got {actual}")
     if delivery:
-        stored = int(group.get("storedBytes") or 0)
-        if stored > 0:
-            record("PASS", f"{label} delivery", f"{name} storedBytes={stored}")
+        events = int(events_by_name.get(name) or 0)
+        if events > 0:
+            record("PASS", f"{label} delivery", f"{name} holds {events} recent log event(s)")
         else:
             record("FAIL", f"{label} delivery",
-                   f"{name} holds no events yet (storedBytes={stored}); invoke the function first")
+                   f"{name} holds no log events yet; invoke the function first")
 
 
 expected_names = set()
