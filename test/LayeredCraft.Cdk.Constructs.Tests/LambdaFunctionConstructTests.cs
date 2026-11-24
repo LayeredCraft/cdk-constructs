@@ -1,5 +1,8 @@
 using System;
+using System.Text.Json;
 using Amazon.CDK;
+using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.S3;
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
 using Compono.XunitV3;
@@ -89,34 +92,13 @@ public class LambdaFunctionConstructTests
         _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
-        // Verify the policy exists with correct name
+        // Verify the policy exists with correct name and is scoped to the construct's log group
         template.HasResourceProperties("AWS::IAM::Policy", Match.ObjectLike(new Dictionary<string, object>
         {
-            { "PolicyName", props.PolicyName },
-            { "PolicyDocument", Match.ObjectLike(new Dictionary<string, object>
-            {
-                { "Statement", Match.ArrayWith([
-                    // First statement: logs:CreateLogStream, logs:CreateLogGroup, logs:TagResource
-                    Match.ObjectLike(new Dictionary<string, object>
-                    {
-                        { "Effect", "Allow" },
-                        { "Action", Match.ArrayWith([
-                            "logs:CreateLogStream",
-                            "logs:CreateLogGroup", 
-                            "logs:TagResource"
-                        ]) },
-                        { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}*:*" }
-                    }),
-                    // Second statement: logs:PutLogEvents
-                    Match.ObjectLike(new Dictionary<string, object>
-                    {
-                        { "Effect", "Allow" },
-                        { "Action", "logs:PutLogEvents" },
-                        { "Resource", $"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}*:*:*" }
-                    })
-                ]) }
-            }) }
+            { "PolicyName", props.PolicyName }
         }));
+
+        template.ShouldHaveCloudWatchLogsPermissions($"{props.FunctionName}-{props.FunctionSuffix}");
     }
 
     [Theory]
@@ -221,22 +203,229 @@ public class LambdaFunctionConstructTests
         }));
     }
 
-    [Theory]
-    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
-    public void Construct_ShouldAddPermissionsToAllTargets(LambdaFunctionConstructProps props)
+    [Fact]
+    public void Construct_ShouldUseLiveAliasNameByDefault()
     {
-        var app = new App();
-        var stack = new Stack(app, "test-stack", new StackProps
-        {
-            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "us-east-1" }
-        });
-        
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath()).Build();
+
         _ = new LambdaFunctionConstruct(stack, "test-construct", props);
         var template = Template.FromStack(stack);
 
-        if (props.Permissions.Count == 0) return;
-        var expectedPermissionCount = props.Permissions.Count * 3; // function + version + alias
+        template.ShouldHaveVersionAndAlias("live");
+    }
+
+    [Fact]
+    public void Construct_ShouldUseConfiguredAliasName()
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithAliasName("prod")
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        template.ShouldHaveVersionAndAlias("prod");
+    }
+
+    [Fact]
+    public void Construct_ShouldScopeLoggingPolicyToItsLogGroup()
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        var logGroupName = $"/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}";
+        var logGroupLogicalId = template.FindResources("AWS::Logs::LogGroup").Keys.Single();
+
+        template.HasResourceProperties("AWS::IAM::Policy", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "PolicyDocument", Match.ObjectLike(new Dictionary<string, object>
+                {
+                    { "Statement", Match.ArrayWith([
+                        Match.ObjectLike(new Dictionary<string, object>
+                        {
+                            { "Effect", "Allow" },
+                            { "Action", Match.ArrayWith(["logs:CreateLogStream", "logs:PutLogEvents"]) },
+                            { "Resource", new Dictionary<string, object>
+                                {
+                                    { "Fn::GetAtt", new object[] { logGroupLogicalId, "Arn" } }
+                                }
+                            }
+                        })
+                    ]) }
+                })
+            }
+        }));
+
+        var templateJson = JsonSerializer.Serialize(template.ToJSON());
+        templateJson.Should().NotContain("logs:CreateLogGroup");
+        templateJson.Should().NotContain("logs:TagResource");
+        templateJson.Should().NotContain($"log-group:{logGroupName}*");
+    }
+
+    [Fact]
+    public void Construct_ShouldUseProvidedBucketCodeAndAddNoBucketGrants()
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+        var bucket = Bucket.FromBucketName(stack, "artifact-bucket", "my-lambda-artifacts");
+        var code = Code.FromBucketV2(bucket, "lambda/app.zip", new BucketOptions());
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("s3-code")
+            .WithCode(code)
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        template.HasResourceProperties("AWS::Lambda::Function", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "Code", Match.ObjectLike(new Dictionary<string, object>
+                {
+                    { "S3Bucket", "my-lambda-artifacts" },
+                    { "S3Key", "lambda/app.zip" }
+                })
+            }
+        }));
+
+        var templateJson = JsonSerializer.Serialize(template.ToJSON());
+        templateJson.Should().NotContain("s3:");
+    }
+
+    [Fact]
+    public void Construct_ShouldRejectBothAssetPathAndCode()
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+        var bucket = Bucket.FromBucketName(stack, "artifact-bucket", "my-lambda-artifacts");
+
+        var props = new LambdaFunctionConstructProps
+        {
+            FunctionName = "both-sources",
+            FunctionSuffix = "test",
+            AssetPath = AssetPathExtensions.GetTestLambdaZipPath(),
+            Code = Code.FromBucketV2(bucket, "lambda/app.zip", new BucketOptions()),
+            RoleName = "both-sources-role",
+            PolicyName = "both-sources-policy"
+        };
+
+        Action act = () => _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+
+        act.Should().Throw<ArgumentException>().WithMessage("*exactly one*");
+    }
+
+    [Fact]
+    public void Construct_ShouldRejectNeitherAssetPathNorCode()
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        var props = new LambdaFunctionConstructProps
+        {
+            FunctionName = "no-source",
+            FunctionSuffix = "test",
+            RoleName = "no-source-role",
+            PolicyName = "no-source-policy"
+        };
+
+        Action act = () => _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+
+        act.Should().Throw<ArgumentException>().WithMessage("*exactly one*");
+    }
+
+    [Fact]
+    public void Construct_ShouldExposeAliasAndVersion()
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithAliasName("prod")
+            .Build();
+
+        var construct = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        construct.Alias.Should().NotBeNull();
+        construct.Version.Should().NotBeNull();
+        construct.Version.Should().BeSameAs(construct.LambdaFunction.CurrentVersion);
+        construct.Alias.Should().BeOfType<Amazon.CDK.AWS.Lambda.Alias>();
+        construct.Alias?.AliasName.Should().Be("prod");
+
+        template.ResourceCountIs("AWS::Lambda::Version", 1);
+        template.ShouldHaveVersionAndAlias("prod");
+    }
+
+    [Theory]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
+    public void Construct_ShouldApplyProfilePermissionsToAliasByDefault(LambdaFunctionConstructProps props)
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
+        template.ResourceCountIs("AWS::Lambda::Permission", 1);
+        template.HasResourceProperties("AWS::Lambda::Permission", Match.ObjectLike(new Dictionary<string, object>
+        {
+            { "FunctionName", new Dictionary<string, object>
+                {
+                    { "Ref", Match.StringLikeRegexp(".*alias.*") }
+                }
+            }
+        }));
+    }
+
+    [Theory]
+    [InlineData(LambdaPermissionTargets.Function, 1)]
+    [InlineData(LambdaPermissionTargets.Version, 1)]
+    [InlineData(LambdaPermissionTargets.Alias, 1)]
+    [InlineData(LambdaPermissionTargets.Function | LambdaPermissionTargets.Version, 2)]
+    [InlineData(LambdaPermissionTargets.Function | LambdaPermissionTargets.Alias, 2)]
+    [InlineData(LambdaPermissionTargets.Version | LambdaPermissionTargets.Alias, 2)]
+    [InlineData(LambdaPermissionTargets.Function | LambdaPermissionTargets.Version | LambdaPermissionTargets.Alias, 3)]
+    public void Construct_ShouldApplyPermissionsToOnlyTheSelectedTargets(
+        LambdaPermissionTargets targets,
+        int expectedPermissionCount)
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("permission-target")
+            .WithApiGatewayPermission(
+                "arn:aws:execute-api:us-east-1:123456789012:api-id/*/GET/test",
+                targets: targets)
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+        var template = Template.FromStack(stack);
+
         template.ResourceCountIs("AWS::Lambda::Permission", expectedPermissionCount);
+    }
+
+    [Fact]
+    public void Construct_ShouldRejectPermissionWithNoTargets()
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithCustomPermission(new LambdaPermission
+            {
+                Principal = "apigateway.amazonaws.com",
+                Action = "lambda:InvokeFunction",
+                SourceArn = "arn:aws:execute-api:us-east-1:123456789012:api-id/*/GET/test",
+                Targets = LambdaPermissionTargets.None
+            })
+            .Build();
+
+        Action act = () => _ = new LambdaFunctionConstruct(stack, "test-construct", props);
+
+        act.Should().Throw<ArgumentException>().WithMessage("*no targets*");
     }
 
     [Theory]

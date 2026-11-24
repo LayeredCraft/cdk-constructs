@@ -1,4 +1,5 @@
 using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.Lambda;
 
 namespace LayeredCraft.Cdk.Constructs.Models;
 
@@ -6,7 +7,16 @@ public interface ILambdaFunctionConstructProps
 {
     string FunctionName { get; set; }
     string FunctionSuffix { get; set; }
-    string AssetPath { get; set; }
+
+    /// <summary>Path to a local Lambda deployment package. Exactly one of <see cref="AssetPath"/> or <see cref="Code"/> must be set.</summary>
+    string? AssetPath { get; set; }
+
+    /// <summary>Existing Lambda code source. Exactly one of <see cref="AssetPath"/> or <see cref="Code"/> must be set.</summary>
+    Code? Code { get; set; }
+
+    /// <summary>Name of the alias pointing at the published version (default: live).</summary>
+    string AliasName { get; set; }
+
     string RoleName { get; set; }
     string PolicyName { get; set; }
     double MemorySize { get; set; }
@@ -24,7 +34,16 @@ public sealed record LambdaFunctionConstructProps : ILambdaFunctionConstructProp
 {
     public required string FunctionName { get; set; }
     public required string FunctionSuffix { get; set; }
-    public required string AssetPath { get; set; }
+
+    /// <summary>Path to a local Lambda deployment package. Exactly one of <see cref="AssetPath"/> or <see cref="Code"/> must be set.</summary>
+    public string? AssetPath { get; set; }
+
+    /// <summary>Existing Lambda code source. Exactly one of <see cref="AssetPath"/> or <see cref="Code"/> must be set.</summary>
+    public Code? Code { get; set; }
+
+    /// <summary>Name of the alias pointing at the published version (default: live).</summary>
+    public string AliasName { get; set; } = "live";
+
     public required string RoleName { get; set; }
     public required string PolicyName { get; set; }
     public double MemorySize { get; set; } = 1024;
