@@ -8,8 +8,8 @@ permissions:
   contents: write
 
 jobs:
-  # To add support for additional .NET versions (e.g. net9, net11), add release branches
-  # (e.g. release/net9) and wire up separate caller workflows targeting those branches.
+  # To add support for additional .NET versions (e.g. net11), add release branches
+  # (e.g. release/net11) and wire up separate caller workflows targeting those branches.
 
   build:
     uses: LayeredCraft/devops-templates/.github/workflows/publish-release.yml@v11.2
