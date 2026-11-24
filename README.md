@@ -134,6 +134,7 @@ public class MyStack : Stack
 - **[DynamoDB Table Construct](https://layeredcraft.github.io/cdk-constructs/constructs/dynamodb-table)** - Production-ready DynamoDB tables with streams and indexes
 - **[Cognito User Pool Construct](https://layeredcraft.github.io/cdk-constructs/constructs/cognito-user-pool)** - Full-featured Cognito user pool with custom domains, OAuth clients, and branding
 - **[Testing Guide](https://layeredcraft.github.io/cdk-constructs/testing)** - Comprehensive testing utilities and patterns
+- **[Upgrading to 3.0](https://layeredcraft.github.io/cdk-constructs/migration/v3)** - Breaking changes and migration steps from 2.x
 - **[Examples](https://layeredcraft.github.io/cdk-constructs/examples)** - Real-world usage examples and patterns
 - **[Web Function Workloads](https://layeredcraft.github.io/cdk-constructs/examples/web-functions)** - Next.js, ASP.NET Core, and Blazor Static SSR recipes
 

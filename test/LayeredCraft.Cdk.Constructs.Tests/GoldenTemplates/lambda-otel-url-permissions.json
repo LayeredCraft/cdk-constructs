@@ -8,16 +8,15 @@
             {
               "Action": [
                 "logs:CreateLogStream",
-                "logs:CreateLogGroup",
-                "logs:TagResource"
+                "logs:PutLogEvents"
               ],
               "Effect": "Allow",
-              "Resource": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/golden-function-test*:*"
-            },
-            {
-              "Action": "logs:PutLogEvents",
-              "Effect": "Allow",
-              "Resource": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/golden-function-test*:*:*"
+              "Resource": {
+                "Fn::GetAtt": [
+                  "goldenlambdagoldenlambdaloggroup1F5BB451",
+                  "Arn"
+                ]
+              }
             }
           ],
           "Version": "2012-10-17"
@@ -133,31 +132,6 @@
       },
       "UpdateReplacePolicy": "Retain",
       "DeletionPolicy": "Retain"
-    },
-    "goldenlambdagoldenlambdafunctionCurrentVersiongoldenlambdapermissionver05EF4D9BA": {
-      "Type": "AWS::Lambda::Permission",
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Ref": "goldenlambdagoldenlambdafunctionCurrentVersionCD044A9Be5d9ec424ac6ba1a553bc90e6cedba75"
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": "arn:aws:execute-api:us-east-1:123456789012:api-id/*/GET/golden"
-      }
-    },
-    "goldenlambdagoldenlambdafunctiongoldenlambdapermissionfn08E91234F": {
-      "Type": "AWS::Lambda::Permission",
-      "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Fn::GetAtt": [
-            "goldenlambdagoldenlambdafunctionFCFBEB49",
-            "Arn"
-          ]
-        },
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": "arn:aws:execute-api:us-east-1:123456789012:api-id/*/GET/golden"
-      }
     },
     "goldenlambdagoldenlambdaaliasB00D58F9": {
       "Type": "AWS::Lambda::Alias",

@@ -1,4 +1,5 @@
 using Amazon.CDK.Assertions;
+using LayeredCraft.Cdk.Constructs.Models;
 
 namespace LayeredCraft.Cdk.Constructs.Testing;
 
@@ -22,36 +23,44 @@ public static class LambdaFunctionConstructAssertions
     }
 
     /// <summary>
-    /// Asserts that the template contains CloudWatch Logs permissions for the specified function.
+    /// Asserts that the execution role's logging policy is scoped to the construct's own log group:
+    /// only <c>logs:CreateLogStream</c> and <c>logs:PutLogEvents</c> on the log group ARN.
     /// </summary>
     /// <param name="template">The CDK template to assert against</param>
-    /// <param name="functionName">The function name to check permissions for</param>
-    /// <param name="region">AWS region (default: us-east-1)</param>
-    /// <param name="account">AWS account ID (default: 123456789012)</param>
-    public static void ShouldHaveCloudWatchLogsPermissions(this Template template, string functionName, 
+    /// <param name="functionName">The function name whose log group scopes the policy</param>
+    /// <param name="region">Unused; retained for source compatibility</param>
+    /// <param name="account">Unused; retained for source compatibility</param>
+    public static void ShouldHaveCloudWatchLogsPermissions(this Template template, string functionName,
         string region = "us-east-1", string account = "123456789012")
     {
+        var logGroups = template.FindResources("AWS::Logs::LogGroup", new Dictionary<string, object>
+        {
+            { "Properties", Match.ObjectLike(new Dictionary<string, object>
+                {
+                    { "LogGroupName", $"/aws/lambda/{functionName}" }
+                })
+            }
+        });
+
+        var logGroupLogicalId = logGroups.Keys.Single();
+
         template.HasResourceProperties("AWS::IAM::Policy", Match.ObjectLike(new Dictionary<string, object>
         {
             { "PolicyDocument", Match.ObjectLike(new Dictionary<string, object>
             {
                 { "Statement", Match.ArrayWith([
-                    // CloudWatch Logs permissions
                     Match.ObjectLike(new Dictionary<string, object>
                     {
                         { "Effect", "Allow" },
                         { "Action", Match.ArrayWith([
                             "logs:CreateLogStream",
-                            "logs:CreateLogGroup", 
-                            "logs:TagResource"
+                            "logs:PutLogEvents"
                         ]) },
-                        { "Resource", $"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/{functionName}*:*" }
-                    }),
-                    Match.ObjectLike(new Dictionary<string, object>
-                    {
-                        { "Effect", "Allow" },
-                        { "Action", "logs:PutLogEvents" },
-                        { "Resource", $"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/{functionName}*:*:*" }
+                        { "Resource", new Dictionary<string, object>
+                            {
+                                { "Fn::GetAtt", new object[] { logGroupLogicalId, "Arn" } }
+                            }
+                        }
                     })
                 ]) }
             }) }
@@ -107,14 +116,21 @@ public static class LambdaFunctionConstructAssertions
     }
 
     /// <summary>
-    /// Asserts that the template contains Lambda permissions for the specified count (function + version + alias).
+    /// Asserts that the template contains the expected number of Lambda permission resources for the
+    /// given permission count and targets.
     /// </summary>
     /// <param name="template">The CDK template to assert against</param>
-    /// <param name="permissionCount">Number of permission objects (will be multiplied by 3 for function, version, alias)</param>
-    public static void ShouldHaveLambdaPermissions(this Template template, int permissionCount)
+    /// <param name="permissionCount">Number of permission objects</param>
+    /// <param name="targets">Targets applied to each permission (default: alias only)</param>
+    public static void ShouldHaveLambdaPermissions(this Template template, int permissionCount,
+        LambdaPermissionTargets targets = LambdaPermissionTargets.Alias)
     {
-        var expectedPermissionCount = permissionCount * 3; // function + version + alias
-        template.ResourceCountIs("AWS::Lambda::Permission", expectedPermissionCount);
+        var targetCount = 0;
+        if (targets.HasFlag(LambdaPermissionTargets.Function)) targetCount++;
+        if (targets.HasFlag(LambdaPermissionTargets.Version)) targetCount++;
+        if (targets.HasFlag(LambdaPermissionTargets.Alias)) targetCount++;
+
+        template.ResourceCountIs("AWS::Lambda::Permission", permissionCount * targetCount);
     }
 
     /// <summary>

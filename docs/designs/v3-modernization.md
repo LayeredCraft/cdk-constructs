@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (revision 1, 2026-11-24), awaiting owner review. Approval of this document is an acceptance criterion of [#109](https://github.com/LayeredCraft/cdk-constructs/issues/109); it does not authorize [#110](https://github.com/LayeredCraft/cdk-constructs/issues/110), [#111](https://github.com/LayeredCraft/cdk-constructs/issues/111) or [#112](https://github.com/LayeredCraft/cdk-constructs/issues/112). |
+| **Status** | **Accepted** (revision 2, 2026-11-24). The owner approved the design on 2026-11-24 ([#109 comment](https://github.com/LayeredCraft/cdk-constructs/issues/109#issuecomment-7131032469)) and authorized [#110](https://github.com/LayeredCraft/cdk-constructs/issues/110) and [#111](https://github.com/LayeredCraft/cdk-constructs/issues/111). [#112](https://github.com/LayeredCraft/cdk-constructs/issues/112) and the stable release remain owner-gated. |
 | **Milestone** | [v3.0.0](https://github.com/LayeredCraft/cdk-constructs/milestone/1), epic [#108](https://github.com/LayeredCraft/cdk-constructs/issues/108) |
 | **Authority** | This document is the design record for 3.0.0. No standalone ADRs are written. |
 | **Target frameworks** | `net10.0`, `net11.0` |
@@ -279,16 +279,23 @@ on this construct):
    `StaticSiteConstruct`.
 7. **Consumer test projects** — no change required; the library's own tests moved to Compono.
 
-## 11. Open questions for the owner
+## 11. Owner decisions (2026-11-24)
 
-1. Approve this design (an acceptance criterion of #109).
-2. Approve or decline the proposed Web Function L2 spike issue ([§9.5](#95-recommendation)).
-3. Confirm U7's shape: `Code` as an alternative to `AssetPath` (additive) rather than replacing
-   `AssetPath`.
-4. Confirm the working name `PrivateStaticAssetsConstruct` for U6.
+1. The design is approved: .NET 10/11 only, updated dependencies and tooling, Compono-first tests,
+   U1–U4 and U7, U6.
+2. `WebFunctionConstruct` keeps its current implementation for 3.0.0 (option A). The composition
+   investigation ([§9.5](#95-recommendation)) is tracked separately and deferred in
+   [#114](https://github.com/LayeredCraft/cdk-constructs/issues/114); it does not block 3.0.0, and no
+   Web Function refactor is authorized.
+3. U7: `Code` is an alternative to `AssetPath`; existing asset-based usage is preserved.
+4. U6 is named `PrivateStaticAssetsConstruct`.
+
+The §7 open question (exposing Lambda logging configuration) was not taken up in #110: no consumer
+needs it, and adding it would need its own owner decision.
 
 ## 12. Revision history
 
 | Revision | Date | Change |
 |---|---|---|
 | 1 | 2026-11-24 | Initial proposal for owner review |
+| 2 | 2026-11-24 | Accepted; owner decisions recorded in §11; Web Function investigation deferred to #114 |

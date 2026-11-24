@@ -2,7 +2,9 @@ using Amazon.CDK;
 using Amazon.CDK.AWS.CertificateManager;
 using Amazon.CDK.AWS.Cognito;
 using Amazon.CDK.AWS.DynamoDB;
+using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.Route53;
+using Amazon.CDK.AWS.S3;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Golden;
@@ -63,6 +65,87 @@ public class ExistingConstructsGoldenTemplateTests
         _ = new LambdaFunctionConstruct(stack, "golden-lambda", props);
 
         GoldenTemplate.AssertMatches(stack, goldenFileName);
+    }
+
+    [Fact]
+    public void LambdaFunctionConstruct_AllPermissionTargets_ShouldMatchGoldenTemplate()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack("golden-lambda");
+
+        var props = new LambdaFunctionConstructProps
+        {
+            FunctionName = "golden-function",
+            FunctionSuffix = "test",
+            AssetPath = CdkTestHelper.GetTestLambdaZipPath(),
+            RoleName = "golden-role",
+            PolicyName = "golden-policy",
+            MemorySize = 1024,
+            TimeoutInSeconds = 6,
+            EnvironmentVariables = new Dictionary<string, string> { ["TABLE_NAME"] = "golden-table" },
+            Permissions =
+            [
+                new LambdaPermission
+                {
+                    Principal = "apigateway.amazonaws.com",
+                    Action = "lambda:InvokeFunction",
+                    SourceArn = "arn:aws:execute-api:us-east-1:123456789012:api-id/*/GET/golden",
+                    Targets = LambdaPermissionTargets.Function
+                        | LambdaPermissionTargets.Version
+                        | LambdaPermissionTargets.Alias
+                }
+            ]
+        };
+
+        _ = new LambdaFunctionConstruct(stack, "golden-lambda", props);
+
+        GoldenTemplate.AssertMatches(stack, "lambda-permissions-all-targets.json");
+    }
+
+    [Fact]
+    public void LambdaFunctionConstruct_S3Code_ShouldMatchGoldenTemplate()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack("golden-lambda");
+
+        var bucket = Bucket.FromBucketName(stack, "artifact-bucket", "golden-artifacts");
+
+        var props = new LambdaFunctionConstructProps
+        {
+            FunctionName = "golden-function",
+            FunctionSuffix = "test",
+            Code = Code.FromBucketV2(bucket, "app.zip", new BucketOptions()),
+            RoleName = "golden-role",
+            PolicyName = "golden-policy",
+            MemorySize = 1024,
+            TimeoutInSeconds = 6,
+            EnvironmentVariables = new Dictionary<string, string> { ["TABLE_NAME"] = "golden-table" }
+        };
+
+        _ = new LambdaFunctionConstruct(stack, "golden-lambda", props);
+
+        GoldenTemplate.AssertMatches(stack, "lambda-s3-code.json");
+    }
+
+    [Fact]
+    public void LambdaFunctionConstruct_CustomAliasName_ShouldMatchGoldenTemplate()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack("golden-lambda");
+
+        var props = new LambdaFunctionConstructProps
+        {
+            FunctionName = "golden-function",
+            FunctionSuffix = "test",
+            AssetPath = CdkTestHelper.GetTestLambdaZipPath(),
+            AliasName = "prod",
+            RoleName = "golden-role",
+            PolicyName = "golden-policy",
+            MemorySize = 1024,
+            TimeoutInSeconds = 6,
+            EnvironmentVariables = new Dictionary<string, string> { ["TABLE_NAME"] = "golden-table" }
+        };
+
+        _ = new LambdaFunctionConstruct(stack, "golden-lambda", props);
+
+        GoldenTemplate.AssertMatches(stack, "lambda-alias-name.json");
     }
 
     [Theory]

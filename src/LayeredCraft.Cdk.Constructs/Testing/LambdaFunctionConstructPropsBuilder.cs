@@ -1,4 +1,5 @@
 using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.Lambda;
 using LayeredCraft.Cdk.Constructs.Models;
 
 namespace LayeredCraft.Cdk.Constructs.Testing;
@@ -11,7 +12,9 @@ public class LambdaFunctionConstructPropsBuilder
 {
     private string _functionName = "test-function";
     private string _functionSuffix = "test";
-    private string _assetPath = "./test-lambda.zip";
+    private string? _assetPath = "./test-lambda.zip";
+    private Code? _code;
+    private string _aliasName = "live";
     private string _roleName = "test-role";
     private string _policyName = "test-policy";
     private double _memorySize = 1024;
@@ -55,6 +58,31 @@ public class LambdaFunctionConstructPropsBuilder
     public LambdaFunctionConstructPropsBuilder WithAssetPath(string assetPath)
     {
         _assetPath = assetPath;
+        _code = null;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Lambda artifact code from an existing source (for example an S3 bucket).
+    /// This replaces the asset path; provide exactly one of <c>AssetPath</c> or <c>Code</c>.
+    /// </summary>
+    /// <param name="code">The Lambda code source</param>
+    /// <returns>The builder instance for method chaining</returns>
+    public LambdaFunctionConstructPropsBuilder WithCode(Code code)
+    {
+        _code = code;
+        _assetPath = null;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Lambda alias name applied to the deployed version.
+    /// </summary>
+    /// <param name="aliasName">The alias name (default: live)</param>
+    /// <returns>The builder instance for method chaining</returns>
+    public LambdaFunctionConstructPropsBuilder WithAliasName(string aliasName)
+    {
+        _aliasName = aliasName;
         return this;
     }
 
@@ -157,16 +185,18 @@ public class LambdaFunctionConstructPropsBuilder
     /// </summary>
     /// <param name="apiArn">The API Gateway execution ARN</param>
     /// <param name="eventSourceToken">Optional event source token</param>
+    /// <param name="targets">Targets to apply the permission to (default: alias)</param>
     /// <returns>The builder instance for method chaining</returns>
     public LambdaFunctionConstructPropsBuilder WithApiGatewayPermission(string apiArn, 
-        string? eventSourceToken = null)
+        string? eventSourceToken = null, LambdaPermissionTargets targets = LambdaPermissionTargets.Alias)
     {
         _permissions.Add(new LambdaPermission
         {
             Principal = "apigateway.amazonaws.com",
             Action = "lambda:InvokeFunction",
             SourceArn = apiArn,
-            EventSourceToken = eventSourceToken
+            EventSourceToken = eventSourceToken,
+            Targets = targets
         });
         return this;
     }
@@ -175,14 +205,17 @@ public class LambdaFunctionConstructPropsBuilder
     /// Adds Alexa Skills Kit invoke permission.
     /// </summary>
     /// <param name="skillId">The Alexa skill ID</param>
+    /// <param name="targets">Targets to apply the permission to (default: alias)</param>
     /// <returns>The builder instance for method chaining</returns>
-    public LambdaFunctionConstructPropsBuilder WithAlexaPermission(string skillId)
+    public LambdaFunctionConstructPropsBuilder WithAlexaPermission(string skillId,
+        LambdaPermissionTargets targets = LambdaPermissionTargets.Alias)
     {
         _permissions.Add(new LambdaPermission
         {
             Principal = "alexa-appkit.amazon.com",
             Action = "lambda:InvokeFunction",
-            EventSourceToken = skillId
+            EventSourceToken = skillId,
+            Targets = targets
         });
         return this;
     }
@@ -290,6 +323,8 @@ public class LambdaFunctionConstructPropsBuilder
             FunctionName = _functionName,
             FunctionSuffix = _functionSuffix,
             AssetPath = _assetPath,
+            Code = _code,
+            AliasName = _aliasName,
             RoleName = _roleName,
             PolicyName = _policyName,
             MemorySize = _memorySize,
