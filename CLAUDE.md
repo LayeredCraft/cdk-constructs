@@ -18,7 +18,7 @@ This is a .NET library that provides reusable AWS CDK constructs for serverless 
 dotnet build
 
 # Run all tests (preferred method for xUnit v3)
-dotnet run --project test/LayeredCraft.Cdk.Constructs.Tests/ --framework net8.0
+dotnet run --project test/LayeredCraft.Cdk.Constructs.Tests/ --framework net10.0
 
 # Run tests for a specific project
 dotnet test test/LayeredCraft.Cdk.Constructs.Tests/
@@ -58,7 +58,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - `WebFunctionEndpointConstruct` (`IWebFunctionEndpoint`) represents each endpoint; `AddEndpoint` adds more; `GrantInvoke` (identity- or resource-policy based) and `GrantCloudFrontInvoke` are endpoint-scoped
 - `WebFunctionOrigin` returns a CloudFront `IOrigin` that configures origin access control (OAC) and the required resource-policy statement for `IamAuth` endpoints
 - Workload-neutral: Next.js, ASP.NET Core, and Blazor Static SSR deploy through the same public API; the differences live in the artifacts and configuration only
-- Requires `Amazon.CDK.Lib` 2.274.0+ (Lambda Web Functions have L1-only support in CDK)
+- Requires `Amazon.CDK.Lib` 2.278.0+; built directly on the CloudFormation L1 resources (`CfnWebFunction`, `CfnWebFunctionRevision`, `CfnWebFunctionEndpoint`, `CfnResourcePolicy`). `Amazon.CDK.Lib` 2.278.0 also ships its own L2 Web Function constructs in `Amazon.CDK.AWS.Lambda`; how this construct relates to them is being evaluated in the 3.0.0 design
 
 **StaticSiteConstruct** (`src/LayeredCraft.Cdk.Constructs/StaticSiteConstruct.cs`)
 - Comprehensive CDK construct for static website hosting
@@ -98,8 +98,9 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 5. **Versioning Strategy**: Creates new versions on every deployment with "live" alias
 
 ### Target Frameworks
-- .NET 8.0 and .NET 9.0
-- Uses AWS CDK v2 (Amazon.CDK.Lib 2.274.0 minimum; the Web Function constructs require the 2.274.0 enum values)
+- .NET 10 and .NET 11
+- Uses AWS CDK v2 (Amazon.CDK.Lib 2.278.0 minimum; the Web Function constructs require the OAC signing enum values)
+- SDK pinned by `global.json` (11.0.100, `rollForward: latestFeature`)
 
 ### OpenTelemetry Configuration (v2.0.0+)
 Starting with version 2.0.0, the OpenTelemetry layer configuration has been updated:

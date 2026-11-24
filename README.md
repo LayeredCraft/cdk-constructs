@@ -122,7 +122,7 @@ public class MyStack : Stack
 }
 ```
 
-> **Compatibility:** Lambda Web Functions require **`Amazon.CDK.Lib` 2.274.0 or later** and a Region where the feature is available. `IamAuth` endpoints are invoked by signed (SigV4) callers; `ApplicationManaged` endpoints are publicly reachable, including behind CloudFront.
+> **Compatibility:** Lambda Web Functions require **`Amazon.CDK.Lib` 2.278.0 or later** and a Region where the feature is available. `IamAuth` endpoints are invoked by signed (SigV4) callers; `ApplicationManaged` endpoints are publicly reachable, including behind CloudFront. `Amazon.CDK.Lib` 2.278.0 declares types with the same names as this library's `WebFunctionCode`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionEndpointOptions`, `IWebFunctionEndpointOptions` and `WebFunctionEndpointAttributes`; a file that imports both `Amazon.CDK.AWS.Lambda` and `LayeredCraft.Cdk.Constructs.Models` must disambiguate, for example `using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;`.
 
 ## Documentation
 
@@ -139,8 +139,8 @@ public class MyStack : Stack
 
 ## Requirements
 
-- **.NET 8.0** or **.NET 9.0**
-- **AWS CDK v2** (Amazon.CDK.Lib 2.274.0+)
+- **.NET 10** or **.NET 11**
+- **AWS CDK v2** (Amazon.CDK.Lib 2.278.0+)
 - **AWS CLI** configured with appropriate permissions
 - **Node.js** (for CDK deployment)
 
@@ -162,8 +162,10 @@ dotnet restore
 dotnet build
 
 # Run tests
-dotnet run --project test/LayeredCraft.Cdk.Constructs.Tests/ --framework net8.0
+dotnet run --project test/LayeredCraft.Cdk.Constructs.Tests/ --framework net10.0
 ```
+
+The repository pins the .NET SDK to `11.0.100` (with `rollForward: latestFeature`) in `global.json`.
 
 ### Code Style
 
