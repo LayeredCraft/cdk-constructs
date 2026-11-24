@@ -6,7 +6,7 @@ It is intentionally workload-neutral: Next.js, ASP.NET Core, and Blazor Static S
 
 !!! info "Lambda Web Functions are a new AWS feature"
     CloudFormation exposes them as `AWS::Lambda::WebFunction`, `WebFunctionRevision`, `WebFunctionEndpoint`, and
-    `AWS::Lambda::ResourcePolicy`. AWS CDK 2.274.0 has only L1 support; this construct wraps the L1s with secure
+    `AWS::Lambda::ResourcePolicy`. AWS CDK 2.278.0 has only L1 support; this construct wraps the L1s with secure
     wiring, synthesis-time validation of invalid combinations, and CDK-idiomatic grants.
 
 ## :rocket: Features
@@ -35,7 +35,7 @@ It is intentionally workload-neutral: Next.js, ASP.NET Core, and Blazor Static S
 
 ## Prerequisites
 
-- **AWS CDK for .NET 2.274.0 or later** (`Amazon.CDK.Lib`). This release adds the enum values the construct needs for OAC signing.
+- **AWS CDK for .NET 2.278.0 or later** (`Amazon.CDK.Lib`). This release provides the enum values the construct needs for OAC signing.
 - A region where Lambda Web Functions are available.
 - A **versioned** S3 bucket that holds the application zip, and an artifact uploaded before you deploy.
 - `aws-cdk` bootstrapped in the account/region if you use CDK assets elsewhere in the same app.
@@ -644,7 +644,7 @@ Detailed recipes for Next.js, ASP.NET Core (Node.js `execve` shim), and Blazor S
 - **Service-created default log groups outlive the stack.** With `WebFunctionLogs.ServiceDefault()` (or a `Use` companion the construct does not manage) the construct creates no `AWS::Logs::LogGroup`; the Lambda service creates the group on first invocation. Such groups are not part of the stack, have no expiry, and are **not** removed by CloudFormation on teardown, so they keep the invocation history after the stack is deleted. CDK-managed `Create()` groups are stack-owned and follow their `RemovalPolicy`. In disposable sandboxes, delete leftover service-created groups explicitly by exact name after destroying the stack. Do not routinely delete production log groups.
 - **IAM policy propagation.** The revision depends on the execution role's `CfnRole` only, never the role's default policy, so permissions granted to the role may not have propagated when the revision first activates. This avoids CloudFormation cycles for mutually-referencing functions.
 - **CloudFront origin-binding exceptions across jsii.** Validation that runs inside the CDK `IOrigin.Bind` path (and inside `HttpOrigin` construction) surfaces in .NET as a `System.Exception` carrying CDK's message, whereas factory-time checks throw `InvalidOperationException`.
-- **F3006 resource-type warnings.** CDK 2.274.0 emits `F3006` "Unknown resource type `AWS::Lambda::WebFunction*`" validation warnings. They are warnings by default and become **synthesis errors** when `@aws-cdk/core:validateAgainstDefaultRules` is enabled; acknowledge with `CloudFormation-Validate::F3006`.
+- **F3006 resource-type warnings.** CDK 2.278.0 emits `F3006` "Unknown resource type `AWS::Lambda::WebFunction*`" validation warnings. They are warnings by default and become **synthesis errors** when `@aws-cdk/core:validateAgainstDefaultRules` is enabled; acknowledge with `CloudFormation-Validate::F3006`.
 - **OAC naming.** The auto-created OAC name is derived from the distribution's origin scope. OAC names are unique per AWS **account** across **Regions**, so the collision risk is identical names within the *same* account — not across different accounts. If you deploy the same distribution shape repeatedly in one account, verify the generated naming still meets your conventions.
 - **Origin request policy.** Use `ALL_VIEWER_EXCEPT_HOST_HEADER`, never `ALL_VIEWER` (see [Caching and header guidance](#caching-and-header-guidance)).
 - **Customer-managed revision keys.** `KmsKeyArn` is not supported in v1. The only workaround is an unsupported escape hatch — `((CfnWebFunctionRevision)web.Node.FindChild("Revision")).KmsKeyArn = key.KeyArn` plus the key-policy grants you write.

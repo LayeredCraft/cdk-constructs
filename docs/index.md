@@ -119,8 +119,9 @@ Full-featured Cognito User Pool with:
 
 ## Requirements
 
-- **.NET 8.0** or **.NET 9.0**
-- **AWS CDK v2** (Amazon.CDK.Lib 2.274.0+)
+- **.NET 10** or **.NET 11**
+- **.NET SDK** `11.0.100` (pinned in `global.json` with `rollForward: latestFeature`)
+- **AWS CDK v2** (Amazon.CDK.Lib 2.278.0+)
 - **AWS CLI** configured with appropriate permissions
 - **Node.js** (for CDK deployment)
 
