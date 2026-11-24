@@ -108,6 +108,7 @@ nav:
   - Constructs:
     - Lambda Function: constructs/lambda-function.md
     - Static Site: constructs/static-site.md
+    - Private Static Assets: constructs/private-static-assets.md
     - DynamoDB Table: constructs/dynamodb-table.md
     - Cognito User Pool: constructs/cognito-user-pool.md
     - Web Function: constructs/web-function.md

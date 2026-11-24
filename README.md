@@ -14,6 +14,7 @@ A comprehensive library of reusable AWS CDK constructs for .NET projects, design
 - **🚀 Lambda Functions**: Comprehensive Lambda construct with configurable OpenTelemetry support, IAM management, and environment configuration
 - **🕸️ Web Functions**: AWS Lambda Web Functions served from an S3 artifact, with IAM or application-managed endpoints, endpoint-scoped grants, and CloudFront OAC origin integration
 - **🌐 Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, and Route53 DNS management
+- **🔒 Private Static Assets**: Immutable, versioned assets in a private bucket behind CloudFront OAC, with optional custom DNS
 - **📊 DynamoDB Tables**: Full-featured DynamoDB construct with streams, TTL, and global secondary indexes
 - **🔐 Cognito User Pools**: Complete Cognito user pool with custom domains, resource servers, OAuth clients, and Managed Login branding
 - **🧪 Testing Helpers**: Extensive testing utilities with fluent assertions and builders
@@ -130,6 +131,7 @@ public class MyStack : Stack
 
 - **[Lambda Function Construct](https://layeredcraft.github.io/cdk-constructs/constructs/lambda-function)** - Full-featured Lambda functions with OpenTelemetry, IAM, and more
 - **[Web Function Construct](https://layeredcraft.github.io/cdk-constructs/constructs/web-function)** - Lambda Web Functions with S3 artifacts, IAM/application-managed endpoints, and CloudFront OAC
+- **[Private Static Assets Construct](https://layeredcraft.github.io/cdk-constructs/constructs/private-static-assets)** - Private S3 bucket, CloudFront OAC, HTTPS-only, immutable versioned deployments
 - **[Static Site Construct](https://layeredcraft.github.io/cdk-constructs/constructs/static-site)** - Complete static website hosting with CloudFront and SSL
 - **[DynamoDB Table Construct](https://layeredcraft.github.io/cdk-constructs/constructs/dynamodb-table)** - Production-ready DynamoDB tables with streams and indexes
 - **[Cognito User Pool Construct](https://layeredcraft.github.io/cdk-constructs/constructs/cognito-user-pool)** - Full-featured Cognito user pool with custom domains, OAuth clients, and branding
