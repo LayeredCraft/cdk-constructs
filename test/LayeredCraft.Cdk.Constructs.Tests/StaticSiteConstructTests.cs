@@ -1,8 +1,9 @@
 using Amazon.CDK.Assertions;
+using Compono.XunitV3;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
-using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
+using LayeredCraft.Cdk.Constructs.Tests.TestKit.Profiles;
 
 namespace LayeredCraft.Cdk.Constructs.Tests;
 
@@ -31,8 +32,8 @@ public class StaticSiteConstructTests
     }
 
     [Theory]
-    [StaticSiteConstructAutoData(includeApiDomain: false, includeAlternateDomains: false)]
-    public void Construct_WithAutoFixtureData_ShouldCreateBasicStaticSite(StaticSiteConstructProps props)
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.None)]
+    public void Construct_WithComposedProps_ShouldCreateBasicStaticSite(StaticSiteConstructProps props)
     {
         // Arrange
         var (_, stack) = CdkTestHelper.CreateTestStack();
@@ -51,7 +52,7 @@ public class StaticSiteConstructTests
     }
 
     [Theory]
-    [StaticSiteConstructAutoData(includeApiDomain: true, includeAlternateDomains: false)]
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.ApiDomain)]
     public void Construct_WithApiDomain_ShouldCreateApiProxyBehavior(StaticSiteConstructProps props)
     {
         // Arrange
@@ -68,7 +69,7 @@ public class StaticSiteConstructTests
     }
 
     [Theory]
-    [StaticSiteConstructAutoData(includeApiDomain: false, includeAlternateDomains: true)]
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.AlternateDomains)]
     public void Construct_WithAlternateDomains_ShouldCreateMultipleRoute53Records(StaticSiteConstructProps props)
     {
         // Arrange
