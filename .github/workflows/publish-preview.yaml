@@ -17,16 +17,14 @@ permissions:
   pull-requests: write
 
 jobs:
-  # To add support for additional .NET versions (e.g. net9, net11), add release branches
-  # (e.g. release/net9) and wire up separate caller workflows targeting those branches.
+  # To add support for additional .NET versions (e.g. net11), add release branches
+  # (e.g. release/net11) and wire up separate caller workflows targeting those branches.
 
   build:
-    uses: LayeredCraft/devops-templates/.github/workflows/publish-preview.yml@v10.8
+    uses: LayeredCraft/devops-templates/.github/workflows/publish-preview.yml@v11.2
     with:
       solution: LayeredCraft.Cdk.Constructs.slnx
       dotnetVersion:  |
-        8.0.x
-        9.0.x
         10.0.x
         11.0.x
       hasTests: true
@@ -39,6 +37,6 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: LayeredCraft/devops-templates/.github/actions/nuget-push@v10.8
+      - uses: LayeredCraft/devops-templates/.github/actions/nuget-push@v11.2
         with:
           nuget_user: ${{ secrets.NUGET_USER }}
