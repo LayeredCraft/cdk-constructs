@@ -8,16 +8,15 @@
             {
               "Action": [
                 "logs:CreateLogStream",
-                "logs:CreateLogGroup",
-                "logs:TagResource"
+                "logs:PutLogEvents"
               ],
               "Effect": "Allow",
-              "Resource": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/golden-function-test*:*"
-            },
-            {
-              "Action": "logs:PutLogEvents",
-              "Effect": "Allow",
-              "Resource": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/golden-function-test*:*:*"
+              "Resource": {
+                "Fn::GetAtt": [
+                  "goldenlambdagoldenlambdaloggroup1F5BB451",
+                  "Arn"
+                ]
+              }
             }
           ],
           "Version": "2012-10-17"

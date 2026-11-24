@@ -20,40 +20,27 @@ public class LambdaFunctionConstruct : Construct
     /// The underlying Lambda function for advanced configuration.
     /// </summary>
     public readonly Function LambdaFunction;
+
+    /// <summary>
+    /// The published Lambda version backing the alias.
+    /// </summary>
+    public readonly IVersion Version;
+
+    /// <summary>
+    /// The Lambda alias pointed at the published version.
+    /// </summary>
+    public readonly IAlias Alias;
+
     public LambdaFunctionConstruct(Construct scope, string id, ILambdaFunctionConstructProps props) : base(scope, id)
     {
         var region = Stack.Of(this).Region;
-        var account = Stack.Of(this).Account;
+        ValidatePermissionTargets(props.Permissions);
+        var code = ResolveCode(props);
+
         var policy = new Policy(this, $"{id}-policy", new PolicyProps
         {
-            PolicyName = props.PolicyName,
-            Statements =
-            [
-                new PolicyStatement(new PolicyStatementProps
-                {
-                    Actions =
-                    [
-                        "logs:CreateLogStream",
-                        "logs:CreateLogGroup",
-                        "logs:TagResource"
-                    ],
-                    Resources = [$"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}*:*"],
-                    Effect = Effect.ALLOW
-                }),
-                new PolicyStatement(new PolicyStatementProps
-                {
-                    Actions =
-                    [
-                        "logs:PutLogEvents"
-                    ],
-                    Resources =
-                        [$"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/{props.FunctionName}-{props.FunctionSuffix}*:*:*"],
-                    Effect = Effect.ALLOW
-                })
-            ]
+            PolicyName = props.PolicyName
         });
-
-        policy.AddStatements(props.PolicyStatements);
 
         var role = new Role(this, $"{id}-role", new RoleProps
         {
@@ -70,12 +57,25 @@ public class LambdaFunctionConstruct : Construct
             RemovalPolicy = RemovalPolicy.DESTROY
         });
 
+        policy.AddStatements(new PolicyStatement(new PolicyStatementProps
+        {
+            Actions =
+            [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            Resources = [logGroup.LogGroupArn],
+            Effect = Effect.ALLOW
+        }));
+
+        policy.AddStatements(props.PolicyStatements);
+
         LambdaFunction = new Function(this, $"{id}-function", new FunctionProps
         {
             FunctionName = $"{props.FunctionName}-{props.FunctionSuffix}",
             Runtime = Runtime.PROVIDED_AL2023,
             Handler = "bootstrap",
-            Code = Code.FromAsset(props.AssetPath),
+            Code = code,
             Role = role,
             MemorySize = props.MemorySize,
             Timeout = Duration.Seconds(props.TimeoutInSeconds),
@@ -96,6 +96,7 @@ public class LambdaFunctionConstruct : Construct
 
         // ✅ Create a new version on every deployment
         var currentVersion = LambdaFunction.CurrentVersion;
+        Version = currentVersion;
 
         if (props.EnableSnapStart)
         {
@@ -113,15 +114,16 @@ public class LambdaFunctionConstruct : Construct
 
         var alias = new Alias(this, $"{id}-alias", new AliasProps
         {
-            AliasName = "live",
+            AliasName = props.AliasName,
             Version = currentVersion,
         });
-        
+        Alias = alias;
+
         AddPermissionsToAllTargets(
             baseId: $"{id}-permission",
             function: LambdaFunction,
-            version: LambdaFunction.CurrentVersion,
-            alias: alias,
+            version: Version,
+            alias: Alias,
             permissions: props.Permissions
         );
 
@@ -158,9 +160,60 @@ public class LambdaFunctionConstruct : Construct
                 SourceArn = perm.SourceArn
             };
 
-            function.AddPermission($"{baseId}-fn-{index}", permission);
-            version.AddPermission($"{baseId}-ver-{index}", permission);
-            alias?.AddPermission($"{baseId}-alias-{index}", permission);
+            if (perm.Targets.HasFlag(LambdaPermissionTargets.Function))
+            {
+                function.AddPermission($"{baseId}-fn-{index}", permission);
+            }
+
+            if (perm.Targets.HasFlag(LambdaPermissionTargets.Version))
+            {
+                version.AddPermission($"{baseId}-ver-{index}", permission);
+            }
+
+            if (alias is not null && perm.Targets.HasFlag(LambdaPermissionTargets.Alias))
+            {
+                alias.AddPermission($"{baseId}-alias-{index}", permission);
+            }
+        }
+    }
+
+    private static Code ResolveCode(ILambdaFunctionConstructProps props)
+    {
+        var assetPath = props.AssetPath;
+        var code = props.Code;
+
+        if (assetPath is not null && code is not null)
+        {
+            throw new ArgumentException(
+                "Exactly one of AssetPath or Code must be set; both were provided.",
+                nameof(props));
+        }
+
+        if (code is not null)
+        {
+            return code;
+        }
+
+        if (!string.IsNullOrWhiteSpace(assetPath))
+        {
+            return Code.FromAsset(assetPath);
+        }
+
+        throw new ArgumentException(
+            "Exactly one of AssetPath or Code must be set; neither was provided.",
+            nameof(props));
+    }
+
+    private static void ValidatePermissionTargets(List<LambdaPermission> permissions)
+    {
+        foreach (var (permission, index) in permissions.Select((p, i) => (p, i)))
+        {
+            if (permission.Targets == LambdaPermissionTargets.None)
+            {
+                throw new ArgumentException(
+                    $"Permission at index {index} has no targets. Set LambdaPermission.Targets to one or more of Function, Version, or Alias.",
+                    nameof(permissions));
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 using Amazon.CDK.Assertions;
+using Amazon.CDK.AWS.Lambda;
 using AwesomeAssertions;
 using Compono.XunitV3;
 using LayeredCraft.Cdk.Constructs;
@@ -117,8 +118,81 @@ public class TestingHelpersTests
         // Create template AFTER adding constructs to the stack
         var template = Template.FromStack(stack);
 
-        // Should have 2 permissions * 3 targets (function + version + alias) = 6 total resources
+        // Each permission is applied to the alias by default
         template.ShouldHaveLambdaPermissions(2);
+    }
+
+    [Fact]
+    public void AssertionHelpers_ShouldVerifyLambdaPermissionsForExplicitTargets()
+    {
+        var stack = CdkTestHelper.CreateTestStackMinimal();
+
+        var allTargets = LambdaPermissionTargets.Function
+            | LambdaPermissionTargets.Version
+            | LambdaPermissionTargets.Alias;
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithFunctionName("permission-targets-test")
+            .WithApiGatewayPermission(
+                "arn:aws:execute-api:us-east-1:123456789012:abcdef123/prod/GET/test",
+                targets: allTargets)
+            .WithAlexaPermission("amzn1.ask.skill.test-skill-id", allTargets)
+            .Build();
+
+        _ = new LambdaFunctionConstruct(stack, "TestConstruct", props);
+
+        var template = Template.FromStack(stack);
+
+        template.ShouldHaveLambdaPermissions(2, allTargets);
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldConfigureAliasName()
+    {
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithAliasName("staging")
+            .Build();
+
+        props.AliasName.Should().Be("staging");
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldConfigureCodeInsteadOfAssetPath()
+    {
+        var code = Code.FromInline("exports.handler = async () => {};");
+
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithCode(code)
+            .Build();
+
+        props.Code.Should().BeSameAs(code);
+        props.AssetPath.Should().BeNull();
+    }
+
+    [Fact]
+    public void PropsBuilder_ShouldConfigurePermissionTargets()
+    {
+        var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+            .WithApiGatewayPermission(
+                "arn:aws:execute-api:us-east-1:123456789012:abcdef123/prod/GET/test",
+                targets: LambdaPermissionTargets.Function | LambdaPermissionTargets.Version)
+            .Build();
+
+        props.Permissions.Should().ContainSingle();
+        props.Permissions[0].Targets.Should().Be(
+            LambdaPermissionTargets.Function | LambdaPermissionTargets.Version);
+    }
+
+    [Fact]
+    public void LambdaPermission_ShouldDefaultToAliasTarget()
+    {
+        var permission = new LambdaPermission
+        {
+            Principal = "apigateway.amazonaws.com",
+            Action = "lambda:InvokeFunction"
+        };
+
+        permission.Targets.Should().Be(LambdaPermissionTargets.Alias);
     }
 
     [Fact]

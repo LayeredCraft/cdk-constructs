@@ -45,12 +45,13 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 **LambdaFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/LambdaFunctionConstruct.cs`)
 - Main CDK construct that creates Lambda functions with comprehensive configuration
-- Automatically creates IAM roles and policies with CloudWatch Logs permissions
+- Automatically creates an IAM role whose logging policy is scoped to the construct's own log group (`logs:CreateLogStream`, `logs:PutLogEvents` on the log group ARN)
+- Code from a local asset (`AssetPath`) or any `Code` source such as an S3 artifact (`Code.FromBucketV2`); exactly one is required
 - Supports configurable OpenTelemetry layer integration via AWS managed layer (disabled by default)
 - Configurable OTEL layer version and architecture (amd64/arm64)
 - Supports AWS Lambda SnapStart for improved cold start performance
-- Creates function versions and aliases for deployment management
-- Handles Lambda permissions for multiple targets (function, version, alias)
+- Creates a version on every deployment and an alias (`AliasName`, default `live`); both are public (`Version`, `Alias`)
+- Applies each `LambdaPermission` to its `Targets` (`LambdaPermissionTargets` flags; default alias only)
 
 **WebFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/WebFunctionConstruct.cs`)
 - Creates an AWS Lambda Web Function from a versioned S3 artifact (`WebFunctionCode.FromBucket`), plus its immutable revision, default endpoint, execution role (optional), logging (optional), and the function's **single** resource-based policy
@@ -87,7 +88,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 **Configuration Models** (`src/LayeredCraft.Cdk.Constructs/Models/`)
 - `LambdaFunctionConstructProps`: Main configuration interface and record for Lambda construct
-- `LambdaPermission`: Record for defining Lambda invocation permissions
+- `LambdaPermission`: Record for defining Lambda invocation permissions; `Targets` (`LambdaPermissionTargets`) selects function, version and/or alias (default alias)
 - `StaticSiteConstructProps`: Configuration interface and record for static site construct
 - `PrivateStaticAssetsConstructProps`, `PrivateStaticAssetsDomainOptions`: configuration for the private static-assets construct
 - `DynamoDbTableConstructProps`: Configuration interface and record for DynamoDB table construct
@@ -101,9 +102,9 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 1. **Construct Pattern**: Uses AWS CDK construct pattern for reusable infrastructure components
 2. **Interface + Record Pattern**: Props classes use both interface and record for flexibility and immutability
-3. **Multi-Target Permissions**: Automatically applies permissions to function, version, and alias
+3. **Least-Privilege Permissions**: Invocation permissions go on the alias by default; function and version targets are opt-in
 4. **OpenTelemetry Integration**: Configurable support for AWS OTEL collector layer with version and architecture options
-5. **Versioning Strategy**: Creates new versions on every deployment with "live" alias
+5. **Versioning Strategy**: Creates new versions on every deployment with a configurable alias (default "live")
 
 ### Target Frameworks
 - .NET 10 and .NET 11
@@ -295,3 +296,35 @@ var stack = CdkTestHelper.CreateTestStackMinimal<MyStack, IMyProps>("stack-name"
 - This follows standard testing library patterns for accessing non-public members
 - CDK's default pattern is internal constructors, so this support is essential for real-world testing
 - The reflection approach ensures compatibility with any custom stack implementation
+## Issue Tracking (Beads)
+
+This repository tracks execution state in [Beads](https://github.com/steveyegge/beads) (`bd`, prefix `cdkc`). GitHub issues hold scope and acceptance criteria; Beads hold claims, subtasks, dependencies, gates, notes and evidence.
+
+**Storage and synchronization (owner decision, 2026-11-24).** Beads records live in an embedded Dolt database (`.beads/embeddeddolt/`, `dolt_database: cdkc`) and are synchronized through Dolt refs in this GitHub repository, the same model as the owner's Jedi Duel repository:
+
+- `refs/dolt/data` holds the Dolt database history, outside normal branches.
+- `__dolt_remote_info__` is a Beads-managed branch recording Dolt remote metadata.
+
+Both are required for synchronization. Do not delete, rename, force-update or merge them, and do not open PRs from `__dolt_remote_info__`.
+
+- Synchronize with `bd dolt pull` before writing and `bd dolt push` after writing. Never `bd dolt push --force`, and never resolve conflicts with `--strategy ours|theirs`, without the owner's approval.
+- `.beads/issues.jsonl` is **not** tracked: JSONL exports are local interchange files only (ignored by `.beads/.gitignore`). Never commit a Beads export in a PR.
+- Committed Beads files: `.beads/.gitignore`, `.beads/README.md`, `.beads/config.yaml`, `.beads/metadata.json`. The database, backups, locks and runtime state are local.
+- Bead text syncs to GitHub: never put secrets, credentials or personal data in titles, descriptions or notes.
+
+**Fresh clone or new machine:**
+
+```bash
+git clone git@github.com:LayeredCraft/cdk-constructs.git && cd cdk-constructs
+cat .beads/metadata.json              # must show "dolt_database": "cdkc"; otherwise stop
+git ls-remote origin 'refs/dolt/*'    # must show refs/dolt/data
+chmod 700 .beads
+git config beads.role maintainer
+bd bootstrap --dry-run                # expect "Bootstrap plan: clone from remote", Database: cdkc
+bd bootstrap --yes
+bd list --all                         # compare with another working copy
+```
+
+Never run `bd init` in a clone of this repository. Linked Git worktrees share the primary checkout's database.
+
+**Agents.** The orchestrating agent is the only Beads actor. Delegated implementation workers never create, modify or synchronize Beads and never edit `.beads/`.

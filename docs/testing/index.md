@@ -102,6 +102,7 @@ var (app, stack) = CdkTestHelper.CreateTestStack<MyStack, IMyProps>("stack-name"
 var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
     .WithFunctionName("my-function")
     .WithFunctionSuffix("prod")
+    .WithAliasName("prod")
     .WithMemorySize(1024)
     .WithTimeoutInSeconds(30)
     .WithEnvironmentVariable("LOG_LEVEL", "info")
@@ -115,6 +116,30 @@ var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZi
     .Build();
 
 // SnapStart is only supported for Java runtimes; avoid enabling it with the default runtime.
+```
+
+To use existing code instead of a local asset, call `WithCode`; it clears the builder's asset path so
+exactly one source is configured:
+
+```csharp
+var props = CdkTestHelper.CreatePropsBuilder()
+    .WithCode(Code.FromBucketV2(bucket, "app.zip", new BucketOptions()))
+    .Build();
+```
+
+`WithApiGatewayPermission` and `WithAlexaPermission` accept an optional `LambdaPermissionTargets`
+argument (default `Alias`). For a custom permission, set `LambdaPermission.Targets` directly:
+
+```csharp
+var props = CdkTestHelper.CreatePropsBuilder(AssetPathExtensions.GetTestLambdaZipPath())
+    .WithApiGatewayPermission(
+        "arn:aws:execute-api:us-east-1:123456789012:abcdef123/*",
+        targets: LambdaPermissionTargets.Alias)
+    .Build();
+
+var allTargets = LambdaPermissionTargets.Function
+    | LambdaPermissionTargets.Version
+    | LambdaPermissionTargets.Alias;
 ```
 
 ### OpenTelemetry Configuration (v2.0+)
@@ -148,8 +173,11 @@ template.ShouldHaveFunctionUrl();
 template.ShouldHaveFunctionUrlOutput("test-stack", "test-construct");
 
 // IAM and permissions
-template.ShouldHaveCloudWatchLogsPermissions("my-function-prod");
-template.ShouldHaveLambdaPermissions(1); // Count of permission objects
+template.ShouldHaveCloudWatchLogsPermissions("my-function-prod"); // scoped to the construct's log group
+template.ShouldHaveLambdaPermissions(1); // one permission applied to the alias only (default)
+template.ShouldHaveLambdaPermissions(
+    1,
+    LambdaPermissionTargets.Function | LambdaPermissionTargets.Version | LambdaPermissionTargets.Alias);
 
 // Environment and configuration
 template.ShouldHaveEnvironmentVariables(new Dictionary<string, string> 
@@ -159,6 +187,12 @@ template.ShouldHaveEnvironmentVariables(new Dictionary<string, string>
 template.ShouldHaveVersionAndAlias("live");
 template.ShouldHaveLogGroup("my-function-prod", 14);
 ```
+
+`ShouldHaveCloudWatchLogsPermissions` asserts the scoped policy: exactly `logs:CreateLogStream` and
+`logs:PutLogEvents` on the construct's log-group ARN (`Fn::GetAtt`), with no `logs:CreateLogGroup`,
+`logs:TagResource`, or wildcard log-group resource. `ShouldHaveLambdaPermissions` takes the
+`LambdaPermissionTargets` (default `Alias`) and multiplies by the number of permission objects, so
+the alias-only default expects one resource per permission.
 
 SnapStart-specific assertions (`template.ShouldHaveSnapStart()`) apply only when you are using a Java runtime; the default `PROVIDED_AL2023` runtime does not support SnapStart.
 

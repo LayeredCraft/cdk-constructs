@@ -113,6 +113,7 @@ nav:
     - Cognito User Pool: constructs/cognito-user-pool.md
     - Web Function: constructs/web-function.md
   - Testing: testing/index.md
+  - Upgrading to 3.0: migration/v3.md
   - Examples:
     - Overview: examples/index.md
     - Web Function Workloads: examples/web-functions.md
