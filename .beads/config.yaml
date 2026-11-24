@@ -75,7 +75,3 @@ sync:
     remote: "git+ssh://git@github.com/LayeredCraft/cdk-constructs.git"
 dolt:
     auto-push: false
-export:
-    auto: true
-    git-add: false
-no-git-ops: true

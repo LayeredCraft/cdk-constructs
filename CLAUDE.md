@@ -283,3 +283,35 @@ var stack = CdkTestHelper.CreateTestStackMinimal<MyStack, IMyProps>("stack-name"
 - This follows standard testing library patterns for accessing non-public members
 - CDK's default pattern is internal constructors, so this support is essential for real-world testing
 - The reflection approach ensures compatibility with any custom stack implementation
+## Issue Tracking (Beads)
+
+This repository tracks execution state in [Beads](https://github.com/steveyegge/beads) (`bd`, prefix `cdkc`). GitHub issues hold scope and acceptance criteria; Beads hold claims, subtasks, dependencies, gates, notes and evidence.
+
+**Storage and synchronization (owner decision, 2026-11-24).** Beads records live in an embedded Dolt database (`.beads/embeddeddolt/`, `dolt_database: cdkc`) and are synchronized through Dolt refs in this GitHub repository, the same model as the owner's Jedi Duel repository:
+
+- `refs/dolt/data` holds the Dolt database history, outside normal branches.
+- `__dolt_remote_info__` is a Beads-managed branch recording Dolt remote metadata.
+
+Both are required for synchronization. Do not delete, rename, force-update or merge them, and do not open PRs from `__dolt_remote_info__`.
+
+- Synchronize with `bd dolt pull` before writing and `bd dolt push` after writing. Never `bd dolt push --force`, and never resolve conflicts with `--strategy ours|theirs`, without the owner's approval.
+- `.beads/issues.jsonl` is **not** tracked: JSONL exports are local interchange files only (ignored by `.beads/.gitignore`). Never commit a Beads export in a PR.
+- Committed Beads files: `.beads/.gitignore`, `.beads/README.md`, `.beads/config.yaml`, `.beads/metadata.json`. The database, backups, locks and runtime state are local.
+- Bead text syncs to GitHub: never put secrets, credentials or personal data in titles, descriptions or notes.
+
+**Fresh clone or new machine:**
+
+```bash
+git clone git@github.com:LayeredCraft/cdk-constructs.git && cd cdk-constructs
+cat .beads/metadata.json              # must show "dolt_database": "cdkc"; otherwise stop
+git ls-remote origin 'refs/dolt/*'    # must show refs/dolt/data
+chmod 700 .beads
+git config beads.role maintainer
+bd bootstrap --dry-run                # expect "Bootstrap plan: clone from remote", Database: cdkc
+bd bootstrap --yes
+bd list --all                         # compare with another working copy
+```
+
+Never run `bd init` in a clone of this repository. Linked Git worktrees share the primary checkout's database.
+
+**Agents.** The orchestrating agent is the only Beads actor. Delegated implementation workers never create, modify or synchronize Beads and never edit `.beads/`.
