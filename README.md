@@ -122,7 +122,7 @@ public class MyStack : Stack
 }
 ```
 
-> **Compatibility:** Lambda Web Functions require **`Amazon.CDK.Lib` 2.278.0 or later** and a Region where the feature is available. `IamAuth` endpoints are invoked by signed (SigV4) callers; `ApplicationManaged` endpoints are publicly reachable, including behind CloudFront. `Amazon.CDK.Lib` 2.278.0 declares types with the same names as this library's `WebFunctionCode`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionEndpointOptions`, `IWebFunctionEndpointOptions` and `WebFunctionEndpointAttributes`; a file that imports both `Amazon.CDK.AWS.Lambda` and `LayeredCraft.Cdk.Constructs.Models` must disambiguate, for example `using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;`.
+> **Compatibility:** Lambda Web Functions require **`Amazon.CDK.Lib` 2.278.0 or later** and a Region where the feature is available. `IamAuth` endpoints are invoked by signed (SigV4) callers; `ApplicationManaged` endpoints are publicly reachable, including behind CloudFront. `Amazon.CDK.Lib` 2.278.0 declares types with the same names as this library's `IWebFunctionEndpoint` (namespace `LayeredCraft.Cdk.Constructs`) and its `WebFunctionCode`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionEndpointOptions`, `IWebFunctionEndpointOptions` and `WebFunctionEndpointAttributes`; a file that imports `Amazon.CDK.AWS.Lambda` together with `LayeredCraft.Cdk.Constructs` or `LayeredCraft.Cdk.Constructs.Models` must disambiguate, for example `using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;`.
 
 ## Documentation
 

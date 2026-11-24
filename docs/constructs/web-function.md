@@ -38,7 +38,7 @@ It is intentionally workload-neutral: Next.js, ASP.NET Core, and Blazor Static S
 ## Prerequisites
 
 - **AWS CDK for .NET 2.278.0 or later** (`Amazon.CDK.Lib`). This release provides the enum values the construct needs for OAC signing.
-- **Name disambiguation.** `Amazon.CDK.Lib` 2.278.0 declares types with the same names as this library's `WebFunctionCode`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionEndpointOptions`, `IWebFunctionEndpointOptions` and `WebFunctionEndpointAttributes`. A file that imports both `Amazon.CDK.AWS.Lambda` and `LayeredCraft.Cdk.Constructs.Models` must disambiguate, for example `using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;`.
+- **Name disambiguation.** `Amazon.CDK.Lib` 2.278.0 declares types with the same names as this library's `IWebFunctionEndpoint` (namespace `LayeredCraft.Cdk.Constructs`) and its `WebFunctionCode`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionEndpointOptions`, `IWebFunctionEndpointOptions` and `WebFunctionEndpointAttributes`. A file that imports `Amazon.CDK.AWS.Lambda` together with `LayeredCraft.Cdk.Constructs` or `LayeredCraft.Cdk.Constructs.Models` must disambiguate, for example `using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;`.
 - A region where Lambda Web Functions are available.
 - A **versioned** S3 bucket that holds the application zip, and an artifact uploaded before you deploy.
 - `aws-cdk` bootstrapped in the account/region if you use CDK assets elsewhere in the same app.
