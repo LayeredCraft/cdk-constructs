@@ -856,6 +856,100 @@ public class PrivateStaticAssetsConstructTests
         act.Should().Throw<ArgumentException>();
     }
 
+    // ---- Certificate region (CloudFront viewer certificates must be in us-east-1) ----
+
+    [Fact]
+    public void Construct_ShouldThrowWhenCreatingCertificateOutsideUsEast1()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack("test-stack", "eu-west-1", "123456789012");
+        var zone = HostedZone.FromHostedZoneAttributes(stack, "HostedZone", new HostedZoneAttributes
+        {
+            HostedZoneId = "Z1234567890ABC",
+            ZoneName = "example.com",
+        });
+        var props = CreateProps();
+        props.Domain = new PrivateStaticAssetsDomainOptions
+        {
+            DomainNames = ["assets.example.com"],
+            HostedZone = zone,
+        };
+
+        var act = () => new PrivateStaticAssetsConstruct(stack, "assets", props);
+
+        act.Should().Throw<ArgumentException>().WithMessage("*us-east-1*");
+    }
+
+    [Fact]
+    public void Construct_ShouldAcceptSuppliedCertificateOutsideUsEast1()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack("test-stack", "eu-west-1", "123456789012");
+        var zone = HostedZone.FromHostedZoneAttributes(stack, "HostedZone", new HostedZoneAttributes
+        {
+            HostedZoneId = "Z1234567890ABC",
+            ZoneName = "example.com",
+        });
+        var certificate = Certificate.FromCertificateArn(
+            stack,
+            "Certificate",
+            "arn:aws:acm:us-east-1:123456789012:certificate/11111111-2222-3333-4444-555555555555");
+        var props = CreateProps();
+        props.Domain = new PrivateStaticAssetsDomainOptions
+        {
+            DomainNames = ["assets.example.com"],
+            Certificate = certificate,
+            HostedZone = zone,
+        };
+
+        var act = () => new PrivateStaticAssetsConstruct(stack, "assets", props);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Construct_ShouldCreateCertificateWhenStackIsUsEast1()
+    {
+        var (_, stack) = CdkTestHelper.CreateTestStack("test-stack", "us-east-1", "123456789012");
+        var zone = HostedZone.FromHostedZoneAttributes(stack, "HostedZone", new HostedZoneAttributes
+        {
+            HostedZoneId = "Z1234567890ABC",
+            ZoneName = "example.com",
+        });
+        var props = CreateProps();
+        props.Domain = new PrivateStaticAssetsDomainOptions
+        {
+            DomainNames = ["assets.example.com"],
+            HostedZone = zone,
+        };
+
+        _ = new PrivateStaticAssetsConstruct(stack, "assets", props);
+
+        var template = Template.FromStack(stack);
+        template.ResourceCountIs("AWS::CertificateManager::Certificate", 1);
+    }
+
+    [Fact]
+    public void Construct_ShouldCreateCertificateWhenStackRegionIsUnresolved()
+    {
+        var app = new App();
+        var stack = new Stack(app, "test-stack", new StackProps());
+        var zone = HostedZone.FromHostedZoneAttributes(stack, "HostedZone", new HostedZoneAttributes
+        {
+            HostedZoneId = "Z1234567890ABC",
+            ZoneName = "example.com",
+        });
+        var props = CreateProps();
+        props.Domain = new PrivateStaticAssetsDomainOptions
+        {
+            DomainNames = ["assets.example.com"],
+            HostedZone = zone,
+        };
+
+        _ = new PrivateStaticAssetsConstruct(stack, "assets", props);
+
+        var template = Template.FromStack(stack);
+        template.ResourceCountIs("AWS::CertificateManager::Certificate", 1);
+    }
+
     // ---- Public properties and composed props ----
 
     [Fact]

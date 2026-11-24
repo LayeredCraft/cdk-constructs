@@ -151,7 +151,11 @@ public record PrivateStaticAssetsDomainOptions
 
     /// <summary>
     /// Optional certificate for the domain names. When omitted, a DNS-validated certificate is created using
-    /// the hosted zone.
+    /// the hosted zone. Because CloudFront only accepts viewer certificates from <c>us-east-1</c>, the construct
+    /// rejects certificate creation when the stack region is resolved and is not <c>us-east-1</c>; supply a
+    /// certificate created in <c>us-east-1</c> instead. A supplied certificate is accepted in any stack region.
+    /// An environment-agnostic stack (an unresolved region) cannot be checked at synthesis and keeps creating
+    /// the certificate.
     /// </summary>
     public ICertificate? Certificate { get; set; }
 

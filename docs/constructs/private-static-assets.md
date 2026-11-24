@@ -129,7 +129,7 @@ var assets = new PrivateStaticAssetsConstruct(this, "GameAssets", new PrivateSta
 | Property | Type | Description |
 |----------|------|-------------|
 | `DomainNames` | `string[]` | The custom domain names (at least one) |
-| `Certificate` | `ICertificate?` | Certificate for the domain names; created (DNS-validated) when omitted. CloudFront only accepts certificates in `us-east-1`, so a created certificate requires a `us-east-1` stack |
+| `Certificate` | `ICertificate?` | Certificate for the domain names; created (DNS-validated) when omitted. Because CloudFront only accepts viewer certificates from `us-east-1`, the construct rejects certificate creation when the stack region is resolved and is not `us-east-1`; supply a certificate created in `us-east-1` instead. A supplied certificate is accepted in any stack region |
 | `HostedZone` | `IHostedZone?` | Hosted zone for validation and records; mutually exclusive with `HostedZoneName` |
 | `HostedZoneName` | `string?` | Hosted-zone name looked up with `HostedZone.FromLookup`; mutually exclusive with `HostedZone` |
 
@@ -137,7 +137,10 @@ Validation at construction (`ArgumentException`):
 
 - no domain names;
 - both `HostedZone` and `HostedZoneName` set;
-- neither a `Certificate` nor a hosted zone (or hosted-zone name) available.
+- neither a `Certificate` nor a hosted zone (or hosted-zone name) available;
+- no `Certificate` and the stack region is resolved and is not `us-east-1` (a CloudFront viewer certificate must
+  be created in `us-east-1`; supply a `Certificate` created there). An environment-agnostic stack (unresolved
+  region) cannot be checked at synthesis and keeps creating the certificate.
 
 ## CloudFront Configuration
 

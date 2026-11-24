@@ -187,6 +187,21 @@ public class PrivateStaticAssetsConstruct : Construct
                 nameof(domain));
         }
 
+        if (domain.Certificate is null)
+        {
+            // CloudFront only accepts viewer certificates from us-east-1. The check is skipped when the stack
+            // region is a token (environment-agnostic stack), because it cannot be resolved at synthesis.
+            var region = Stack.Of(this).Region;
+            if (!Token.IsUnresolved(region) && region != "us-east-1")
+            {
+                throw new ArgumentException(
+                    $"A CloudFront viewer certificate must be created in us-east-1, but the stack region is " +
+                    $"'{region}'. Supply a Certificate created in us-east-1 (for example via " +
+                    "Certificate.FromCertificateArn).",
+                    nameof(domain));
+            }
+        }
+
         certificate = domain.Certificate
             ?? new Certificate(this, $"{id}-certificate", new CertificateProps
             {
