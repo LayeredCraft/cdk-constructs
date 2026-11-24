@@ -127,7 +127,7 @@ public class LambdaFunctionConstruct : Construct
 
         if (props.GenerateUrl)
         {
-            var functionUrl = alias.AddFunctionUrl(new FunctionUrlProps
+            var functionUrl = alias.AddFunctionUrl(new FunctionUrlOptions
             {
                 AuthType = FunctionUrlAuthType.NONE
             });
