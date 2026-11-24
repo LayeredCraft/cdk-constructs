@@ -18,7 +18,7 @@ This is a .NET library that provides reusable AWS CDK constructs for serverless 
 dotnet build
 
 # Run all tests (preferred method for xUnit v3)
-dotnet run --project test/LayeredCraft.Cdk.Constructs.Tests/ --framework net8.0
+dotnet run --project test/LayeredCraft.Cdk.Constructs.Tests/ --framework net10.0
 
 # Run tests for a specific project
 dotnet test test/LayeredCraft.Cdk.Constructs.Tests/
@@ -58,7 +58,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - `WebFunctionEndpointConstruct` (`IWebFunctionEndpoint`) represents each endpoint; `AddEndpoint` adds more; `GrantInvoke` (identity- or resource-policy based) and `GrantCloudFrontInvoke` are endpoint-scoped
 - `WebFunctionOrigin` returns a CloudFront `IOrigin` that configures origin access control (OAC) and the required resource-policy statement for `IamAuth` endpoints
 - Workload-neutral: Next.js, ASP.NET Core, and Blazor Static SSR deploy through the same public API; the differences live in the artifacts and configuration only
-- Requires `Amazon.CDK.Lib` 2.274.0+ (Lambda Web Functions have L1-only support in CDK)
+- Requires `Amazon.CDK.Lib` 2.278.0+; built directly on the CloudFormation L1 resources (`CfnWebFunction`, `CfnWebFunctionRevision`, `CfnWebFunctionEndpoint`, `CfnResourcePolicy`). `Amazon.CDK.Lib` 2.278.0 also ships its own L2 Web Function constructs in `Amazon.CDK.AWS.Lambda`; how this construct relates to them is being evaluated in the 3.0.0 design
 
 **StaticSiteConstruct** (`src/LayeredCraft.Cdk.Constructs/StaticSiteConstruct.cs`)
 - Comprehensive CDK construct for static website hosting
@@ -98,8 +98,9 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 5. **Versioning Strategy**: Creates new versions on every deployment with "live" alias
 
 ### Target Frameworks
-- .NET 8.0 and .NET 9.0
-- Uses AWS CDK v2 (Amazon.CDK.Lib 2.274.0 minimum; the Web Function constructs require the 2.274.0 enum values)
+- .NET 10 and .NET 11
+- Uses AWS CDK v2 (Amazon.CDK.Lib 2.278.0 minimum; the Web Function constructs require the OAC signing enum values)
+- SDK pinned by `global.json` (11.0.100, `rollForward: latestFeature`)
 
 ### OpenTelemetry Configuration (v2.0.0+)
 Starting with version 2.0.0, the OpenTelemetry layer configuration has been updated:
@@ -123,28 +124,30 @@ var props = new LambdaFunctionConstructProps
 ## Testing Framework
 
 ### Test Structure
-- Uses xUnit v3 with AutoFixture for data generation
+- xUnit v3 on Microsoft.Testing.Platform (`xunit.v3.mtp-v2`; `global.json` selects the MTP runner). There is no VSTest adapter (`Microsoft.NET.Test.Sdk` and `xunit.runner.visualstudio` were removed in 3.0.0).
+- Compono (`Compono`, `Compono.XunitV3`) for test composition; no AutoFixture and no NSubstitute
 - AwesomeAssertions for fluent assertions
-- NSubstitute for mocking (though not heavily used in current tests)
 - AWS CDK Template assertions for infrastructure testing
 
 ### Test Architecture
-**Custom Attributes**:
-- `LambdaFunctionConstructAutoDataAttribute`: AutoFixture attribute with customizable parameters
-- `WebFunctionConstructAutoDataAttribute`: AutoFixture attribute supplying deterministic Web Function props (imported, externally managed artifact bucket)
-- `BaseFixtureFactory`: Factory for creating configured AutoFixture instances
+**Composition profiles** (`TestKit/Profiles/`), one `ICompositionProfile` per construct's props, used with `[Compose<TProfile>]` or `[Compose<TProfile, TConfig>]`:
+- `LambdaFunctionConstructPropsProfile` + `LambdaFunctionConstructPropsConfig(LambdaFunctionConstructPropsOptions)` (`[Flags]`: `OtelLayer`, `Permissions`, `FunctionUrl`)
+- `StaticSiteConstructPropsProfile` + `StaticSiteConstructPropsConfig(StaticSiteConstructPropsOptions)` (`ApiDomain`, `AlternateDomains`)
+- `CognitoUserPoolConstructPropsProfile` + its config (branding on/off)
+- `DynamoDbTableConstructPropsProfile`, `WebFunctionConstructPropsProfile` (no per-test configuration)
 
-**Test Customizations**:
-- `LambdaFunctionConstructCustomization`: Configures realistic test data for Lambda constructs
-- `WebFunctionConstructCustomization`: Configures realistic test data for Web Function constructs
-- `StaticSiteConstructCustomization`: Configures realistic test data for static site constructs
-- Supports parameterized test scenarios for Lambda (OTEL layer on/off, permissions included/excluded) and static sites (API domain on/off, alternate domains included/excluded)
+Example:
+```csharp
+[Theory]
+[Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
+public void Construct_ShouldCreateLambdaFunction(LambdaFunctionConstructProps props) { ... }
+```
 
 ### Test Data Strategy
-- Uses AutoFixture with custom configurations for realistic AWS resource names
+- Behavior-defining values (resource names, domains, asset paths) are visible literals in the profiles. Incidental values (for example Lambda memory and timeout, Web Function log levels) are generated deterministically from the composition context, within valid AWS ranges.
+- The props members are optional (non-`required`), which Compono's generated plans do not populate, so each profile registers a factory; the reason is documented in each profile.
+- Load the Compono consumer skill before changing these tests; never reintroduce AutoFixture or reflection-based workarounds.
 - Test assets include `test-lambda.zip` for Lambda deployment packages and `static-site/` folder for static site assets
-- Tests verify both resource creation and property configuration
-- Supports parameterized scenarios for both Lambda (OTEL layer on/off, permissions included/excluded) and static sites (API domain on/off, alternate domains included/excluded)
 
 ### Testing Helpers (`src/LayeredCraft.Cdk.Constructs/Testing/`)
 The library includes comprehensive testing helpers for consumers:
@@ -214,7 +217,7 @@ The library includes comprehensive testing helpers for consumers:
 ## Development Practices
 
 ### Code Style
-- C# 12+ features enabled (records, required properties, collection expressions)
+- `LangVersion` default: the C# version the SDK selects for each target framework (records, required properties, collection expressions)
 - Nullable reference types enabled
 - Implicit usings enabled
 - Uses `required` properties for mandatory configuration

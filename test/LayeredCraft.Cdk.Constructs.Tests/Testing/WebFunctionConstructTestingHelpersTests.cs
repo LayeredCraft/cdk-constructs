@@ -9,10 +9,11 @@ using LogGroup = Amazon.CDK.AWS.Logs.LogGroup;
 using LogGroupProps = Amazon.CDK.AWS.Logs.LogGroupProps;
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
+using Compono.XunitV3;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
-using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
+using LayeredCraft.Cdk.Constructs.Tests.TestKit.Profiles;
 
 namespace LayeredCraft.Cdk.Constructs.Tests.Testing;
 
@@ -777,11 +778,11 @@ public class WebFunctionConstructTestingHelpersTests
         act.Should().Throw<InvalidOperationException>();
     }
 
-    // ---- D6: AutoData fixture is jsii-compatible -------------------------------
+    // ---- D6: composed props are jsii-compatible --------------------------------
 
     [Theory]
-    [WebFunctionConstructAutoData]
-    public void WebFunctionConstructAutoData_ShouldSupplySynthesizableProps(WebFunctionConstructProps props)
+    [Compose<WebFunctionConstructPropsProfile>]
+    public void WebFunctionConstructPropsProfile_ShouldSupplySynthesizableProps(WebFunctionConstructProps props)
     {
         var (_, stack) = CdkTestHelper.CreateTestStack();
 

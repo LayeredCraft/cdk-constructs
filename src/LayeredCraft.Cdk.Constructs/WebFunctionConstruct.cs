@@ -8,6 +8,10 @@ using Amazon.CDK.AWS.Logs;
 using Amazon.JSII.Runtime.Deputy;
 using Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
+// Amazon.CDK.Lib 2.278.0 adds same-named Web Function types to Amazon.CDK.AWS.Lambda;
+// these aliases keep this library's own types unambiguous.
+using IWebFunctionEndpointOptions = LayeredCraft.Cdk.Constructs.Models.IWebFunctionEndpointOptions;
+using WebFunctionEndpointType = LayeredCraft.Cdk.Constructs.Models.WebFunctionEndpointType;
 
 namespace LayeredCraft.Cdk.Constructs;
 

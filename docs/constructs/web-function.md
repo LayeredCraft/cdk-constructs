@@ -6,8 +6,10 @@ It is intentionally workload-neutral: Next.js, ASP.NET Core, and Blazor Static S
 
 !!! info "Lambda Web Functions are a new AWS feature"
     CloudFormation exposes them as `AWS::Lambda::WebFunction`, `WebFunctionRevision`, `WebFunctionEndpoint`, and
-    `AWS::Lambda::ResourcePolicy`. AWS CDK 2.274.0 has only L1 support; this construct wraps the L1s with secure
-    wiring, synthesis-time validation of invalid combinations, and CDK-idiomatic grants.
+    `AWS::Lambda::ResourcePolicy`. This construct is built directly on those CloudFormation L1 resources, wrapping
+    them with secure wiring, synthesis-time validation of invalid combinations, and CDK-idiomatic grants.
+    `Amazon.CDK.Lib` 2.278.0 also ships its own L2 Web Function constructs in `Amazon.CDK.AWS.Lambda`; how this
+    construct relates to them is being evaluated in the 3.0.0 design.
 
 ## :rocket: Features
 
@@ -35,7 +37,8 @@ It is intentionally workload-neutral: Next.js, ASP.NET Core, and Blazor Static S
 
 ## Prerequisites
 
-- **AWS CDK for .NET 2.274.0 or later** (`Amazon.CDK.Lib`). This release adds the enum values the construct needs for OAC signing.
+- **AWS CDK for .NET 2.278.0 or later** (`Amazon.CDK.Lib`). This release provides the enum values the construct needs for OAC signing.
+- **Name disambiguation.** `Amazon.CDK.Lib` 2.278.0 declares types with the same names as this library's `IWebFunctionEndpoint` (namespace `LayeredCraft.Cdk.Constructs`) and its `WebFunctionCode`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionEndpointOptions`, `IWebFunctionEndpointOptions` and `WebFunctionEndpointAttributes`. A file that imports `Amazon.CDK.AWS.Lambda` together with `LayeredCraft.Cdk.Constructs` or `LayeredCraft.Cdk.Constructs.Models` must disambiguate, for example `using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;`.
 - A region where Lambda Web Functions are available.
 - A **versioned** S3 bucket that holds the application zip, and an artifact uploaded before you deploy.
 - `aws-cdk` bootstrapped in the account/region if you use CDK assets elsewhere in the same app.

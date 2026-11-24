@@ -134,7 +134,7 @@ public class StaticSiteConstruct : Construct
                 ProtocolPolicy = OriginProtocolPolicy.HTTPS_ONLY
             });
 
-            var apiBehaviorOptions = new BehaviorOptions
+            var apiBehaviorOptions = new AddBehaviorOptions
             {
                 AllowedMethods = AllowedMethods.ALLOW_ALL,
                 CachePolicy = CachePolicy.CACHING_DISABLED,
