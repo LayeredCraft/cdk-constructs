@@ -20,13 +20,18 @@ public enum LambdaFunctionConstructPropsOptions
 public sealed record LambdaFunctionConstructPropsConfig(LambdaFunctionConstructPropsOptions Options);
 
 /// <summary>
-/// Composes the deterministic, realistic <see cref="LambdaFunctionConstructProps"/> test data the
-/// Lambda construct tests rely on.
+/// Supplies the deterministic, realistic <see cref="LambdaFunctionConstructProps"/> test data the Lambda
+/// construct tests rely on. The incidental <see cref="LambdaFunctionConstructProps.MemorySize"/> and
+/// <see cref="LambdaFunctionConstructProps.TimeoutInSeconds"/> are generated from the composition context
+/// (constrained to the ranges AWS Lambda accepts: memory 128-10240 MB, timeout 1-900 s).
 /// </summary>
 public sealed class LambdaFunctionConstructPropsProfile(LambdaFunctionConstructPropsConfig config) : ICompositionProfile
 {
+    // Compono does not provide this because composition populates constructor parameters and required
+    // members only; every behavior-defining member of LambdaFunctionConstructProps is an optional
+    // (non-required) property, so a registration factory supplies the whole value.
     public void Configure(CompositionBuilder builder) =>
-        builder.Register(() => new LambdaFunctionConstructProps
+        builder.Register(context => new LambdaFunctionConstructProps
         {
             FunctionName = "test-function",
             FunctionSuffix = "disney-trivia",
@@ -59,5 +64,8 @@ public sealed class LambdaFunctionConstructPropsProfile(LambdaFunctionConstructP
                 : [],
             EnableSnapStart = false,
             GenerateUrl = config.Options.HasFlag(LambdaFunctionConstructPropsOptions.FunctionUrl),
+            // Incidental values, generated deterministically within Lambda's valid ranges.
+            MemorySize = 128 + (int)((uint)context.DeriveSeed() % 10113u),
+            TimeoutInSeconds = 1 + (int)((uint)context.DeriveSeed() % 900u),
         });
 }

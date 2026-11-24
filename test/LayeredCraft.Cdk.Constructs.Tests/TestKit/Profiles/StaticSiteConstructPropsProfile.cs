@@ -19,11 +19,15 @@ public enum StaticSiteConstructPropsOptions
 public sealed record StaticSiteConstructPropsConfig(StaticSiteConstructPropsOptions Options);
 
 /// <summary>
-/// Composes the deterministic, realistic <see cref="StaticSiteConstructProps"/> test data the static
-/// site construct tests rely on.
+/// Supplies the deterministic, realistic <see cref="StaticSiteConstructProps"/> test data the static site
+/// construct tests rely on. Every member was pinned by the previous customization, so every member is a
+/// behavior-defining literal here too.
 /// </summary>
 public sealed class StaticSiteConstructPropsProfile(StaticSiteConstructPropsConfig config) : ICompositionProfile
 {
+    // Compono does not provide this because composition populates constructor parameters and required
+    // members only; the behavior-defining ApiDomain/AlternateDomains members are optional (non-required)
+    // properties, so a registration factory supplies the whole value.
     public void Configure(CompositionBuilder builder) =>
         builder.Register(() => new StaticSiteConstructProps
         {

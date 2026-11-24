@@ -18,8 +18,10 @@ public enum CognitoUserPoolConstructPropsOptions
 public sealed record CognitoUserPoolConstructPropsConfig(CognitoUserPoolConstructPropsOptions Options);
 
 /// <summary>
-/// Composes the deterministic, realistic <see cref="CognitoUserPoolConstructProps"/> test data the
-/// Cognito user pool construct tests rely on.
+/// Supplies the deterministic, realistic <see cref="CognitoUserPoolConstructProps"/> test data the Cognito
+/// user pool construct tests rely on. The previous customization built the whole value through the props
+/// builder (never letting AutoFixture generate a member), so every member is a behavior-defining literal
+/// here too, produced from a single builder-built template.
 /// </summary>
 public sealed class CognitoUserPoolConstructPropsProfile(CognitoUserPoolConstructPropsConfig config) : ICompositionProfile
 {
@@ -37,6 +39,9 @@ public sealed class CognitoUserPoolConstructPropsProfile(CognitoUserPoolConstruc
         }
         """;
 
+    // Compono does not provide this because composition populates constructor parameters and required
+    // members only; the behavior-defining members (clients, domain, groups, resource servers) are optional
+    // (non-required) properties, so a registration factory supplies the whole value.
     public void Configure(CompositionBuilder builder) =>
         builder.Register(() => CdkTestHelper.CreateCognitoUserPoolPropsBuilder()
             .AddResourceServer(
