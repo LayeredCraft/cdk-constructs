@@ -1,10 +1,11 @@
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
+using Compono.XunitV3;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Extensions;
-using LayeredCraft.Cdk.Constructs.Tests.TestKit.Customizations;
+using LayeredCraft.Cdk.Constructs.Tests.TestKit.Profiles;
 
 namespace LayeredCraft.Cdk.Constructs.Tests.Testing;
 
@@ -672,102 +673,54 @@ public class TestingHelpersTests
         stack.IsInternalConstructor.Should().BeTrue();
     }
 
-    [Fact]
-    public void StaticSiteConstructCustomization_WithApiDomainIncluded_ShouldSetApiDomain()
+    [Theory]
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.ApiDomain)]
+    public void StaticSiteConstructPropsProfile_WithApiDomainIncluded_ShouldSetApiDomain(StaticSiteConstructProps props)
     {
-        // Arrange
-        var fixture = new Fixture();
-        var customization = new StaticSiteConstructCustomization(includeApiDomain: true, includeAlternateDomains: false);
-
-        // Act
-        customization.Customize(fixture);
-        var props = fixture.Create<StaticSiteConstructProps>();
-
-        // Assert
         props.ApiDomain.Should().Be("api.example.com");
         props.AlternateDomains.Should().BeEmpty();
     }
 
-    [Fact]
-    public void StaticSiteConstructCustomization_WithApiDomainExcluded_ShouldNotSetApiDomain()
+    [Theory]
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.None)]
+    public void StaticSiteConstructPropsProfile_WithApiDomainExcluded_ShouldNotSetApiDomain(StaticSiteConstructProps props)
     {
-        // Arrange
-        var fixture = new Fixture();
-        var customization = new StaticSiteConstructCustomization(includeApiDomain: false, includeAlternateDomains: false);
-
-        // Act
-        customization.Customize(fixture);
-        var props = fixture.Create<StaticSiteConstructProps>();
-
-        // Assert
         props.ApiDomain.Should().BeNull();
         props.AlternateDomains.Should().BeEmpty();
     }
 
-    [Fact]
-    public void StaticSiteConstructCustomization_WithAlternateDomainsIncluded_ShouldSetAlternateDomains()
+    [Theory]
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.AlternateDomains)]
+    public void StaticSiteConstructPropsProfile_WithAlternateDomainsIncluded_ShouldSetAlternateDomains(StaticSiteConstructProps props)
     {
-        // Arrange
-        var fixture = new Fixture();
-        var customization = new StaticSiteConstructCustomization(includeApiDomain: false, includeAlternateDomains: true);
-
-        // Act
-        customization.Customize(fixture);
-        var props = fixture.Create<StaticSiteConstructProps>();
-
-        // Assert
         props.ApiDomain.Should().BeNull();
         props.AlternateDomains.Should().HaveCount(2);
         props.AlternateDomains.Should().Contain("example.com");
         props.AlternateDomains.Should().Contain("alt.example.com");
     }
 
-    [Fact]
-    public void StaticSiteConstructCustomization_WithAlternateDomainsExcluded_ShouldNotSetAlternateDomains()
+    [Theory]
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.None)]
+    public void StaticSiteConstructPropsProfile_WithAlternateDomainsExcluded_ShouldNotSetAlternateDomains(StaticSiteConstructProps props)
     {
-        // Arrange
-        var fixture = new Fixture();
-        var customization = new StaticSiteConstructCustomization(includeApiDomain: false, includeAlternateDomains: false);
-
-        // Act
-        customization.Customize(fixture);
-        var props = fixture.Create<StaticSiteConstructProps>();
-
-        // Assert
         props.ApiDomain.Should().BeNull();
         props.AlternateDomains.Should().BeEmpty();
     }
 
-    [Fact]
-    public void StaticSiteConstructCustomization_WithBothIncluded_ShouldSetBothApiDomainAndAlternateDomains()
+    [Theory]
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.ApiDomain | StaticSiteConstructPropsOptions.AlternateDomains)]
+    public void StaticSiteConstructPropsProfile_WithBothIncluded_ShouldSetBothApiDomainAndAlternateDomains(StaticSiteConstructProps props)
     {
-        // Arrange
-        var fixture = new Fixture();
-        var customization = new StaticSiteConstructCustomization(includeApiDomain: true, includeAlternateDomains: true);
-
-        // Act
-        customization.Customize(fixture);
-        var props = fixture.Create<StaticSiteConstructProps>();
-
-        // Assert
         props.ApiDomain.Should().Be("api.example.com");
         props.AlternateDomains.Should().HaveCount(2);
         props.AlternateDomains.Should().Contain("example.com");
         props.AlternateDomains.Should().Contain("alt.example.com");
     }
 
-    [Fact]
-    public void StaticSiteConstructCustomization_ShouldAlwaysSetRequiredProperties()
+    [Theory]
+    [Compose<StaticSiteConstructPropsProfile, StaticSiteConstructPropsConfig>(StaticSiteConstructPropsOptions.None)]
+    public void StaticSiteConstructPropsProfile_ShouldAlwaysSetRequiredProperties(StaticSiteConstructProps props)
     {
-        // Arrange
-        var fixture = new Fixture();
-        var customization = new StaticSiteConstructCustomization(includeApiDomain: false, includeAlternateDomains: false);
-
-        // Act
-        customization.Customize(fixture);
-        var props = fixture.Create<StaticSiteConstructProps>();
-
-        // Assert
         props.DomainName.Should().Be("example.com");
         props.SiteSubDomain.Should().Be("www");
         props.AssetPath.Should().EndWith("TestAssets/static-site");

@@ -2,10 +2,11 @@ using Amazon.CDK;
 using Amazon.CDK.Assertions;
 using Amazon.CDK.AWS.Route53;
 using AwesomeAssertions;
+using Compono.XunitV3;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
-using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
+using LayeredCraft.Cdk.Constructs.Tests.TestKit.Profiles;
 
 namespace LayeredCraft.Cdk.Constructs.Tests;
 
@@ -17,7 +18,7 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldCreateUserPool(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -29,7 +30,7 @@ public class CognitoUserPoolConstructTests
     }
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldExposeUserPoolProperty(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -44,7 +45,7 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldCreateUserPoolDomain(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -56,7 +57,7 @@ public class CognitoUserPoolConstructTests
     }
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldExposeDomainProperty(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -128,7 +129,7 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldCreateAppClient(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -140,7 +141,7 @@ public class CognitoUserPoolConstructTests
     }
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldExposeAppClientsProperty(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -155,7 +156,7 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldCreateResourceServer(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -171,7 +172,7 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldCreateUserGroup(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -187,7 +188,7 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [CognitoUserPoolConstructAutoData(includeBranding: false)]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldNotCreateManagedLoginBranding_WhenBrandingIsNull(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -203,7 +204,7 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [CognitoUserPoolConstructAutoData(includeBranding: true)]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.Branding)]
     public void Construct_ShouldCreateManagedLoginBranding_WhenBrandingIsConfigured(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -215,7 +216,7 @@ public class CognitoUserPoolConstructTests
     }
 
     [Theory]
-    [CognitoUserPoolConstructAutoData(includeBranding: true)]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.Branding)]
     public void Construct_ShouldNotCreateBranding_WhenNoBrandingOnClient(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -242,7 +243,7 @@ public class CognitoUserPoolConstructTests
     }
 
     [Theory]
-    [CognitoUserPoolConstructAutoData(includeBranding: true)]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.Branding)]
     public void Construct_ShouldThrow_WhenBrandingSettingsJsonIsEmpty(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -272,7 +273,7 @@ public class CognitoUserPoolConstructTests
     // -------------------------------------------------------------------------
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldExportUserPoolId(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -284,7 +285,7 @@ public class CognitoUserPoolConstructTests
     }
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldExportUserPoolArn(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
@@ -296,7 +297,7 @@ public class CognitoUserPoolConstructTests
     }
 
     [Theory]
-    [CognitoUserPoolConstructAutoData]
+    [Compose<CognitoUserPoolConstructPropsProfile, CognitoUserPoolConstructPropsConfig>(CognitoUserPoolConstructPropsOptions.None)]
     public void Construct_ShouldExportAppClientId(CognitoUserPoolConstructProps props)
     {
         var stack = CreateStack();
