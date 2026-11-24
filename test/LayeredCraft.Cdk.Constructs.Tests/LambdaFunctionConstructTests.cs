@@ -2,10 +2,11 @@ using System;
 using Amazon.CDK;
 using Amazon.CDK.Assertions;
 using AwesomeAssertions;
+using Compono.XunitV3;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
-using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
 using LayeredCraft.Cdk.Constructs.Tests.TestKit.Extensions;
+using LayeredCraft.Cdk.Constructs.Tests.TestKit.Profiles;
 using LayeredCraft.Cdk.Constructs.Testing;
 
 namespace LayeredCraft.Cdk.Constructs.Tests;
@@ -14,7 +15,7 @@ namespace LayeredCraft.Cdk.Constructs.Tests;
 public class LambdaFunctionConstructTests
 {
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldCreateLambdaFunction(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -38,7 +39,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldCreateIAMRole(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -57,7 +58,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldCreateIAMPolicy(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -76,7 +77,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldIncludeCloudWatchLogsPermissions(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -119,7 +120,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldSetEnvironmentVariables(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -141,7 +142,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData(includeOtelLayer: true)]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions | LambdaFunctionConstructPropsOptions.OtelLayer)]
     public void Construct_ShouldIncludeOtelLayerWhenEnabled(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -161,7 +162,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData(includeOtelLayer: false)]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldDisableTracingWhenOtelLayerDisabled(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -199,7 +200,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldCreateVersionAndAlias(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -221,7 +222,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData(generateUrl: false)]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldAddPermissionsToAllTargets(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -239,7 +240,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData(includePermissions: false, generateUrl: false)]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.None)]
     public void Construct_ShouldHandleEmptyPermissionsList(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -256,7 +257,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldCreateLogGroupWithRetention(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -277,7 +278,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldNotEnableSnapStartByDefault(LambdaFunctionConstructProps props)
     {
         var app = new App();
@@ -294,7 +295,7 @@ public class LambdaFunctionConstructTests
     }
 
     [Theory]
-    [LambdaFunctionConstructAutoData]
+    [Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
     public void Construct_ShouldEnableSnapStartWhenConfigured(LambdaFunctionConstructProps props)
     {
         props.EnableSnapStart = true;
