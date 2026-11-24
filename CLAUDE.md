@@ -45,12 +45,13 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 **LambdaFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/LambdaFunctionConstruct.cs`)
 - Main CDK construct that creates Lambda functions with comprehensive configuration
-- Automatically creates IAM roles and policies with CloudWatch Logs permissions
+- Automatically creates an IAM role whose logging policy is scoped to the construct's own log group (`logs:CreateLogStream`, `logs:PutLogEvents` on the log group ARN)
+- Code from a local asset (`AssetPath`) or any `Code` source such as an S3 artifact (`Code.FromBucketV2`); exactly one is required
 - Supports configurable OpenTelemetry layer integration via AWS managed layer (disabled by default)
 - Configurable OTEL layer version and architecture (amd64/arm64)
 - Supports AWS Lambda SnapStart for improved cold start performance
-- Creates function versions and aliases for deployment management
-- Handles Lambda permissions for multiple targets (function, version, alias)
+- Creates a version on every deployment and an alias (`AliasName`, default `live`); both are public (`Version`, `Alias`)
+- Applies each `LambdaPermission` to its `Targets` (`LambdaPermissionTargets` flags; default alias only)
 
 **WebFunctionConstruct** (`src/LayeredCraft.Cdk.Constructs/WebFunctionConstruct.cs`)
 - Creates an AWS Lambda Web Function from a versioned S3 artifact (`WebFunctionCode.FromBucket`), plus its immutable revision, default endpoint, execution role (optional), logging (optional), and the function's **single** resource-based policy
@@ -80,7 +81,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 **Configuration Models** (`src/LayeredCraft.Cdk.Constructs/Models/`)
 - `LambdaFunctionConstructProps`: Main configuration interface and record for Lambda construct
-- `LambdaPermission`: Record for defining Lambda invocation permissions
+- `LambdaPermission`: Record for defining Lambda invocation permissions; `Targets` (`LambdaPermissionTargets`) selects function, version and/or alias (default alias)
 - `StaticSiteConstructProps`: Configuration interface and record for static site construct
 - `DynamoDbTableConstructProps`: Configuration interface and record for DynamoDB table construct
 - `WebFunctionConstructProps`, `WebFunctionCode`/`WebFunctionCodeFromBucketOptions`/`WebFunctionCodeBucketPolicy`, `WebFunctionEndpointOptions`/`IWebFunctionEndpointOptions`, `WebFunctionEndpointAttributes`, `WebFunctionLogs`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionCallerPolicy`/`WebFunctionInvokeGrantOptions`, `WebFunctionOriginProps`/`WebFunctionOriginWithOacProps`/`WebFunctionOriginPermissions`: Web Function configuration (see `docs/constructs/web-function.md`)
@@ -93,9 +94,9 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 
 1. **Construct Pattern**: Uses AWS CDK construct pattern for reusable infrastructure components
 2. **Interface + Record Pattern**: Props classes use both interface and record for flexibility and immutability
-3. **Multi-Target Permissions**: Automatically applies permissions to function, version, and alias
+3. **Least-Privilege Permissions**: Invocation permissions go on the alias by default; function and version targets are opt-in
 4. **OpenTelemetry Integration**: Configurable support for AWS OTEL collector layer with version and architecture options
-5. **Versioning Strategy**: Creates new versions on every deployment with "live" alias
+5. **Versioning Strategy**: Creates new versions on every deployment with a configurable alias (default "live")
 
 ### Target Frameworks
 - .NET 10 and .NET 11
