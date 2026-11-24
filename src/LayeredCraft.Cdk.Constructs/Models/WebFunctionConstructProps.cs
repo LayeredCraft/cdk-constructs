@@ -2,6 +2,11 @@ using System.Collections.Generic;
 using Amazon.CDK;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
+// Amazon.CDK.Lib 2.278.0 adds same-named Web Function types to Amazon.CDK.AWS.Lambda;
+// these aliases keep this library's own types unambiguous.
+using IWebFunctionEndpointOptions = LayeredCraft.Cdk.Constructs.Models.IWebFunctionEndpointOptions;
+using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;
+using WebFunctionRuntime = LayeredCraft.Cdk.Constructs.Models.WebFunctionRuntime;
 
 namespace LayeredCraft.Cdk.Constructs.Models;
 

@@ -13,6 +13,12 @@ using Constructs;
 using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
+// Amazon.CDK.Lib 2.278.0 adds same-named Web Function types to Amazon.CDK.AWS.Lambda;
+// these aliases keep this library's own types unambiguous.
+using WebFunctionAuthType = LayeredCraft.Cdk.Constructs.Models.WebFunctionAuthType;
+using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;
+using WebFunctionEndpointAttributes = LayeredCraft.Cdk.Constructs.Models.WebFunctionEndpointAttributes;
+using WebFunctionEndpointOptions = LayeredCraft.Cdk.Constructs.Models.WebFunctionEndpointOptions;
 
 namespace LayeredCraft.Cdk.Constructs.Tests;
 

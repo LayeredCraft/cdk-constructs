@@ -14,6 +14,12 @@ using LayeredCraft.Cdk.Constructs;
 using LayeredCraft.Cdk.Constructs.Models;
 using LayeredCraft.Cdk.Constructs.Testing;
 using DynamoAttribute = Amazon.CDK.AWS.DynamoDB.Attribute;
+// Amazon.CDK.Lib 2.278.0 adds same-named Web Function types to Amazon.CDK.AWS.Lambda;
+// these aliases keep this library's own types unambiguous.
+using WebFunctionAuthType = LayeredCraft.Cdk.Constructs.Models.WebFunctionAuthType;
+using WebFunctionCode = LayeredCraft.Cdk.Constructs.Models.WebFunctionCode;
+using WebFunctionEndpointOptions = LayeredCraft.Cdk.Constructs.Models.WebFunctionEndpointOptions;
+using WebFunctionEndpointType = LayeredCraft.Cdk.Constructs.Models.WebFunctionEndpointType;
 
 namespace LayeredCraft.Cdk.Constructs.Tests;
 
