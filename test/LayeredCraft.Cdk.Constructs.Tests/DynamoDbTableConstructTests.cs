@@ -3,8 +3,9 @@ using Amazon.CDK.Assertions;
 using Amazon.CDK.AWS.DynamoDB;
 using Amazon.CDK.AWS.Lambda;
 using AwesomeAssertions;
+using Compono.XunitV3;
 using LayeredCraft.Cdk.Constructs.Models;
-using LayeredCraft.Cdk.Constructs.Tests.TestKit.Attributes;
+using LayeredCraft.Cdk.Constructs.Tests.TestKit.Profiles;
 using LayeredCraft.Cdk.Constructs.Testing;
 using Attribute = Amazon.CDK.AWS.DynamoDB.Attribute;
 
@@ -14,7 +15,7 @@ namespace LayeredCraft.Cdk.Constructs.Tests;
 public class DynamoDbTableConstructTests
 {
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void Construct_ShouldCreateDynamoDbTable(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -81,7 +82,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void Construct_ShouldCreateTableWithGlobalSecondaryIndex(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -128,7 +129,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void Construct_ShouldCreateTableWithMultipleGlobalSecondaryIndexes(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -186,7 +187,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void Construct_ShouldCreateTableWithStream(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -210,7 +211,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void Construct_ShouldCreateTableWithTimeToLive(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -226,7 +227,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void Construct_ShouldCreateTableWithPayPerRequestBilling(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -302,7 +303,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void AttachStreamLambda_ShouldCreateEventSourceMapping_WhenStreamEnabled(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -332,7 +333,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void AttachStreamLambda_ShouldThrowException_WhenStreamNotEnabled(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -353,7 +354,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void Construct_ShouldCreateAllRequiredOutputs(DynamoDbTableConstructProps props)
     {
         // Arrange
@@ -396,7 +397,7 @@ public class DynamoDbTableConstructTests
     }
 
     [Theory]
-    [DynamoDbTableConstructAutoData]
+    [Compose<DynamoDbTableConstructPropsProfile>]
     public void Construct_ShouldNotCreateStreamOutput_WhenStreamNotEnabled(DynamoDbTableConstructProps props)
     {
         // Arrange
