@@ -12,8 +12,8 @@ namespace LayeredCraft.Cdk.Constructs.Tests.TestKit.Profiles;
 /// Supplies deterministic <see cref="WebFunctionConstructProps"/> test data. The default code artifact is
 /// an imported (externally managed) bucket so synthesis never requires AWS credentials or an owned bucket
 /// resource. A real imported bucket is used (rather than a test double) so the props marshal through jsii
-/// when the construct is synthesized. The two incidental log levels the previous customization left to
-/// AutoFixture are generated from the composition context.
+/// when the construct is synthesized. The two incidental log levels the previous customization left unset
+/// are generated from the composition context.
 /// </summary>
 public sealed class WebFunctionConstructPropsProfile : ICompositionProfile
 {

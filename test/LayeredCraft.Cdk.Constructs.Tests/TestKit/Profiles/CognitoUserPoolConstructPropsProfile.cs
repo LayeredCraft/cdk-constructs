@@ -20,8 +20,8 @@ public sealed record CognitoUserPoolConstructPropsConfig(CognitoUserPoolConstruc
 /// <summary>
 /// Supplies the deterministic, realistic <see cref="CognitoUserPoolConstructProps"/> test data the Cognito
 /// user pool construct tests rely on. The previous customization built the whole value through the props
-/// builder (never letting AutoFixture generate a member), so every member is a behavior-defining literal
-/// here too, produced from a single builder-built template.
+/// builder, so every member is a behavior-defining literal here too, produced from a single builder-built
+/// template.
 /// </summary>
 public sealed class CognitoUserPoolConstructPropsProfile(CognitoUserPoolConstructPropsConfig config) : ICompositionProfile
 {
