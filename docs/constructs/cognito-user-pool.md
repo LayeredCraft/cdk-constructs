@@ -321,24 +321,6 @@ template.ShouldExportUserPoolArn("test-stack", "auth-pool");
 template.ShouldExportAppClientId("test-stack", "auth-pool", "web-app");
 ```
 
-### AutoFixture Integration
-
-```csharp
-[Theory]
-[CognitoUserPoolConstructAutoData]
-public void Should_Create_User_Pool(CognitoUserPoolConstructProps props)
-{
-    // props generated with sensible defaults (no branding)
-}
-
-[Theory]
-[CognitoUserPoolConstructAutoData(includeBranding: true)]
-public void Should_Create_User_Pool_With_Branding(CognitoUserPoolConstructProps props)
-{
-    // props generated with Managed Login branding included
-}
-```
-
 ## Examples
 
 For more real-world examples, see the [Examples](../examples/index.md) section.

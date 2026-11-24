@@ -15,7 +15,7 @@ The testing framework consists of:
 - **Test Helpers**: Utilities for creating test stacks and props
 - **Assertion Methods**: Fluent assertions for CDK resources
 - **Props Builders**: Fluent builders for construct properties
-- **AutoFixture Integration**: Automatic test data generation with realistic values
+- **Composed test data**: the library's own tests compose props with Compono profiles
 
 ## Getting Started
 
@@ -194,6 +194,32 @@ template.ShouldHaveApiProxyBehavior("api.example.com");
 template.ShouldNotHaveApiProxyBehavior();
 ```
 
+## Private Static Assets Testing
+
+### Props Builder
+
+```csharp
+var props = new PrivateStaticAssetsConstructPropsBuilder()
+    .WithAssetPath("./dist")
+    .WithDestinationKeyPrefix("game/1.2.3/")
+    .WithCacheControl(CacheControl.FromString("public, max-age=31536000, immutable"))
+    .Build();
+```
+
+### Assertion Methods
+
+```csharp
+var template = Template.FromStack(stack);
+
+template.ShouldHavePrivateBucket();                 // Block Public Access, SSE-S3, SSL-only, versioned
+template.ShouldNotHaveWebsiteEndpoint();
+template.ShouldHaveOacOnlyOrigin();
+template.ShouldScopeBucketPolicyToDistribution();   // AWS:SourceArn of this distribution
+template.ShouldHaveHttpsOnlyViewerPolicy();
+template.ShouldHaveBucketDeployment(destinationKeyPrefix: "game/1.2.3/");
+template.ShouldHaveDnsRecords("assets.example.com"); // only with a custom domain
+```
+
 ## DynamoDB Table Testing
 
 ### Props Builder
@@ -337,23 +363,6 @@ template.ShouldHaveRevisionDependingOnLogGroups(
 
 The invocation assertions require `Effect = Allow`, the expected action (`lambda:InvokeWebFunctionEndpoint`), and the exact endpoint resource, so a `Deny` statement or an unrelated action never satisfies them. `ShouldHaveInvokeGrant` also matches a minimized policy whose `Resource` is an array of endpoint ARNs. The log-group assertions match by log-group **name** and exact `RetentionInDays`; tokenized names cannot be asserted this way. `ShouldHaveRevisionDependingOnLogGroups` resolves each name to its logical ID through the template, so it never hard-codes generated identifiers. Use `ShouldHaveWebFunctionLogGroup`, not `ShouldHaveLogGroup` (the latter is the Lambda Function construct's assertion).
 
-### AutoData Support
-
-```csharp
-[Theory]
-[WebFunctionConstructAutoData]
-public void Should_Synthesize_Generated_Props(WebFunctionConstructProps props)
-{
-    var (_, stack) = CdkTestHelper.CreateTestStack();
-
-    _ = new WebFunctionConstruct(stack, "web", props);
-
-    Template.FromStack(stack).ShouldHaveWebFunction("test-web-function");
-}
-```
-
-`[WebFunctionConstructAutoData]` supplies deterministic props whose default code artifact is an imported, externally managed bucket, so the fixture synthesizes without credentials or a bucket resource.
-
 ### Golden-Template Conventions
 
 Representative Web Function configurations are pinned as full synthesized templates under `test/LayeredCraft.Cdk.Constructs.Tests/GoldenTemplates/` (`web-function-default.json`, `web-function-cloudfront-oac.json`, and so on), alongside the golden templates for the four existing constructs. `GoldenTemplate.AssertMatches(stack, "web-function-default.json")` compares the complete, normalized template and fails with a readable diff. Regenerate intentionally with `UPDATE_GOLDEN_TEMPLATES=1`; the harness rewrites the checked-in file and then fails once so the change is reviewed. Existing-construct goldens must show **zero diff** on any dependency or CDK bump.
@@ -363,33 +372,22 @@ Representative Web Function configurations are pinned as full synthesized templa
 - **Origin exceptions.** Validation that runs inside CDK's `IOrigin.Bind` path (and inside `HttpOrigin` construction) surfaces in .NET as a `System.Exception` carrying CDK's message, while factory-time checks in `WebFunctionOrigin` throw `InvalidOperationException`. Assert with the matching exception type, and prefer validating origin props at factory time.
 - **Principal materialization.** Identity-policy writes and principal classification depend partly on how jsii materializes types in `Amazon.CDK.Lib`: exported classes such as `Role`, `User`, `Group`, `LazyRole` and `PrincipalWithConditions` arrive as concrete .NET types, while CDK's private classes (`ImmutableRole`, the imported role) arrive as interface proxies. The real-CDK `CdkUpgradeGuard_*` tests in `WebFunctionSecurityTests.cs` pin this behavior; they must pass before any `Amazon.CDK.Lib` upgrade is accepted.
 
-## AutoFixture Integration
+## Composed Test Data (Compono)
 
-### Custom Attributes
+The library's own test suite composes construct props with [Compono](https://github.com/LayeredCraft/compono)
+profiles (`test/LayeredCraft.Cdk.Constructs.Tests/TestKit/Profiles`), for example:
 
 ```csharp
 [Theory]
-[LambdaFunctionConstructAutoData]
-public void Should_Create_Lambda_With_Generated_Data(LambdaFunctionConstructProps props)
+[Compose<LambdaFunctionConstructPropsProfile, LambdaFunctionConstructPropsConfig>(LambdaFunctionConstructPropsOptions.Permissions)]
+public void Should_Create_Lambda_With_Composed_Props(LambdaFunctionConstructProps props)
 {
-    // props is automatically generated with realistic test data
-}
-
-[Theory]
-[LambdaFunctionConstructAutoData(includeOtelLayer: false, includePermissions: true)]
-public void Should_Create_Lambda_With_Custom_Settings(LambdaFunctionConstructProps props)
-{
-    // props generated with specific customizations
+    // props composed with deterministic, realistic values
 }
 ```
 
-### Available Attributes
-
-- `LambdaFunctionConstructAutoDataAttribute`: Generates Lambda props
-- `StaticSiteConstructAutoDataAttribute`: Generates static site props
-- `DynamoDbTableConstructAutoDataAttribute`: Generates DynamoDB props
-- `CognitoUserPoolConstructAutoDataAttribute`: Generates Cognito user pool props (pass `includeBranding: true` to include Managed Login branding)
-- `WebFunctionConstructAutoDataAttribute`: Generates Web Function props (imported, externally managed artifact bucket; IAM-auth endpoint)
+These profiles are test-project infrastructure, not part of the package. In your own tests, use the shipped
+`*ConstructPropsBuilder` classes, or your own composition, to create props.
 
 ## Testing Patterns
 

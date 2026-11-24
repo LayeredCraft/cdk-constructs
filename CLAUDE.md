@@ -69,6 +69,13 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - Includes automatic asset deployment with cache invalidation
 - Exposes `SiteDomain` property containing the fully qualified domain name
 
+**PrivateStaticAssetsConstruct** (`src/LayeredCraft.Cdk.Constructs/PrivateStaticAssetsConstruct.cs`)
+- Immutable, versioned web assets in a private bucket (Block Public Access, SSE-S3, SSL-only, versioned, no website endpoint, retained by default)
+- CloudFront with `S3BucketOrigin.WithOriginAccessControl` (bucket policy scoped to the distribution's `AWS:SourceArn`), HTTPS-only and `CACHING_OPTIMIZED` by default
+- `BucketDeployment` with destination key prefix, `Prune` (default false), `RetainOnDelete` (default true), cache-control and optional invalidation paths
+- Optional custom DNS (`PrivateStaticAssetsDomainOptions`), SPA routing and error responses; all off by default
+- Exposes `Bucket`, `Distribution` and `DomainName`
+
 **DynamoDbTableConstruct** (`src/LayeredCraft.Cdk.Constructs/DynamoDbTableConstruct.cs`)
 - Comprehensive CDK construct for DynamoDB table creation and configuration
 - Supports partition keys, sort keys, and global secondary indexes
@@ -82,6 +89,7 @@ dotnet add test/LayeredCraft.Cdk.Constructs.Tests/ package PackageName
 - `LambdaFunctionConstructProps`: Main configuration interface and record for Lambda construct
 - `LambdaPermission`: Record for defining Lambda invocation permissions
 - `StaticSiteConstructProps`: Configuration interface and record for static site construct
+- `PrivateStaticAssetsConstructProps`, `PrivateStaticAssetsDomainOptions`: configuration for the private static-assets construct
 - `DynamoDbTableConstructProps`: Configuration interface and record for DynamoDB table construct
 - `WebFunctionConstructProps`, `WebFunctionCode`/`WebFunctionCodeFromBucketOptions`/`WebFunctionCodeBucketPolicy`, `WebFunctionEndpointOptions`/`IWebFunctionEndpointOptions`, `WebFunctionEndpointAttributes`, `WebFunctionLogs`, `WebFunctionRuntime`, `WebFunctionAuthType`, `WebFunctionEndpointType`, `WebFunctionCallerPolicy`/`WebFunctionInvokeGrantOptions`, `WebFunctionOriginProps`/`WebFunctionOriginWithOacProps`/`WebFunctionOriginPermissions`: Web Function configuration (see `docs/constructs/web-function.md`)
 
@@ -178,6 +186,10 @@ The library includes comprehensive testing helpers for consumers:
 **StaticSiteConstructPropsBuilder** (`StaticSiteConstructPropsBuilder.cs`):
 - Fluent builder for creating static site test props with scenario-based configurations
 - Methods like `WithDomainName()`, `WithAlternateDomains()`, `WithApiDomain()`, `ForBlog()`, `ForDocumentation()`, `ForSinglePageApp()`
+
+**PrivateStaticAssetsConstructAssertions** / **PrivateStaticAssetsConstructPropsBuilder**:
+- `ShouldHavePrivateBucket()`, `ShouldNotHaveWebsiteEndpoint()`, `ShouldHaveOacOnlyOrigin()`, `ShouldScopeBucketPolicyToDistribution()`, `ShouldHaveHttpsOnlyViewerPolicy()`, `ShouldHaveBucketDeployment()`, `ShouldHaveDnsRecords()`
+- Builder methods such as `WithDestinationKeyPrefix()`, `WithCacheControl()`, `WithDomain()`, `WithSpaRouting()`
 
 **DynamoDbTableConstructAssertions** (`DynamoDbTableConstructAssertions.cs`):
 - Extension methods for Template assertions specific to DynamoDB tables

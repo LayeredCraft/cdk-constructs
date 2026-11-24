@@ -14,6 +14,7 @@ A comprehensive library of reusable AWS CDK constructs for .NET projects, design
 - **🚀 Lambda Functions**: Comprehensive Lambda construct with configurable OpenTelemetry support, IAM management, and environment configuration
 - **🕸️ Web Functions**: AWS Lambda Web Functions served from an S3 artifact, with IAM or application-managed endpoints, endpoint-scoped grants, and CloudFront OAC origin integration
 - **🌐 Static Sites**: Complete static website hosting with S3, CloudFront, SSL certificates, and Route53 DNS management
+- **🔒 Private Static Assets**: Immutable, versioned assets in a private bucket behind CloudFront OAC
 - **📊 DynamoDB Tables**: Full-featured DynamoDB construct with streams, TTL, and global secondary indexes
 - **🧪 Testing Helpers**: Extensive testing utilities with fluent assertions and builders
 - **📝 Type Safety**: Full TypeScript-style intellisense and compile-time validation
@@ -91,6 +92,15 @@ Complete static website hosting with:
 - SSL certificates
 - Route53 DNS
 - API proxy support
+
+### [Private Static Assets Construct](constructs/private-static-assets.md)
+
+Private, immutable web assets behind CloudFront:
+
+- Private S3 bucket (Block Public Access, SSE-S3, SSL-only, versioned)
+- CloudFront with origin access control, HTTPS-only by default
+- Versioned deployment prefix, no prune, retained objects, cache-control
+- Optional custom DNS, SPA routing and error responses (off by default)
 
 ### [DynamoDB Table Construct](constructs/dynamodb-table.md)
 

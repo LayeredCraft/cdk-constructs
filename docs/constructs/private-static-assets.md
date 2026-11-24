@@ -44,7 +44,7 @@ public class MyStack : Stack
 }
 ```
 
-## Immutable, versioned deployment (Jedi Duel example)
+## Immutable, versioned deployment
 
 Deploy immutable game assets under a versioned prefix, keep the previous versions (no prune), retain the
 objects when the deployment resource is removed, and serve them with a long-lived immutable cache-control
@@ -129,7 +129,7 @@ var assets = new PrivateStaticAssetsConstruct(this, "GameAssets", new PrivateSta
 | Property | Type | Description |
 |----------|------|-------------|
 | `DomainNames` | `string[]` | The custom domain names (at least one) |
-| `Certificate` | `ICertificate?` | Certificate for the domain names; created (DNS-validated) when omitted |
+| `Certificate` | `ICertificate?` | Certificate for the domain names; created (DNS-validated) when omitted. CloudFront only accepts certificates in `us-east-1`, so a created certificate requires a `us-east-1` stack |
 | `HostedZone` | `IHostedZone?` | Hosted zone for validation and records; mutually exclusive with `HostedZoneName` |
 | `HostedZoneName` | `string?` | Hosted-zone name looked up with `HostedZone.FromLookup`; mutually exclusive with `HostedZone` |
 
@@ -158,7 +158,8 @@ Validation at construction (`ArgumentException`):
 - **Versioning**: enabled
 - **No static website endpoint**
 - **Removal policy**: `RETAIN` by default
-- **No auto-delete objects**
+- **No auto-delete objects**: with `RemovalPolicy.DESTROY`, CloudFormation cannot delete the bucket while it
+  still holds objects or object versions, so empty it first or keep the default `RETAIN`
 
 ## Testing
 
