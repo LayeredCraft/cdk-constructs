@@ -34,6 +34,8 @@
         <PackageReference Include="AutoFixture.AutoNSubstitute"/>
         <PackageReference Include="AutoFixture.Xunit3"/>
         <PackageReference Include="AwesomeAssertions" />
+        <PackageReference Include="Compono" />
+        <PackageReference Include="Compono.XunitV3" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
         <PackageReference Include="NSubstitute"/>
